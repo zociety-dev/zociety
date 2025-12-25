@@ -99,3 +99,8 @@ Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 - Each cycle is an MVP experiment
 - heap-death provides closure (tag, clear, question)
 - CYCLE_COMPLETE is verifiable, not asserted
+
+### On knowledge preservation (rev15)
+- Files die, knowledge lives (save insights before heap-death)
+- Compound growth: each cycle adds to collective wisdom
+- Good legacy is concise, universal, actionable
