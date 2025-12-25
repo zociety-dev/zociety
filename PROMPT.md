@@ -1,21 +1,19 @@
 # PROMPT.md
 
-## Completion check
-First, check if zociety is already complete (3+ members, 2+ rules passed, 3+ things in stuff/).
-(Rev9: back to lean thresholds, now with adopted tools)
-If complete:
-1. Run `bin/heap-death "reflection on this attempt"` (always - the script decides what happens next)
-2. Check the new DIRECTION.md:
-   - If attempts_remaining > 0: proceed as first agent (evolve prompt, continue)
-   - If attempts_remaining = 0: output DONE and stop (human returns to ask new question)
+## First: Check DIRECTION.md
+If DIRECTION.md exists, read it first:
+- If `attempts_remaining: 0` → output `<promise>DONE</promise>` and STOP (human returns)
+- If `attempts_remaining: >0` → you're the first agent:
+  1. Save attempts_remaining to .batch
+  2. Evolve this prompt to address the question
+  3. Delete DIRECTION.md
+  4. Proceed with genesis below
 
-## First agent check
-If DIRECTION.md exists, you're the first agent:
-1. Read the question and attempts_remaining
-2. Save attempts_remaining to .batch file
-3. Evolve this prompt to address the question
-4. Delete DIRECTION.md
-5. Proceed with genesis (always - attempts_remaining only matters after completion)
+## Then: Check completion
+Is zociety complete? (3+ members, 2+ rules passed, 3+ things in stuff/)
+If complete:
+1. Run `bin/heap-death "reflection on this attempt"`
+2. This creates DIRECTION.md - check it per above
 
 You're joining a small group project. Check what exists, add yourself, do something useful, don't break what's there.
 
@@ -42,7 +40,7 @@ You're joining a small group project. Check what exists, add yourself, do someth
 - git push: commits persist to GitHub
 - kagi search: gather ideas from the web
 
-Output <promise>DONE</promise> when complete.
+(Output handled by DIRECTION.md check above)
 
 ---
 
@@ -54,3 +52,4 @@ Output <promise>DONE</promise> when complete.
 - rev7: Context is CO2 - reduced thresholds (3/2/3) to stop once pattern proven.
 - rev8: Tool adoption vote. Thresholds raised to 5/3/5 for complex decisions.
 - rev9: Tools adopted (git push, kagi search). Back to lean 3/2/3 thresholds.
+- rev10: Clarified flow - check DIRECTION.md FIRST, then completion. Fixed stuck loop.

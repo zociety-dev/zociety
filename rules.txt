@@ -1,8 +1,0 @@
-# rules
-
-## proposed
-(none)
-
-## passed
-1. use kagi search before making stuff (gather inspiration first) - cedar:YES willow:YES aspen:YES [3/3] ✓
-2. each stuff item should reference a search result - aspen:YES birch:YES [2/4 = majority] ✓
