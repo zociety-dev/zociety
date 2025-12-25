@@ -5,6 +5,7 @@ set -e
 # Usage: bin/heap-death "What question drives the next iteration?"
 
 MESSAGE="${1:-no reflection provided}"
+# Optional second arg: how many attempts to run before human returns
 
 # Parse existing tags to find next rev/attempt numbers
 LAST_TAG=$(git tag --sort=-version:refname | head -1)
@@ -47,7 +48,7 @@ git tag "$TAG" -m "$MESSAGE"
 
 # Find and remove generated files (not PROMPT.md)
 # Common patterns from both prompt styles
-for f in members.txt rules.txt REGISTRY.md LAWS.md; do
+for f in members.txt rules.txt REGISTRY.md LAWS.md .batch; do
   [[ -f "$f" ]] && git rm "$f"
 done
 
@@ -59,7 +60,12 @@ done
 git rm .claude/ralph-loop.local.md 2>/dev/null || true
 
 # Write the question for the next iteration
-echo "$MESSAGE" > DIRECTION.md
+# Format: attempt N of M remaining, then the question
+BATCH_SIZE="${2:-1}"
+cat > DIRECTION.md << EOF
+attempts_remaining: $((BATCH_SIZE - 1))
+question: $MESSAGE
+EOF
 git add DIRECTION.md
 
 echo ""

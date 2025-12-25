@@ -28,10 +28,25 @@ When an iteration completes, the human runs:
 bin/heap-death "The question that prompted this reflection"
 ```
 
+Or to run N attempts before returning:
+
+```
+bin/heap-death "The question" 5
+```
+
 This:
 - Tags the current state with rev/attempt/iteration numbers
-- Clears generated files (members.txt, rules.txt, stuff/, etc.)
-- Writes DIRECTION.md with the question for the next iteration
+- Clears generated files (members.txt, rules.txt, stuff/, .batch, etc.)
+- Writes DIRECTION.md with the question and attempts_remaining count
+
+## Batch Mode
+
+When attempts_remaining > 0, the loop auto-restarts after genesis completes:
+1. First agent saves attempts_remaining to .batch
+2. Genesis completes
+3. Next iteration sees complete state + .batch
+4. Auto-runs heap-death with decremented count
+5. Repeats until attempts_remaining = 0, then human returns
 
 ## Evolution
 
