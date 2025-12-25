@@ -1,4 +1,3 @@
-members: 1/7
-rules: 0/5 passed (1 proposed)
-stuff: 1/7
-rev5: heap-death always runs on completion
+members: 2/7
+rules: 0/5 passed (1 proposed with 2 votes)
+stuff: 2/7

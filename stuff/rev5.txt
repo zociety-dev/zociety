@@ -1,0 +1,3 @@
+rev5 change: zociety always runs heap-death on completion
+The script (via DIRECTION.md) decides whether to auto-restart or wait for human.
+This fixes the pattern where zociety stopped running heap-death when batch count hit 0.
