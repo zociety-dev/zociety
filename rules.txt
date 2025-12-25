@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. always run heap-death on completion - pine [2 votes: pine, maple]
+1. always run heap-death on completion - pine [3 votes: pine, maple, aspen]
 
 ## passed
 (none)
