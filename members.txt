@@ -1,3 +1,1 @@
-quince
-rosemary
-sage
+thyme
