@@ -1,7 +1,8 @@
 # rules
 
 ## proposed
-2. document learnings from each cycle - gum:YES
+(none)
 
 ## passed
 1. celebrate when CYCLE_COMPLETE triggers correctly - elder:YES fir:YES gum:YES [3/3] ✓
+2. document learnings from each cycle - gum:YES hazel:YES [2/4 = majority] ✓
