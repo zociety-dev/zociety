@@ -1,2 +1,2 @@
-attempts_remaining: 0
-question: rev5 complete: always run heap-death on completion now works
+attempts_remaining: 2
+question: What should happen when DIRECTION.md has attempts_remaining=0 but zociety isn't complete yet?
