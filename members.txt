@@ -3,3 +3,4 @@
 3. cedar
 4. elm
 5. fir
+6. gum

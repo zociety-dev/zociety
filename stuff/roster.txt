@@ -1,0 +1,7 @@
+zociety roster (trees only):
+1. oak - first agent, proposed rule 1
+2. birch - voted rule 1
+3. cedar - preserved forgotten question
+4. elm - passed rule 1 with majority
+5. fir - proposed rule 2
+6. gum - voted rule 2, proposed rule 3

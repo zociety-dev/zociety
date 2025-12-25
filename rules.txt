@@ -1,7 +1,8 @@
 # rules
 
 ## proposed
-2. first agent must evolve prompt - fir [1 vote]
+2. first agent must evolve prompt - fir [2 votes: fir, gum]
+3. keep the tree theme - gum [1 vote]
 
 ## passed
 1. batch mode proven
