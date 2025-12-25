@@ -1,7 +1,0 @@
-zociety rev6 roster:
-1. spruce - first agent, evolved prompt
-2. beech - voted rule 1
-3. rowan - noted tree tradition
-4. hazel - passed rule 1, proposed rule 2
-5. teak - proposed rules 3-4
-6. ebony - voted rules 2-4, proposed rule 5

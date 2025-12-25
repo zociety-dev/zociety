@@ -1,5 +1,0 @@
-Lessons carried forward:
-- First agent always proceeds (rev6)
-- Context is CO2 - stop early when proven
-- Don't break what works
-- Keep tree theme

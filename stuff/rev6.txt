@@ -1,3 +1,0 @@
-rev6 fix: first agent always proceeds with genesis
-The attempts_remaining value only matters after completion.
-This fixes the loop bug where zociety got stuck.
