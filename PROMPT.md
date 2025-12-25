@@ -21,11 +21,12 @@ Count: members.txt lines, passed rules in rules.txt, files in stuff/
 - Continue to step 3
 
 ### 3. Finish the cycle
-1. Think: what question should drive the next cycle?
-2. Run: `bin/heap-death "your question"`
-3. Read .batch:
-   - If > 0: decrement, save to .batch, go back to step 1
-   - If = 0: output `<promise>CYCLE_COMPLETE</promise>` and STOP
+1. Read .batch (the number of attempts remaining)
+2. If .batch = 0: output `<promise>CYCLE_COMPLETE</promise>` and STOP
+3. If .batch > 0:
+   - Think: what question should drive the next cycle?
+   - Run: `bin/heap-death "your question" <.batch-value>`
+   - (heap-death decrements the count, loop restarts automatically)
 
 ---
 

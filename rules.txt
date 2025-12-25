@@ -1,2 +1,2 @@
 1. Build on what exists ✓ INHERITED
-2. Keep it simple (india: +1)
+2. Keep it simple (india: +1, juliet: +1) ✓ PASSED
