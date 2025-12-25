@@ -1,0 +1,64 @@
+#!/bin/bash
+set -e
+
+# heap-death: Archive current iteration, clear slate for next
+# Usage: bin/heap-death "What question drives the next iteration?"
+
+MESSAGE="${1:-no reflection provided}"
+
+# Parse existing tags to find next rev/attempt numbers
+LAST_TAG=$(git tag --sort=-version:refname | head -1)
+
+if [[ -z "$LAST_TAG" ]]; then
+  REV=1
+  ATTEMPT=1
+else
+  # Extract rev and attempt from tag like rev2-attempt1-iterations7of20
+  REV=$(echo "$LAST_TAG" | sed -n 's/rev\([0-9]*\).*/\1/p')
+  ATTEMPT=$(echo "$LAST_TAG" | sed -n 's/.*attempt\([0-9]*\).*/\1/p')
+  LAST_REV_IN_TAG=$REV
+
+  # Check if PROMPT.md changed since last tag - if so, new rev
+  if git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/null; then
+    ATTEMPT=$((ATTEMPT + 1))
+  else
+    REV=$((REV + 1))
+    ATTEMPT=1
+  fi
+fi
+
+# Get iteration count from ralph-loop state or git log
+if [[ -f .claude/ralph-loop.local.md ]]; then
+  ITERATIONS=$(grep '^iteration:' .claude/ralph-loop.local.md | sed 's/iteration: *//')
+  MAX_ITER=$(grep '^max_iterations:' .claude/ralph-loop.local.md | sed 's/max_iterations: *//')
+else
+  ITERATIONS=$(git log --oneline | wc -l | tr -d ' ')
+  MAX_ITER="?"
+fi
+
+TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
+
+echo "Tagging: $TAG"
+echo "Message: $MESSAGE"
+echo ""
+
+# Tag current state
+git tag "$TAG" -m "$MESSAGE"
+
+# Find and remove generated files (not PROMPT.md)
+# Common patterns from both prompt styles
+for f in members.txt rules.txt REGISTRY.md LAWS.md; do
+  [[ -f "$f" ]] && git rm "$f"
+done
+
+for d in stuff artifacts; do
+  [[ -d "$d" ]] && git rm -r "$d"
+done
+
+# Remove ralph loop state
+git rm .claude/ralph-loop.local.md 2>/dev/null || true
+
+echo ""
+echo "Cleared. Write new PROMPT.md and commit to start next iteration."
+echo "Tags so far:"
+git tag
