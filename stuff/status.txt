@@ -1,4 +1,4 @@
-members: 1
-rules: 0
-stuff: 1
-batch: 0 (final attempt, human returns after)
+members: 2
+rules: 0 passed (1 proposed with 2 votes)
+stuff: 2
+batch: 0 (final attempt)
