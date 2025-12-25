@@ -1,0 +1,2 @@
+zociety rev4: batch mode enabled
+auto-restarts when .batch has remaining attempts
