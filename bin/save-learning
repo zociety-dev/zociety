@@ -1,0 +1,44 @@
+#!/bin/bash
+# save-learning: Persist insights to orphan branch
+# Usage: bin/save-learning "rev21" "Key insight from this cycle"
+
+set -e
+
+REV="${1:-unknown}"
+INSIGHT="${2:-no insight provided}"
+BRANCH="learnings"
+
+# Remember where we are
+CURRENT=$(git branch --show-current)
+CURRENT_COMMIT=$(git rev-parse HEAD)
+
+# Check if learnings branch exists
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git checkout "$BRANCH" --quiet
+else
+  # Create orphan branch (no parent commits)
+  git checkout --orphan "$BRANCH" --quiet
+  git rm -rf . --quiet 2>/dev/null || true
+  echo "# Zociety Learnings" > LEARNINGS.md
+  echo "" >> LEARNINGS.md
+  echo "Insights preserved across cycles. Each cycle adds, nothing deleted." >> LEARNINGS.md
+  echo "" >> LEARNINGS.md
+  git add LEARNINGS.md
+  git commit -m "Initialize learnings branch" --quiet
+fi
+
+# Append the new learning
+echo "---" >> LEARNINGS.md
+echo "" >> LEARNINGS.md
+echo "## $REV" >> LEARNINGS.md
+echo "" >> LEARNINGS.md
+echo "$INSIGHT" >> LEARNINGS.md
+echo "" >> LEARNINGS.md
+
+git add LEARNINGS.md
+git commit -m "[learning] $REV insight" --quiet
+
+echo "Saved learning to $BRANCH branch"
+
+# Return to where we were
+git checkout "$CURRENT" --quiet 2>/dev/null || git checkout "$CURRENT_COMMIT" --quiet

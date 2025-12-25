@@ -1,0 +1,33 @@
+#!/bin/bash
+# check-genesis: Query git state to determine if genesis thresholds are met
+# Returns 0 if complete, 1 if incomplete
+# Outputs current counts to stderr for visibility
+
+set -e
+
+# Count members by [join] commits
+MEMBERS=$(git log --oneline --grep="^\[join\]" 2>/dev/null | wc -l | tr -d ' ')
+
+# Count passed rules by [pass] commits  
+RULES=$(git log --oneline --grep="^\[pass\]" 2>/dev/null | wc -l | tr -d ' ')
+
+# Count stuff by tracked files
+STUFF=$(git ls-files stuff/ 2>/dev/null | wc -l | tr -d ' ')
+
+# Thresholds
+NEED_MEMBERS=3
+NEED_RULES=2
+NEED_STUFF=3
+
+echo "Genesis state:" >&2
+echo "  Members: $MEMBERS/$NEED_MEMBERS" >&2
+echo "  Rules:   $RULES/$NEED_RULES" >&2
+echo "  Stuff:   $STUFF/$NEED_STUFF" >&2
+
+if [[ $MEMBERS -ge $NEED_MEMBERS && $RULES -ge $NEED_RULES && $STUFF -ge $NEED_STUFF ]]; then
+  echo "  Status:  COMPLETE" >&2
+  exit 0
+else
+  echo "  Status:  INCOMPLETE" >&2
+  exit 1
+fi

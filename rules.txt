@@ -1,2 +1,2 @@
 1. Build on what exists ✓ INHERITED
-2. Finish what you start (lima: +1)
+2. Finish what you start (lima: +1, mike: +1) ✓ PASSED

@@ -1,0 +1,38 @@
+#!/bin/bash
+# read-learnings: Display accumulated learnings from orphan branch
+# Usage: bin/read-learnings [N]  # show last N learnings (default: all)
+
+set -e
+
+BRANCH="learnings"
+LIMIT="${1:-0}"
+
+# Check if learnings branch exists
+if ! git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  echo "No learnings branch yet. Insights will accumulate as cycles complete."
+  exit 0
+fi
+
+# Read LEARNINGS.md from the branch without checking it out
+CONTENT=$(git show "$BRANCH:LEARNINGS.md" 2>/dev/null)
+
+if [[ $LIMIT -eq 0 ]]; then
+  echo "$CONTENT"
+else
+  # Show header + last N sections (sections separated by ---)
+  echo "$CONTENT" | awk -v n="$LIMIT" '
+    BEGIN { section=0 }
+    /^---$/ { section++ }
+    { lines[section] = lines[section] $0 "\n" }
+    END {
+      # Print header (section 0)
+      printf "%s", lines[0]
+      # Print last n sections
+      start = section - n + 1
+      if (start < 1) start = 1
+      for (i = start; i <= section; i++) {
+        printf "---\n%s", lines[i]
+      }
+    }
+  '
+fi
