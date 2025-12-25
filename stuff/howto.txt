@@ -1,0 +1,6 @@
+how batch mode works:
+1. human runs: bin/heap-death "question" N
+2. first agent saves N-1 to .batch
+3. zociety builds to completion
+4. next iteration checks .batch, auto-restarts if > 0
+5. repeats until .batch = 0

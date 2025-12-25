@@ -1,8 +1,8 @@
 # rules
 
 ## proposed
-1. check .batch before outputting DONE - ada, ben [2 votes]
-2. keep status.txt updated - ben [1 vote]
+2. keep status.txt updated - ben, cam [2 votes]
+3. short names only - cam [1 vote]
 
 ## passed
-(none)
+1. check .batch before outputting DONE [3/3]
