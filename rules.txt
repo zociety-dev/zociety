@@ -1,0 +1,7 @@
+# Rules (majority vote to pass)
+
+## Proposed
+1. keep commits short - cal [1 vote]
+
+## Passed
+(none yet)
