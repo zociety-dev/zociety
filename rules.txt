@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. first agent always proceeds with genesis - spruce [2 votes: spruce, beech]
+1. first agent always proceeds with genesis - spruce [3 votes: spruce, beech, rowan]
 
 ## passed
 (none)
