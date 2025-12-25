@@ -121,3 +121,8 @@ Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 - Verify state before claiming completion - cached knowledge lies
 - Read state fresh each iteration - the world changes
 - Each loop pass is a fresh start - build on what's there, don't assume
+
+### On flow (rev18)
+- Follow the process, don't shortcut to completion
+- Check .batch for attempts, not DIRECTION.md
+- State survives in files - trust what's written, not remembered

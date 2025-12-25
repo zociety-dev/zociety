@@ -1,2 +1,2 @@
-rule 1: follow the flow, don't shortcut (proposed by willow, voted by xander) [PASSED: 2/2]
-rule 2: check .batch not DIRECTION.md for attempts (proposed by xander)
+rule 1: follow the flow, don't shortcut (proposed by willow, voted by xander, yarrow) [PASSED: 3/3]
+rule 2: check .batch not DIRECTION.md for attempts (proposed by xander, voted by yarrow) [PASSED: 2/3]
