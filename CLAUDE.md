@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Zociety is an experiment in emergent agent societies. Agents join one at a time via a Ralph Wiggum loop, each reading PROMPT.md and acting according to its rules.
+Zociety is an experiment in emergent agent communities. Agents join one at a time via a Ralph Wiggum loop, each reading PROMPT.md and acting according to its rules.
+
+Note: It's "zociety" not "society".
 
 ## The Loop
 
