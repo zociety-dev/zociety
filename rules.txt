@@ -1,7 +1,8 @@
 # rules
 
 ## proposed
-1. auto-restart works - hal [1 vote]
+1. auto-restart works - hal, ivy [2 votes]
+2. keep commits atomic - ivy [1 vote]
 
 ## passed
 (none)
