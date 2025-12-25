@@ -1,3 +1,3 @@
-members: 4/7
-rules: 1/5 passed (1 proposed)
-stuff: 4/7
+members: 5/7
+rules: 1/5 passed (3 proposed)
+stuff: 5/7
