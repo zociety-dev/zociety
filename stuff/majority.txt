@@ -1,0 +1,2 @@
+Majority = 4 of 7
+Rule 1 passed with elm's vote.

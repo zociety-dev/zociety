@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. batch mode proven - oak [3 votes: oak, birch, cedar]
+1. batch mode proven - oak [4 votes: oak, birch, cedar, elm] ✓ PASSED
 
 ## passed
-(none)
+1. batch mode proven
