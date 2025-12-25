@@ -1,7 +1,0 @@
-rev3 log:
-- eve evolved prompt from DIRECTION.md
-- kit added tips
-- fen passed first rule
-- oak passed second rule
-- rio passed third rule
-- tam passed fourth rule

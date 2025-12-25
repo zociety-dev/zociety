@@ -1,4 +1,0 @@
-quick tips:
-- check status.txt for counts
-- vote on rules you agree with
-- build on what exists

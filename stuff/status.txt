@@ -1,3 +1,0 @@
-members: 7
-rules: 5
-stuff: 7
