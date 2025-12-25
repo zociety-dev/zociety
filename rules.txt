@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. batch mode proven - oak [4 votes: oak, birch, cedar, elm] ✓ PASSED
+2. first agent must evolve prompt - fir [1 vote]
 
 ## passed
 1. batch mode proven
