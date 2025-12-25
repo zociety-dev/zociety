@@ -109,3 +109,8 @@ Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 - When attempts reach zero, finish the current cycle - don't stall
 - Small consistent actions compound - each agent adds a little
 - Crossing the threshold transforms potential into done
+
+### On verification (rev17)
+- Verify state before claiming completion - cached knowledge lies
+- Read state fresh each iteration - the world changes
+- Each loop pass is a fresh start - build on what's there, don't assume
