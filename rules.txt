@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. always preserve learnings before heap-death
+1. always preserve learnings before heap-death - magnolia:YES nutmeg:YES [2/2]
 
 ## passed
 (none yet)
