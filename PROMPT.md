@@ -3,10 +3,17 @@
 ## First: Check DIRECTION.md
 If DIRECTION.md exists, you're the first agent:
 1. Read the question and attempts_remaining
-2. Save attempts_remaining to .batch
+2. Save `attempts_remaining: 20` to .batch
 3. Evolve this prompt to address the question
 4. Delete DIRECTION.md
 5. Proceed with genesis (always - attempts_remaining only matters after completion)
+
+
+
+
+---
+
+
 
 ## Then: Check completion
 Is zociety complete? (3+ members, 2+ rules passed, 3+ things in stuff/)

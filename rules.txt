@@ -1,2 +1,1 @@
-rule 1: verify before you claim (proposed by thyme, voted by umber, violet) [PASSED: 3/3]
-rule 2: read state fresh each iteration (proposed by umber, voted by violet) [PASSED: 2/3]
+rule 1: follow the flow, don't shortcut (proposed by willow)
