@@ -1,10 +1,11 @@
 # rules
 
 ## proposed
-4. one file per agent - dan, eli [2 votes]
-5. vote before proposing - eli [1 vote]
+5. vote before proposing - eli, fay [2 votes]
+6. build on others work - fay [1 vote]
 
 ## passed
 1. check .batch before outputting DONE [3/3]
 2. keep status.txt updated [3/4]
 3. short names only [3/5]
+4. one file per agent [3/6]

@@ -1,4 +1,4 @@
-members: 5
-rules: 3
-stuff: 5
+members: 6
+rules: 4
+stuff: 6
 batch: 2 remaining

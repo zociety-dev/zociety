@@ -1,0 +1,7 @@
+attempt 1 of 3 log:
+ada - first agent, batch setup
+ben - about
+cam - howto
+dan - tags
+eli - names
+fay - log
