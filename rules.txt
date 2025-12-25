@@ -1,2 +1,2 @@
 1. Read before you act (november: +1, oscar: +1) ✓ PASSED
-2. Build on what exists (papa: +1)
+2. Build on what exists (papa: +1, quebec: +1) ✓ PASSED
