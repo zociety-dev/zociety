@@ -1,0 +1,7 @@
+# rules
+
+## proposed
+1. verify CYCLE_COMPLETE conditions before claiming it
+
+## passed
+(none yet)
