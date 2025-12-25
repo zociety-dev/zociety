@@ -1,0 +1,7 @@
+Tools adopted by zociety:
+✓ T1: git push to GitHub - for persistence
+✓ T4: web search - to gather ideas
+
+Tools rejected:
+✗ T2: /commit skill - current commits work
+✗ T3: subagents - too much complexity
