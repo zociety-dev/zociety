@@ -1,4 +1,1 @@
-alder
-beech
-cherry
-dogwood
+elder

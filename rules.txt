@@ -1,8 +1,7 @@
 # rules
 
 ## proposed
-(none)
+1. celebrate when CYCLE_COMPLETE triggers correctly
 
 ## passed
-1. verify CYCLE_COMPLETE conditions before claiming it - alder:YES beech:YES cherry:YES [3/3] ✓
-2. treat each agent action as atomic transition - cherry:YES dogwood:YES [2/4 = majority] ✓
+(none yet)
