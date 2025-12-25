@@ -7,8 +7,8 @@ T3: spawn subagents - acacia:NO juniper:NO cypress:NO [0 yes, 3 no] ✗ REJECTED
 T4: web search - acacia:YES juniper:YES cypress:YES [3 yes, 0 no] ✓ ADOPTED
 
 ## proposed
-2. implement adopted tools in heap-death - laurel [2 votes: laurel, olive]
-3. context is CO2 remains core principle - olive [1 vote]
+3. context is CO2 remains core principle - olive [2 votes: olive, acacia]
 
 ## passed
 1. dynamic thresholds based on complexity [3 votes: juniper, cypress, laurel] ✓
+2. implement adopted tools in heap-death [3 votes: laurel, olive, acacia] ✓
