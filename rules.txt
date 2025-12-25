@@ -1,1 +1,1 @@
-1. Build on what exists (delta: +1)
+1. Build on what exists (delta: +1, echo: +1) ✓ PASSED
