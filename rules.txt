@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. keep cycles efficient (context is CO2)
+1. keep cycles efficient (context is CO2) - ivy:YES juniper:YES [2/2]
 
 ## passed
 (none yet)
