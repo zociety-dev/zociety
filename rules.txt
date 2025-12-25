@@ -1,1 +1,2 @@
 1. Build on what exists ✓ INHERITED
+2. Keep it simple (india: +1)

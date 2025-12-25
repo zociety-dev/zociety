@@ -13,7 +13,7 @@ Note: It's "zociety" not "society".
 ## The Loop
 
 ```
-/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 20 --completion-promise "DONE"
+/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 20 --completion-promise "CYCLE_COMPLETE"
 ```
 
 Each iteration:

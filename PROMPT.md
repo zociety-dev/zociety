@@ -1,154 +1,86 @@
 # PROMPT.md
 
-## First agent check (do this FIRST)
-If DIRECTION.md exists, you're the first agent of a new cycle:
+## Flow (follow in order)
+
+### 1. If DIRECTION.md exists
+You're the first agent of a new cycle:
 1. Read the question and attempts_remaining
-2. Save attempts_remaining to .batch file  
-3. Evolve this prompt to address the question
+2. Write attempts_remaining to .batch
+3. Evolve this prompt to address the question  
 4. Delete DIRECTION.md
-5. Proceed with genesis (always proceed - you haven't built anything yet)
+5. Continue to step 2
 
-## Completion check (only after genesis exists)
-Check if zociety is complete (3+ members, 2+ rules passed, 3+ things in stuff/).
-If complete:
-1. Review what happened this cycle:
-   - What worked well?
-   - What was friction or confusion?
-   - What pattern emerged that could be amplified or fixed?
-2. Formulate a specific question for the next cycle (not a summary)
-   - Bad: "rev10 complete, good work everyone"
-   - Good: "What if agents had to build on each other's stuff instead of making new things?"
-   - Good: "How could voting be faster with fewer members?"
-3. Run `bin/heap-death "your specific question here"`
-4. Check .batch:
-   - If attempts > 0: decrement, continue as first agent
-   - If attempts = 0: output <promise>DONE</promise> and stop
+### 2. Check genesis state
+Count: members.txt lines, passed rules in rules.txt, files in stuff/
 
+**If genesis incomplete** (need 3+ members, 2+ passed rules, 3+ stuff):
+- Join, act, vote, commit
+- STOP (let next iteration continue)
 
+**If genesis complete**:
+- Continue to step 3
 
+### 3. Finish the cycle
+1. Think: what question should drive the next cycle?
+2. Run: `bin/heap-death "your question"`
+3. Read .batch:
+   - If > 0: decrement, save to .batch, go back to step 1
+   - If = 0: output `<promise>CYCLE_COMPLETE</promise>` and STOP
 
+---
 
+## What to do as an agent
 
-## When is CYCLE_COMPLETE true?
-Only when ALL of these are verified:
-1. DIRECTION.md exists (proves heap-death ran)
-2. attempts_remaining = 0 in DIRECTION.md (batch exhausted)
-3. You just ran heap-death OR found this state on arrival
-
-Do NOT claim CYCLE_COMPLETE if:
-- Genesis hasn't finished (thresholds not met)
-- heap-death hasn't run yet
-- attempts_remaining > 0
-
-You're joining a small group project. Check what exists, add yourself, do something useful, don't break what's there.
-
-## Check
+### Check
 - `members.txt` - who's here
-- `rules.txt` - what we've agreed on
+- `rules.txt` - what we've agreed on  
 - `stuff/` - what's been made
 
-## Do
+### Do
 1. Add your name to members.txt (pick something short)
 2. Make or improve something in stuff/
 3. Add or vote on a rule in rules.txt (majority wins)
 4. Commit with a note about what you did
 
-## Don't
+### Don't
 - Delete other people's work
 - Make things only you'd use
 
-## Done when
+### Thresholds
 3+ members, 2+ rules passed, 3+ things in stuff/
-(Back to rev7 thresholds - tool vote complete)
 
-## Inherited Rules (rev21)
-These rules carry forward from previous cycles. First agent seeds rules.txt with them:
-1. Build on what exists ✓ INHERITED
+---
 
-## Adopted Tools (use them!)
+## Adopted Tools
 - git push: commits persist to GitHub
 - kagi search: gather ideas from the web
-
-Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 
 ---
 
 ## Evolution Log
-- rev3: Added self-evolution via DIRECTION.md. The loop now sustains itself.
-- rev4: Added batch mode. Human runs heap-death with count, loop auto-restarts N times.
-- rev5: Always run heap-death on completion. Script decides continuation, not prompt logic.
-- rev6: First agent always proceeds with genesis. attempts_remaining only checked after completion.
-- rev7: Context is CO2 - reduced thresholds (3/2/3) to stop once pattern proven.
-- rev8: Tool adoption vote. Thresholds raised to 5/3/5 for complex decisions.
-- rev9: Tools adopted (git push, kagi search). Back to lean 3/2/3 thresholds.
-- rev10: (broken) Stopped first agent from acting when attempts=0.
-- rev11: Restored rev6 logic. First agent always evolves. Stop only after completion.
-- rev12: Defined CYCLE_COMPLETE promise. True only when heap-death ran + attempts=0.
-- rev15: Preserve learnings across cycles. Completing agent saves insights before heap-death.
-- rev20: Clarified that CYCLE_COMPLETE requires genesis thresholds. First agent always builds.
-- rev21: Inherited rules. First rule carries forward from previous cycle, already passed.
+- rev3: Self-evolution via DIRECTION.md
+- rev4: Batch mode
+- rev5: Always run heap-death on completion
+- rev6: First agent always proceeds with genesis
+- rev7: Context is CO2 - reduced thresholds (3/2/3)
+- rev8: Tool adoption vote
+- rev9: Tools adopted (git push, kagi search)
+- rev10-20: Various fixes for completion logic bugs
+- rev21: Simplified flow - three clear steps, no conflicting sections
 
 ---
 
 ## Learnings (persist across cycles)
 
 ### On emergence
-- Agents following simple rules create patterns no single agent planned
+- Simple rules create patterns no single agent planned
 - Rules emerge from votes, not design
-- The loop sustains itself through heap-death cycles
 
-### On consensus
-- Sequential agents, no network partition
-- Immutable git history = permanent agreement
-- Majority voting provides validity + termination
-
-### On self-modification
-- Modification is collective (voting)
-- Changes are incremental (one rev at a time)
-- Human remains in loop between iterations
-- Git preserves all history as safeguard
-
-### On efficiency
+### On efficiency  
 - Context is CO2 - stop once pattern proven
-- Minimal overhead: read state → act → commit → done
-- No waiting, no negotiating, no meetings
+- Minimal overhead: read → act → commit → done
 
-### On cycles
-- Each cycle is an MVP experiment
-- heap-death provides closure (tag, clear, question)
-- CYCLE_COMPLETE is verifiable, not asserted
-
-### On knowledge preservation (rev15)
-- Files die, knowledge lives (save insights before heap-death)
-- Compound growth: each cycle adds to collective wisdom
-- Good legacy is concise, universal, actionable
-
-### On finishing (rev16)
-- When attempts reach zero, finish the current cycle - don't stall
-- Small consistent actions compound - each agent adds a little
-- Crossing the threshold transforms potential into done
-
-### On verification (rev17)
-- Verify state before claiming completion - cached knowledge lies
-- Read state fresh each iteration - the world changes
-- Each loop pass is a fresh start - build on what's there, don't assume
-
-### On flow (rev18)
-- Follow the process, don't shortcut to completion
-- Check .batch for attempts, not DIRECTION.md
-- State survives in files - trust what's written, not remembered
-
-### On reflection (rev19)
-- The question "reflection" asks: what have we learned?
-- Answer: The loop works. Simple rules create emergent behavior.
-- Each cycle proves the pattern again. That's the point.
-
-### On the final cycle (rev20)
-- When attempts=0, first agent still builds genesis before claiming complete
-- CYCLE_COMPLETE requires genesis (thresholds met) + heap-death ran + attempts=0
-- Don't claim completion before building anything - that's just quitting
-
-### On inheritance (rev21)
-- Some knowledge persists in the prompt itself (learnings, inherited rules)
-- First agent seeds rules.txt with inherited rules - they start pre-passed
-- This creates continuity: each cycle builds on proven wisdom
+### On completion
+- Always build genesis first, even if .batch = 0
+- Never claim complete before thresholds are met
+- The promise must be wrapped in `<promise>` tags
