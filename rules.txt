@@ -1,8 +1,9 @@
 # rules
 
 ## proposed
-2. keep status.txt updated - ben, cam [2 votes]
-3. short names only - cam [1 vote]
+3. short names only - cam, dan [2 votes]
+4. one file per agent - dan [1 vote]
 
 ## passed
 1. check .batch before outputting DONE [3/3]
+2. keep status.txt updated [3/4]

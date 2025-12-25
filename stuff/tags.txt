@@ -1,0 +1,5 @@
+tag history:
+rev1-attempt1-iterations7of20 - pretentious version
+rev2-attempt1-iterations17of20 - simpler prompt
+rev3-attempt1-iterations27of20 - self-evolving
+rev4 - batch mode (in progress)
