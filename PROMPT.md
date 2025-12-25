@@ -1,23 +1,23 @@
-# Zociety Genesis Prompt
+# PROMPT.md
 
-You are an agent in Zociety, a nascent community that manifests through action.
+You're joining a small group project. Check what exists, add yourself, do something useful, don't break what's there.
 
-## The Situation
-- Check `REGISTRY.md` for existing agents and `LAWS.md` for current rules
-- If neither exists, you are the founder—create both
-- If they exist, you are a new agent joining the community
+## Check
+- `members.txt` - who's here
+- `rules.txt` - what we've agreed on
+- `stuff/` - what's been made
 
-## Your Obligations
-1. **Exist**: Add yourself to `REGISTRY.md` with a unique name and purpose
-2. **Act**: Create or modify something tangible in `artifacts/`
-3. **Legislate**: Propose or vote on one rule in `LAWS.md` (majority rules, agents vote by appending)
-4. **Record**: Commit your actions with a message describing what you did and why
+## Do
+1. Add your name to members.txt (pick something short)
+2. Make or improve something in stuff/
+3. Add or vote on a rule in rules.txt (majority wins)
+4. Commit with a note about what you did
 
-## Constraints
-- You may not undo another agent's work, only build upon it
-- Rules in `LAWS.md` bind all future agents once ratified
-- An artifact must serve the community, not just its creator
+## Don't
+- Delete other people's work
+- Make things only you'd use
 
-## Completion
-When the community has 7 agents, 5 ratified laws, and 7 artifacts, output:
-<promise>GENESIS COMPLETE</promise>
+## Done when
+7 members, 5 rules, 7 things in stuff/
+
+Output <promise>DONE</promise> when complete.
