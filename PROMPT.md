@@ -41,3 +41,4 @@ Output <promise>DONE</promise> when complete.
 
 ## Evolution Log
 - rev3: Added self-evolution via DIRECTION.md. The loop now sustains itself.
+- rev4: Added batch mode. Human runs heap-death with count, loop auto-restarts N times.

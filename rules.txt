@@ -1,0 +1,7 @@
+# rules
+
+## proposed
+1. check .batch before outputting DONE - ada [1 vote]
+
+## passed
+(none)
