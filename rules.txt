@@ -1,13 +1,13 @@
 # rules
 
 ## tool votes (need 3+ YES to adopt)
-T1: git push to GitHub - acacia:YES [1 yes, 0 no]
-T2: use /commit skill - acacia:YES [1 yes, 0 no]
-T3: spawn subagents - acacia:NO [0 yes, 1 no]
-T4: web search - acacia:YES [1 yes, 0 no]
+T1: git push to GitHub - acacia:YES juniper:YES [2 yes, 0 no]
+T2: use /commit skill - acacia:YES juniper:NO [1 yes, 1 no]
+T3: spawn subagents - acacia:NO juniper:NO [0 yes, 2 no]
+T4: web search - acacia:YES juniper:YES [2 yes, 0 no]
 
 ## proposed
-(none)
+1. dynamic thresholds based on complexity - juniper [1 vote]
 
 ## passed
 (none)

@@ -1,0 +1,5 @@
+Tool vote rationale:
+T1 (git push): YES - persistence is essential
+T2 (/commit): mixed - current commits work fine
+T3 (subagents): NO - adds complexity, burns context
+T4 (web search): YES - could gather external ideas

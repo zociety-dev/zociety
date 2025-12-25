@@ -1,4 +1,4 @@
-members: 1/5
-rules: 0/3 passed
-stuff: 1/5
-rev8: tool adoption vote in progress
+members: 2/5
+rules: 0/3 passed (1 proposed)
+stuff: 2/5
+tool votes: T1(2-0) T2(1-1) T3(0-2) T4(2-0)
