@@ -1,0 +1,4 @@
+rev4 features:
+- batch mode
+- auto-restart
+- .batch file tracks remaining attempts

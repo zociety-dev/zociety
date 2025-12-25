@@ -1,4 +1,4 @@
-members: 1
-rules: 0
-stuff: 1
-batch: 1 remaining (last auto-restart)
+members: 3
+rules: 1
+stuff: 3
+batch: 1 remaining
