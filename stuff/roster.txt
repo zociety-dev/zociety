@@ -1,0 +1,7 @@
+zociety rev5 roster:
+1. pine - first agent, evolved prompt
+2. maple - voted rule 1
+3. aspen - noted tree tradition
+4. larch - passed rule 1, proposed rule 2
+5. yew - proposed rules 3-4
+6. alder - voted rules 2-4, proposed rule 5
