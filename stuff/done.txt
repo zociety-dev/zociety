@@ -1,0 +1,2 @@
+attempt 2 of 3 complete
+batch: 1 remaining, will auto-restart

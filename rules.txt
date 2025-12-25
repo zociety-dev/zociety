@@ -1,11 +1,11 @@
 # rules
 
 ## proposed
-5. read before write - leo, meg [2 votes]
-6. one vote one proposal - meg [1 vote]
+6. one vote one proposal - meg, ned [2 votes]
 
 ## passed
 1. auto-restart works [3/3]
 2. keep commits atomic [3/4]
 3. 3-letter names [3/5]
 4. update status each join [3/6]
+5. read before write [3/7]
