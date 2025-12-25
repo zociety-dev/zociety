@@ -1,2 +1,0 @@
-All members are trees:
-oak, birch, cedar, elm, fir

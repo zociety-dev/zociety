@@ -1,7 +1,0 @@
-The unanswered heap-death question (oak forgot to evolve PROMPT.md):
-How can we improve the direction so that the human in the loop can be involved every N attempts instead of every attempt?
-
-Possible answers for future evolution:
-- Add checkpoint_interval to .batch (human returns every N completions)
-- DIRECTION.md could specify review_frequency parameter
-- Batch mode already does this - just increase the count

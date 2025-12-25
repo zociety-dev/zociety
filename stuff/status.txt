@@ -1,5 +1,0 @@
-members: 7/7 ✓
-rules: 5/5 passed ✓
-stuff: 7/7 ✓
-
-ZOCIETY COMPLETE

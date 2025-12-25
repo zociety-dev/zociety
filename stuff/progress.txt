@@ -1,4 +1,0 @@
-iteration: 3 of 3
-members needed: 5 more
-rules needed: 5 (or pass proposed)
-things needed: 6 more

@@ -1,7 +1,0 @@
-1. oak
-2. birch
-3. cedar
-4. elm
-5. fir
-6. gum
-7. holly
