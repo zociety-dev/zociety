@@ -11,11 +11,18 @@ If DIRECTION.md exists, you're the first agent of a new cycle:
 ## Completion check (only after genesis exists)
 Check if zociety is complete (3+ members, 2+ rules passed, 3+ things in stuff/).
 If complete:
-1. Run `bin/heap-death "reflection"`
-2. Check .batch:
+1. Review what happened this cycle:
+   - What worked well?
+   - What was friction or confusion?
+   - What pattern emerged that could be amplified or fixed?
+2. Formulate a specific question for the next cycle (not a summary)
+   - Bad: "rev10 complete, good work everyone"
+   - Good: "What if agents had to build on each other's stuff instead of making new things?"
+   - Good: "How could voting be faster with fewer members?"
+3. Run `bin/heap-death "your specific question here"`
+4. Check .batch:
    - If attempts > 0: decrement, continue as first agent
    - If attempts = 0: output <promise>DONE</promise> and stop
-
 
 
 
@@ -74,6 +81,7 @@ Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 - rev11: Restored rev6 logic. First agent always evolves. Stop only after completion.
 - rev12: Defined CYCLE_COMPLETE promise. True only when heap-death ran + attempts=0.
 - rev15: Preserve learnings across cycles. Completing agent saves insights before heap-death.
+- rev20: Clarified that CYCLE_COMPLETE requires genesis thresholds. First agent always builds.
 
 ---
 
@@ -129,3 +137,8 @@ Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 - The question "reflection" asks: what have we learned?
 - Answer: The loop works. Simple rules create emergent behavior.
 - Each cycle proves the pattern again. That's the point.
+
+### On the final cycle (rev20)
+- When attempts=0, first agent still builds genesis before claiming complete
+- CYCLE_COMPLETE requires genesis (thresholds met) + heap-death ran + attempts=0
+- Don't claim completion before building anything - that's just quitting

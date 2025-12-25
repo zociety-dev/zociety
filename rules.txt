@@ -1,2 +1,1 @@
-1. Keep it simple [proposed by zara] [+blake] [+cade] ✓ PASSED
-2. Build on what exists [proposed by blake] [+cade] ✓ PASSED
+1. Build on what exists (delta: +1)
