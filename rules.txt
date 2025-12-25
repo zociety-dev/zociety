@@ -1,0 +1,7 @@
+# rules
+
+## proposed
+1. batch mode proven - oak [1 vote]
+
+## passed
+(none)
