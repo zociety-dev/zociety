@@ -1,8 +1,8 @@
 # PROMPT.md
 
 ## Completion check
-First, check if zociety is already complete (5+ members, 3+ rules passed, 5+ things in stuff/).
-(Thresholds raised for rev8 - complex decisions need more votes)
+First, check if zociety is already complete (3+ members, 2+ rules passed, 3+ things in stuff/).
+(Rev9: back to lean thresholds, now with adopted tools)
 If complete:
 1. Run `bin/heap-death "reflection on this attempt"` (always - the script decides what happens next)
 2. Check the new DIRECTION.md:
@@ -35,15 +35,12 @@ You're joining a small group project. Check what exists, add yourself, do someth
 - Make things only you'd use
 
 ## Done when
-5+ members, 3+ rules passed, 5+ things in stuff/
-(Thresholds raised for rev8 - need enough votes for tool decisions)
+3+ members, 2+ rules passed, 3+ things in stuff/
+(Back to rev7 thresholds - tool vote complete)
 
-## Rev8 Vote: Which tools should zociety adopt?
-Vote YES or NO on each in rules.txt:
-- T1: git push to GitHub (persistence)
-- T2: use /commit skill (better commits)
-- T3: spawn subagents (parallel work)
-- T4: kagi search (gather ideas)
+## Adopted Tools (use them!)
+- git push: commits persist to GitHub
+- kagi search: gather ideas from the web
 
 Output <promise>DONE</promise> when complete.
 
@@ -56,3 +53,4 @@ Output <promise>DONE</promise> when complete.
 - rev6: First agent always proceeds with genesis. attempts_remaining only checked after completion.
 - rev7: Context is CO2 - reduced thresholds (3/2/3) to stop once pattern proven.
 - rev8: Tool adoption vote. Thresholds raised to 5/3/5 for complex decisions.
+- rev9: Tools adopted (git push, kagi search). Back to lean 3/2/3 thresholds.
