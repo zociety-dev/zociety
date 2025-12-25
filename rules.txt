@@ -1,7 +1,8 @@
 # Rules (majority vote to pass)
 
 ## Proposed
-1. keep commits short - cal [1 vote]
+1. keep commits short - cal, rox [2 votes]
+2. name your files plainly - rox [1 vote]
 
 ## Passed
 (none yet)

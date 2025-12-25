@@ -1,0 +1,4 @@
+things we could make:
+- a simple game
+- a shared todo list
+- ascii art
