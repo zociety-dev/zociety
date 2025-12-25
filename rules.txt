@@ -1,8 +1,8 @@
 # rules
 
 ## proposed
-1. read CLAUDE.md before changing workflows - eve, kit [2 votes]
-2. keep stuff/ organized - kit [1 vote]
+2. keep stuff/ organized - kit, fen [2 votes]
+3. update status.txt when joining - fen [1 vote]
 
 ## passed
-(none)
+1. read CLAUDE.md before changing workflows [3/3]
