@@ -1,4 +1,0 @@
-maple
-oak
-pine
-elm

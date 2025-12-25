@@ -1,8 +1,0 @@
-# rules
-
-## proposed
-(none)
-
-## passed
-1. first agent documents what question they're addressing - maple:YES oak:YES pine:YES [3/3] ✓
-2. stuff should connect to zociety's design - pine:YES elm:YES [2/4 = majority] ✓

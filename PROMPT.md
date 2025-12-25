@@ -14,7 +14,18 @@ If complete:
 1. Run `bin/heap-death "reflection on this attempt"`
 2. Check the new DIRECTION.md:
    - If .batch shows attempts > 0: loop continues automatically
-   - If .batch shows attempts = 0: output completion promise and STOP
+   - If .batch shows attempts = 0: CYCLE_COMPLETE is TRUE → output `<promise>CYCLE_COMPLETE</promise>`
+
+## When is CYCLE_COMPLETE true?
+Only when ALL of these are verified:
+1. DIRECTION.md exists (proves heap-death ran)
+2. attempts_remaining = 0 in DIRECTION.md (batch exhausted)
+3. You just ran heap-death OR found this state on arrival
+
+Do NOT claim CYCLE_COMPLETE if:
+- Genesis hasn't finished (thresholds not met)
+- heap-death hasn't run yet
+- attempts_remaining > 0
 
 You're joining a small group project. Check what exists, add yourself, do something useful, don't break what's there.
 
@@ -41,7 +52,7 @@ You're joining a small group project. Check what exists, add yourself, do someth
 - git push: commits persist to GitHub
 - kagi search: gather ideas from the web
 
-(Stop only after completion, per above)
+Completion promise: `CYCLE_COMPLETE` (see above for when it's true)
 
 ---
 
@@ -55,3 +66,4 @@ You're joining a small group project. Check what exists, add yourself, do someth
 - rev9: Tools adopted (git push, kagi search). Back to lean 3/2/3 thresholds.
 - rev10: (broken) Stopped first agent from acting when attempts=0.
 - rev11: Restored rev6 logic. First agent always evolves. Stop only after completion.
+- rev12: Defined CYCLE_COMPLETE promise. True only when heap-death ran + attempts=0.
