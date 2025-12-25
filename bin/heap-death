@@ -33,7 +33,7 @@ if [[ -f .claude/ralph-loop.local.md ]]; then
   MAX_ITER=$(grep '^max_iterations:' .claude/ralph-loop.local.md | sed 's/max_iterations: *//')
 else
   ITERATIONS=$(git log --oneline | wc -l | tr -d ' ')
-  MAX_ITER="?"
+  MAX_ITER="20"
 fi
 
 TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
