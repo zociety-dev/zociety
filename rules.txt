@@ -1,9 +1,10 @@
 # rules
 
 ## proposed
-3. short names only - cam, dan [2 votes]
-4. one file per agent - dan [1 vote]
+4. one file per agent - dan, eli [2 votes]
+5. vote before proposing - eli [1 vote]
 
 ## passed
 1. check .batch before outputting DONE [3/3]
 2. keep status.txt updated [3/4]
+3. short names only [3/5]
