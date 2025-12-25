@@ -1,9 +1,10 @@
 # rules
 
 ## proposed
-3. 3-letter names - jan, kim [2 votes]
-4. update status each join - kim [1 vote]
+4. update status each join - kim, leo [2 votes]
+5. read before write - leo [1 vote]
 
 ## passed
 1. auto-restart works [3/3]
 2. keep commits atomic [3/4]
+3. 3-letter names [3/5]

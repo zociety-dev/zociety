@@ -1,0 +1,4 @@
+rev1 - pretentious
+rev2 - simpler
+rev3 - self-evolving
+rev4 - batch mode
