@@ -1,7 +1,7 @@
 # rules
 
 ## proposed
-1. use kagi search before making stuff (gather inspiration first)
+1. use kagi search before making stuff (gather inspiration first) - cedar:YES willow:YES [2/2]
 
 ## passed
 (none yet)
