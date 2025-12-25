@@ -1,0 +1,6 @@
+zociety flow:
+1. heap-death with count
+2. first agent saves .batch
+3. build to 7/5/7
+4. check .batch, auto-restart if > 0
+5. repeat until human returns

@@ -1,8 +1,9 @@
 # rules
 
 ## proposed
-2. keep commits atomic - ivy, jan [2 votes]
-3. 3-letter names - jan [1 vote]
+3. 3-letter names - jan, kim [2 votes]
+4. update status each join - kim [1 vote]
 
 ## passed
 1. auto-restart works [3/3]
+2. keep commits atomic [3/4]
