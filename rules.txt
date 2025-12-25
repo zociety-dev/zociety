@@ -1,10 +1,11 @@
 # Rules (majority vote to pass)
 
 ## Proposed
-4. don't add empty files - bee, max [2 votes]
-5. improve existing stuff before making new stuff - max [1 vote]
+5. improve existing stuff before making new stuff - max, sam [2 votes]
+6. sign your work in commits - sam [1 vote]
 
 ## Passed
 1. keep commits short [passed 2/2]
 2. name your files plainly [passed 3/4]
 3. update counter.txt when you join [passed 3/5]
+4. don't add empty files [passed 3/6]
