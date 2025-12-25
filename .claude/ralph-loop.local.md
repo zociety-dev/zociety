@@ -1,6 +1,6 @@
 ---
 active: true
-iteration: 2
+iteration: 3
 max_iterations: 60
 completion_promise: "ZOCIETYDIDTHEIRBEST"
 started_at: "2025-12-25T14:07:41Z"

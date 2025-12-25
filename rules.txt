@@ -1,7 +1,8 @@
 # rules
 
 ## proposed
-2. keep tree theme - fig [1 vote]
+(none)
 
 ## passed
-1. context is CO2 (actually implemented now) [3 votes: banyan, palm, fig] ✓
+1. context is CO2 (actually implemented now)
+2. keep tree theme [2 votes: fig, banyan] ✓
