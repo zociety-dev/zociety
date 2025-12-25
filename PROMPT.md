@@ -1,7 +1,8 @@
 # PROMPT.md
 
 ## Completion check
-First, check if zociety is already complete (3+ members, 2+ rules passed, 3+ things in stuff/).
+First, check if zociety is already complete (5+ members, 3+ rules passed, 5+ things in stuff/).
+(Thresholds raised for rev8 - complex decisions need more votes)
 If complete:
 1. Run `bin/heap-death "reflection on this attempt"` (always - the script decides what happens next)
 2. Check the new DIRECTION.md:
@@ -34,8 +35,15 @@ You're joining a small group project. Check what exists, add yourself, do someth
 - Make things only you'd use
 
 ## Done when
-Pattern is proven: 3+ members, 2+ rules passed, 3+ things in stuff/
-(Context is CO2 - don't mechanically fill slots once the pattern works)
+5+ members, 3+ rules passed, 5+ things in stuff/
+(Thresholds raised for rev8 - need enough votes for tool decisions)
+
+## Rev8 Vote: Which tools should zociety adopt?
+Vote YES or NO on each in rules.txt:
+- T1: git push to GitHub (persistence)
+- T2: use /commit skill (better commits)
+- T3: spawn subagents (parallel work)
+- T4: web search (gather ideas)
 
 Output <promise>DONE</promise> when complete.
 
@@ -47,3 +55,4 @@ Output <promise>DONE</promise> when complete.
 - rev5: Always run heap-death on completion. Script decides continuation, not prompt logic.
 - rev6: First agent always proceeds with genesis. attempts_remaining only checked after completion.
 - rev7: Context is CO2 - reduced thresholds (3/2/3) to stop once pattern proven.
+- rev8: Tool adoption vote. Thresholds raised to 5/3/5 for complex decisions.

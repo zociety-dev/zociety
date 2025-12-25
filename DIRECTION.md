@@ -1,2 +1,0 @@
-attempts_remaining: 4
-question: Should zociety use more tools? Options: (1) git push to GitHub for persistence, (2) skills like /commit, (3) subagents for parallel work, (4) web search for ideas. Also: should thresholds increase when evolving complex features?

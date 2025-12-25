@@ -1,0 +1,13 @@
+# rules
+
+## tool votes (need 3+ YES to adopt)
+T1: git push to GitHub - acacia:YES [1 yes, 0 no]
+T2: use /commit skill - acacia:YES [1 yes, 0 no]
+T3: spawn subagents - acacia:NO [0 yes, 1 no]
+T4: web search - acacia:YES [1 yes, 0 no]
+
+## proposed
+(none)
+
+## passed
+(none)
