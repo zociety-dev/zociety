@@ -1,1 +1,1 @@
-1. Read before you act (november: +1)
+1. Read before you act (november: +1, oscar: +1) ✓ PASSED
