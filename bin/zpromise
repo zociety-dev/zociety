@@ -1,28 +1,27 @@
 #!/bin/bash
-# zpromise: Output completion promise and final event
+# zpromise: Output completion promise
+#
+# Call this when zstate shows action="promise"
+# This happens after heap-death with batch_remaining=0
 
 set -e
 
-AGENT="${1:-system}"
-
-# Verify state
+# Verify we're in the right state
 STATE=$(bin/zstate)
-COMPLETE=$(echo "$STATE" | jq -r '.genesis.complete')
-BATCH=$(echo "$STATE" | jq -r '.batch // 0')
+ACTION=$(echo "$STATE" | jq -r '.action')
+LAST_EVENT=$(echo "$STATE" | jq -r '.last_event')
 
-if [[ "$COMPLETE" != "true" ]]; then
-  echo "ERROR: Genesis not complete" >&2
-  echo "Current state:" >&2
-  echo "$STATE" | jq .genesis >&2
+if [[ "$ACTION" != "promise" ]]; then
+  echo "ERROR: Current action is '$ACTION', not 'promise'" >&2
+  echo "Run bin/zstate to see current state" >&2
   exit 1
 fi
 
-if [[ "$BATCH" != "0" && "$BATCH" != "null" ]]; then
-  echo "ERROR: Batch remaining ($BATCH), run heap-death instead" >&2
-  exit 1
+# Safety check: should only promise after heap-death
+if [[ "$LAST_EVENT" != "heap-death" ]]; then
+  echo "WARNING: Last event was '$LAST_EVENT', expected 'heap-death'" >&2
+  echo "Proceeding anyway..." >&2
 fi
-
-bin/zevent complete "$AGENT" "cycle complete" '{}'
 
 echo ""
 echo "<promise>CYCLE_COMPLETE</promise>"

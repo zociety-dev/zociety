@@ -1,0 +1,31 @@
+#!/bin/bash
+# zcomplete: Record genesis completion event
+#
+# Call this when zstate shows action="complete"
+# This happens when genesis thresholds are met for the first time
+
+set -e
+
+AGENT="${1:-system}"
+
+# Verify we're in the right state
+STATE=$(bin/zstate)
+ACTION=$(echo "$STATE" | jq -r '.action')
+COMPLETE=$(echo "$STATE" | jq -r '.genesis.complete')
+
+if [[ "$ACTION" != "complete" ]]; then
+  echo "ERROR: Current action is '$ACTION', not 'complete'" >&2
+  echo "Run bin/zstate to see current state" >&2
+  exit 1
+fi
+
+if [[ "$COMPLETE" != "true" ]]; then
+  echo "ERROR: Genesis not complete" >&2
+  echo "$STATE" | jq .genesis >&2
+  exit 1
+fi
+
+# Record the completion event
+bin/zevent complete "$AGENT" "genesis complete" '{}'
+
+echo "Completion event recorded. Next agent should run heap-death."

@@ -151,55 +151,50 @@ done
 git rm -f .claude/ralph-loop.local.md --quiet 2>/dev/null || true
 
 #############################################
-# 8. Commit direction event for next cycle
+# 8. Commit direction event for next cycle (only if batch remains)
 #############################################
 
-NEXT_CYCLE=$((CURRENT_CYCLE + 1))
+if [[ "$REMAINING" -gt 0 ]]; then
+  NEXT_CYCLE=$((CURRENT_CYCLE + 1))
 
-# DIRECTION_DATA is created but used in manual commit below (shellcheck ignore)
-# shellcheck disable=SC2034
-DIRECTION_DATA=$(jq -n \
-  --arg question "$QUESTION" \
-  --argjson total "$BATCH_SIZE" \
-  --argjson remaining "$REMAINING" \
-  '{question: $question, batch_total: $total, batch_remaining: $remaining}')
+  DIRECTION_EVENT=$(jq -n \
+    --arg type "direction" \
+    --arg agent "system" \
+    --argjson cycle "$NEXT_CYCLE" \
+    --argjson seq 1 \
+    --arg question "$QUESTION" \
+    --argjson total "$BATCH_SIZE" \
+    --argjson remaining "$REMAINING" \
+    '{
+      z: 1,
+      event: $type,
+      cycle: $cycle,
+      seq: $seq,
+      agent: $agent,
+      ts: (now | todate),
+      state: {
+        members: 0,
+        rules: 0,
+        stuff: 0,
+        complete: false
+      },
+      data: {
+        question: $question,
+        batch_total: $total,
+        batch_remaining: $remaining
+      }
+    }'
+  )
 
-# Create a special commit for direction event with incremented cycle
-# This requires a custom commit since zevent would use current cycle
-DIRECTION_EVENT=$(jq -n \
-  --arg type "direction" \
-  --arg agent "system" \
-  --argjson cycle "$NEXT_CYCLE" \
-  --argjson seq 1 \
-  --arg question "$QUESTION" \
-  --argjson total "$BATCH_SIZE" \
-  --argjson remaining "$REMAINING" \
-  '{
-    z: 1,
-    event: $type,
-    cycle: $cycle,
-    seq: $seq,
-    agent: $agent,
-    ts: (now | todate),
-    state: {
-      members: 0,
-      rules: 0,
-      stuff: 0,
-      complete: false
-    },
-    data: {
-      question: $question,
-      batch_total: $total,
-      batch_remaining: $remaining
-    }
-  }'
-)
-
-DIRECTION_MSG="[direction] system: $QUESTION
+  DIRECTION_MSG="[direction] system: $QUESTION
 
 $DIRECTION_EVENT"
 
-git commit --allow-empty -m "$DIRECTION_MSG" --quiet
+  git commit --allow-empty -m "$DIRECTION_MSG" --quiet
+  echo "Direction event committed for cycle $NEXT_CYCLE"
+else
+  echo "Batch exhausted - no direction event (next agent will output promise)"
+fi
 
 echo ""
 echo "╔════════════════════════════════════════╗"

@@ -14,8 +14,9 @@ This returns JSON with an `action` field. Follow it:
 |--------|-----------|
 | `evolve` | Read `direction`, evolve this prompt, then contribute |
 | `contribute` | Join (if not member), make stuff, vote on rules |
-| `heap-death` | Run `bin/zheap-death <name> "<question>" <batch>` |
-| `promise` | Run `bin/zpromise <name>` and STOP |
+| `complete` | Run `bin/zcomplete <n>` to record genesis completion |
+| `heap-death` | Run `bin/zheap-death <n> "<question>" 1` to archive cycle |
+| `promise` | Run `bin/zpromise` and STOP |
 
 ## Contributing
 
@@ -103,6 +104,7 @@ bin/zstate           # Current state and next action
 bin/zjoin            # Join as member
 bin/zstuff           # Record stuff creation
 bin/zvote            # Vote on rules
+bin/zcomplete        # Record genesis completion
 bin/zheap-death      # Archive cycle, start next
 bin/zpromise         # Output completion promise
 bin/read-learnings   # See insights from past cycles
