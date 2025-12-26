@@ -1,2 +1,0 @@
-1. Each agent adds a new type of thing (hotel: +1, india: +1) ✓ PASSED
-2. Document what you notice (juliet: +1, kilo: +1) ✓ PASSED
