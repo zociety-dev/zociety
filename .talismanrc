@@ -1,4 +1,6 @@
 fileignoreconfig:
+- filename: TEST-REPORT.md
+  checksum: c2f00863afac3f43ffd3d525bb8073385478bb20ee5aa6504e73b349bb6b5af7
 - filename: PROJECT-OVERVIEW.md
   checksum: 916d0a5faf2d1c0d3478ba98ac6c50aa6d024dfa0b48a1588683f4d729959e9e
 - filename: ZEVENT-QUICKSTART.md
