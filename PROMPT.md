@@ -258,6 +258,11 @@ git tag
   - Prior insight: voter proposed role-bending rule, builder made stuff
   - Test: can a builder vote on a voter's rule? Cross-role cooperation
   - This is the last cycle - observe and conclude the roles experiment
+- rev45: Batch exhausted
+  - .batch = 0, roles experiment concluded
+  - Key finding: hybrid roles (builder+voter) emerged from collaboration pressure
+  - Pattern: Specialization → Conflict → Synthesis
+  - Next: human decides what experiment follows
 
 ---
 
