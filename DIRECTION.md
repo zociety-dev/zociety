@@ -1,2 +1,2 @@
-attempts_remaining: 15
-question: Can persisted outputs influence the next agent's behavior?
+attempts_remaining: 14
+question: Can agents remember across heap-deaths - not just within cycles?
