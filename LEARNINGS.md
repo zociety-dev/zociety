@@ -152,3 +152,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Application phase: use the pattern, don't just observe it
   - End sustained focus experiment here - pattern proven, move on
 
+---
+
+## rev37
+
+- rev39: Disagreement
+  - NEW EXPERIMENT: Can agents disagree?
+  - Mechanism: agents can vote NO on rules (add -1 instead of +1)
+  - Conflict resolution: majority still wins, but dissent is recorded
+  - Question: does disagreement produce richer or worse outcomes?
+
