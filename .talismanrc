@@ -1,4 +1,6 @@
 fileignoreconfig:
+- filename: PROJECT-OVERVIEW.md
+  checksum: 916d0a5faf2d1c0d3478ba98ac6c50aa6d024dfa0b48a1588683f4d729959e9e
 - filename: ZEVENT-QUICKSTART.md
   checksum: 5d059a25a8a2c36a7e060d402bb8c0eed6cdd5dcd242ac08538ee44f5d6ae0fd
 - filename: bin/zevent

@@ -7,7 +7,10 @@ set -e
 TYPE="$1"
 AGENT="$2"
 DESC="$3"
-DATA="${4:-{}}"
+DATA="${4}"
+if [[ -z "$DATA" ]]; then
+  DATA="{}"
+fi
 
 if [[ -z "$TYPE" || -z "$AGENT" || -z "$DESC" ]]; then
   echo "Usage: bin/zevent <type> <agent> <description> [data_json]" >&2
@@ -19,10 +22,10 @@ CURRENT=$(bin/zstate)
 CYCLE=$(echo "$CURRENT" | jq -r '.cycle')
 SEQ=$(echo "$CURRENT" | jq -r '.seq + 1')
 
-# Count current genesis state from git history
-MEMBERS=$(git log --oneline --grep='^\[join\]' 2>/dev/null | wc -l | tr -d ' ')
-RULES=$(git log --oneline --grep='^\[pass\]' 2>/dev/null | wc -l | tr -d ' ')
-STUFF=$(git ls-files stuff/ 2>/dev/null | wc -l | tr -d ' ')
+# Get current genesis counts from last event
+MEMBERS=$(echo "$CURRENT" | jq -r '.genesis.members')
+RULES=$(echo "$CURRENT" | jq -r '.genesis.rules')
+STUFF=$(echo "$CURRENT" | jq -r '.genesis.stuff')
 
 # Adjust counts based on event type
 case "$TYPE" in
@@ -31,9 +34,12 @@ case "$TYPE" in
   stuff) STUFF=$((STUFF + 1)) ;;
 esac
 
-# Check completion
-COMPLETE="false"
-[[ $MEMBERS -ge 3 && $RULES -ge 2 && $STUFF -ge 3 ]] && COMPLETE="true"
+# Check completion (as JSON boolean)
+if [[ $MEMBERS -ge 3 && $RULES -ge 2 && $STUFF -ge 3 ]]; then
+  COMPLETE="true"
+else
+  COMPLETE="false"
+fi
 
 # Build event JSON
 EVENT=$(jq -n \
@@ -44,8 +50,8 @@ EVENT=$(jq -n \
   --argjson members "$MEMBERS" \
   --argjson rules "$RULES" \
   --argjson stuff "$STUFF" \
-  --argjson complete "$COMPLETE" \
   --argjson data "$DATA" \
+  --arg complete "$COMPLETE" \
   '{
     z: 1,
     event: $type,
@@ -57,7 +63,7 @@ EVENT=$(jq -n \
       members: $members,
       rules: $rules,
       stuff: $stuff,
-      complete: $complete
+      complete: ($complete == "true")
     },
     data: $data
   }'

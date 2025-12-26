@@ -15,7 +15,7 @@ if [[ -z "$AGENT" || -z "$RULE" || -z "$DESC" ]]; then
   exit 1
 fi
 
-DATA=$(jq -n \
+DATA=$(jq -nc \
   --argjson rule "$RULE" \
   --arg description "$DESC" \
   --argjson for "$FOR" \

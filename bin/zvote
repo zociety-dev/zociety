@@ -16,7 +16,7 @@ fi
 
 [[ "$VOTE_STR" == "yes" ]] && VOTE=1 || VOTE=-1
 
-DATA=$(jq -n --argjson rule "$RULE" --argjson vote "$VOTE" --arg reason "$REASON" \
+DATA=$(jq -nc --argjson rule "$RULE" --argjson vote "$VOTE" --arg reason "$REASON" \
   '{rule: $rule, vote: $vote, reason: $reason}')
 
 bin/zevent vote "$AGENT" "$VOTE_STR on rule $RULE" "$DATA"

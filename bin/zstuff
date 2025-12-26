@@ -13,7 +13,7 @@ if [[ -z "$AGENT" || -z "$FILE" ]]; then
   exit 1
 fi
 
-DATA=$(jq -n --arg file "$FILE" --arg traversal "$TRAVERSAL" \
+DATA=$(jq -nc --arg file "$FILE" --arg traversal "$TRAVERSAL" \
   '{file: $file, action: "create", traversal: $traversal}')
 
 bin/zevent stuff "$AGENT" "added $FILE" "$DATA"

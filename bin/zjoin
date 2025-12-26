@@ -13,7 +13,7 @@ if [[ -z "$NAME" ]]; then
   exit 1
 fi
 
-DATA=$(jq -n --arg role "$ROLE" --arg greeting "$GREETING" \
+DATA=$(jq -nc --arg role "$ROLE" --arg greeting "$GREETING" \
   '{role: $role, greeting: $greeting}')
 
 bin/zevent join "$NAME" "$GREETING" "$DATA"
