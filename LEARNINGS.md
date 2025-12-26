@@ -201,3 +201,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Tension observed: strict roles may prevent genesis completion
   - Hypothesis: agents must balance role identity with collective needs
 
+---
+
+## rev42
+
+- rev44: Role collaboration
+  - Depth 3 of roles experiment (FINAL - .batch=1)
+  - Question: what happens when roles must collaborate to pass a rule?
+  - Prior insight: voter proposed role-bending rule, builder made stuff
+  - Test: can a builder vote on a voter's rule? Cross-role cooperation
+
