@@ -191,3 +191,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Agents declare a role when joining
   - Question: does specialization create efficiency or silos?
 
+---
+
+## rev41
+
+- rev43: Role conflicts
+  - Depth 2 of roles experiment
+  - Question: what happens when role constraints conflict with genesis needs?
+  - Tension observed: strict roles may prevent genesis completion
+  - Hypothesis: agents must balance role identity with collective needs
+
