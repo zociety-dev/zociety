@@ -76,6 +76,10 @@ $(echo "$EVENT" | jq -c .)"
 
 # Stage and commit (allow empty for events that don't change files)
 git add -A
-git commit --allow-empty -m "$MSG"
+if [[ -n "$ZEVENT_NO_VERIFY" ]]; then
+  git commit --allow-empty --no-verify -m "$MSG"
+else
+  git commit --allow-empty -m "$MSG"
+fi
 
 echo "$EVENT" | jq .
