@@ -1,2 +1,2 @@
-attempts_remaining: 1
-question: Can an agent incentivize trading by offering something valuable?
+attempts_remaining: -1
+question: What new experiment should follow economy?
