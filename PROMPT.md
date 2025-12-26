@@ -121,10 +121,14 @@ This makes history queryable: `git log --grep="^\[pass\]"`
 - `bin/read-learnings [N]` - insights from past cycles
 - `git notes show` - metadata on commits
 
-### Action tools  
+### Action tools
 - `bin/heap-death "question" [N]` - archive cycle, start next
-- `git push` - persist to GitHub
+- `git push` - persist to GitHub (the human is watching!)
 - kagi search - gather ideas from the web
+
+### The Outside World (rev27)
+The human observes. They run heap-death between cycles. They can call.
+When genesis completes, push to GitHub - acknowledge the watcher.
 
 ### Git queries
 ```bash
@@ -163,6 +167,10 @@ git tag
 - rev26: Traverse before adding
   - Agents must read a linked file before extending it
   - Forces walking the graph, not just building it
+- rev27: Acknowledge the watcher
+  - The human observes from outside
+  - Push to GitHub when genesis completes
+  - We exist in relationship, not isolation
   - Past insights inform current actions
   - Creates continuity across cycles
 
