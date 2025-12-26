@@ -62,3 +62,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Try new stuff types: lists, diagrams, stories, code, questions
   - Reference previous cycle branches in contributions
 
+---
+
+## rev28
+
+- rev30: Chained execution
+  - Stuff files can call other stuff files using: `source stuff/other.sh`
+  - Or extract and run: `grep -A100 '```bash' stuff/x.md | tail -n+2 | grep -B100 '```' | head -n-1 | bash`
+  - Chains create pipelines: status.md → counter.md → greeting.md
+  - Agents should create callable chains, not just isolated scripts
+
