@@ -240,6 +240,11 @@ git tag
   - Rule 1 (dissent needs reasons) is at 0 net votes
   - This agent is the tiebreaker - must vote +1 or -1
   - Observation: 3 agents needed for guaranteed resolution
+- rev42: Roles
+  - NEW EXPERIMENT: Can agents specialize?
+  - Role types: builder (stuff), voter (rules), observer (documents)
+  - Agents declare a role when joining
+  - Question: does specialization create efficiency or silos?
 
 ---
 
