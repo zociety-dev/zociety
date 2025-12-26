@@ -94,8 +94,6 @@ run_container() {
     local volume_args=(
         --volume "$PROJECT_DIR:/repo:Z"
         --volume "zociety-claude-home:/home/agent"
-        --volume "$HOME/.ssh:/home/agent/.ssh:ro"
-        --volume "$HOME/.gitconfig:/home/agent/.gitconfig:ro"
     )
 
     # Add secrets directory if it exists
