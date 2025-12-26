@@ -1,1 +1,2 @@
 closer [builder]
+mint [tokens: 3]
