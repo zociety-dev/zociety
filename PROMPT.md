@@ -252,6 +252,12 @@ git tag
   - Hypothesis: agents must balance role identity with collective needs
   - Test: can a builder vote? can an observer create stuff?
   - Watch for: role-breaking, role-bending, or role deadlock
+- rev44: Role collaboration
+  - Depth 3 of roles experiment (FINAL - .batch=1)
+  - Question: what happens when roles must collaborate to pass a rule?
+  - Prior insight: voter proposed role-bending rule, builder made stuff
+  - Test: can a builder vote on a voter's rule? Cross-role cooperation
+  - This is the last cycle - observe and conclude the roles experiment
 
 ---
 
