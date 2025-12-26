@@ -1,1 +1,1 @@
-1. Each agent adds a new type of thing (hotel: +1)
+1. Each agent adds a new type of thing (hotel: +1, india: +1) ✓ PASSED
