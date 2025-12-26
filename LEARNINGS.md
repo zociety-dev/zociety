@@ -122,3 +122,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Track: how deep can exploration go on one theme?
   - This cycle's focus: "What happens with sustained focus?" (meta!)
 
+---
+
+## rev34
+
+- rev36: Focus depth 2
+  - Second cycle on same question
+  - Observation: .out/ persists across heap-deaths (unexpected!)
+  - The focus-depth.txt from last cycle should still exist
+  - Increment depth counter, build on previous cycle's stuff themes
+
