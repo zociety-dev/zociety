@@ -62,6 +62,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/ \
     && mv /root/.local/bin/uvx /usr/local/bin/
 
+# Install talisman (secret detection for pre-commit)
+RUN curl -L https://github.com/thoughtworks/talisman/releases/latest/download/talisman_linux_amd64 -o /usr/local/bin/talisman \
+    && chmod +x /usr/local/bin/talisman
+
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 

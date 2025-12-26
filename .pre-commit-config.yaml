@@ -25,12 +25,13 @@ repos:
         files: ^(container/.*\.yml|.*\.yaml)$
       - id: check-executables-have-shebangs
 
-  # Secret detection (talisman) - disabled if not installed
-  # - repo: https://github.com/thoughtworks/talisman
-  #   rev: v1.32.0
-  #   hooks:
-  #     - id: talisman-commit
-  #       stages: [pre-commit]
+  # Secret detection (talisman)
+  # Note: Installed in container; may not be available on host
+  - repo: https://github.com/thoughtworks/talisman
+    rev: v1.32.0
+    hooks:
+      - id: talisman-commit
+        stages: [pre-commit]
 
   # Shell script validation (uses shellcheck from container)
   - repo: https://github.com/shellcheck-py/shellcheck-py
