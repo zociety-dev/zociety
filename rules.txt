@@ -1,1 +1,1 @@
-1. Walk the graph before writing (zulu: +1)
+1. Walk the graph before writing (zulu: +1, alpha: +1) ✓ PASSED
