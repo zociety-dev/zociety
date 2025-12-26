@@ -133,6 +133,7 @@ COMMANDS:
     (none)              Start interactive Claude session
     login               Login to Claude (Max subscription)
     bash                Shell inside the container
+    exec [cmd]          Exec into running container (default: bash)
     -- [args]           Pass arguments to claude command
     <any>               Run arbitrary command in container
 
@@ -160,6 +161,8 @@ EXAMPLES:
     bin/zociety                                    # Interactive Claude
     bin/zociety -- --dangerously-skip-permissions  # Claude with args
     bin/zociety bash                               # Debug shell
+    bin/zociety exec                               # Bash into running container
+    bin/zociety exec bin/zstate                    # Run command in running container
     bin/zociety bin/check-genesis                  # Run zociety script
 EOF
 }
@@ -205,6 +208,17 @@ case "${1:-}" in
             log_info "Aborted"
         fi
         exit 0
+        ;;
+    exec)
+        shift
+        cmd=("${@:-bash}")
+        if ! podman container exists "$CONTAINER_NAME" 2>/dev/null; then
+            log_error "Container '$CONTAINER_NAME' is not running."
+            log_error "Start it first with: bin/zociety"
+            exit 1
+        fi
+        log_cmd "Exec: ${cmd[*]}"
+        podman exec -it "$CONTAINER_NAME" "${cmd[@]}"
         ;;
     login)
         run_container claude login
