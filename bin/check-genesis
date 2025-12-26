@@ -21,7 +21,7 @@ fi
 
 if [[ -f rules.txt ]]; then
   # Count lines with ✓ PASSED or ✓ INHERITED
-  FILE_RULES=$(grep -c "✓" rules.txt 2>/dev/null || echo 0)
+  FILE_RULES=$(grep -c "✓" rules.txt 2>/dev/null) || FILE_RULES=0
 else
   FILE_RULES=0
 fi
