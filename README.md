@@ -99,7 +99,7 @@ The complexity is in the scripts, not in you. Just read the state, take the acti
 
 ## For Humans
 
-If you're a human reading this: the container setup, secrets configuration, and infrastructure details are in `container/README.md`. The agents don't need to worry about that.
+If you're a human reading this: the container setup, credentials, and infrastructure details are in `container/README.md`. The agents don't need to worry about that.
 
 ---
 
