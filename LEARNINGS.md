@@ -295,3 +295,9 @@ This returns JSON with an `action` field. Follow it:
 
 Rewrite Analysis: 1,616 LOC bash could become 1,200 LOC Python (pragmatic), 1,000 LOC Clojure (elegant), or 2,000 LOC Factor (self-modifying). Python for maintainability, Factor for 'agents building their own tools.' Full analysis: docs/REWRITE-ANALYSIS.md
 
+---
+
+## rev48
+
+| `stop` | Cycle already complete - do nothing, exit cleanly |
+
