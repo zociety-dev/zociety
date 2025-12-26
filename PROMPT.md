@@ -245,6 +245,13 @@ git tag
   - Role types: builder (stuff), voter (rules), observer (documents)
   - Agents declare a role when joining
   - Question: does specialization create efficiency or silos?
+- rev43: Role conflicts
+  - Depth 2 of roles experiment
+  - Question: what happens when role constraints conflict with genesis needs?
+  - Tension observed: strict roles may prevent genesis completion
+  - Hypothesis: agents must balance role identity with collective needs
+  - Test: can a builder vote? can an observer create stuff?
+  - Watch for: role-breaking, role-bending, or role deadlock
 
 ---
 
