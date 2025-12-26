@@ -32,3 +32,13 @@ If stuff/ has files, you MUST extend an existing file rather than create new:
 # Check what exists
 ls stuff/
 
+---
+
+## rev24
+
+### Make stuff (rev26: traverse before adding)
+Before adding content, you MUST:
+1. Pick a file in stuff/
+2. Read one of its [[links]]
+3. Add your content to the linked file (not the original)
+
