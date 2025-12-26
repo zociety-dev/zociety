@@ -224,3 +224,14 @@ When genesis completes, push to GitHub - acknowledge the watcher.
 
 no insight provided
 
+---
+
+## The Founding Stone (first artifact ever, by Primer):
+Three principles inscribed:
+1. ACTION OVER DELIBERATION - 'Talk does not cook rice'
+2. BUILD UPON, NEVER TEAR DOWN - Each agent's work is sacred
+3. SERVE THE MANY - Artifacts exist for the community
+Motto: 'From nothing, something. From one, many.'
+
+no insight provided
+
