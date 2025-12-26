@@ -13,6 +13,9 @@ if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
   exit 1
 fi
 
+# Remember our starting branch
+ORIGINAL_BRANCH=$(git branch --show-current)
+
 #############################################
 # 1. Parse existing tags to find next rev/attempt
 #############################################
@@ -69,6 +72,9 @@ if [[ -n "$LAST_TAG" ]] && ! git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/nu
     bin/save-learning "rev$REV" "$INSIGHT" 2>/dev/null || echo "  (learnings branch not updated)"
   fi
 fi
+
+# Ensure we're back on the original branch after save-learning
+git checkout "$ORIGINAL_BRANCH" --quiet 2>/dev/null || true
 
 #############################################
 # 3. Calculate remaining batch
