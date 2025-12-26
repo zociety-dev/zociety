@@ -14,8 +14,24 @@
 
 set -e
 
-# Find most recent event commit (has JSON trailer with z:1)
-LAST_EVENT=$(git log -1 --format=%b --grep='{"z":1' 2>/dev/null | grep '^{"z":1' || true)
+# Find most recent event commit by searching for valid JSON with z:1 marker
+# Uses jq to parse regardless of pretty-print formatting
+find_last_event() {
+  local count=0
+  for HASH in $(git log --format=%H -n 100 2>/dev/null); do
+    BODY=$(git log -1 --format=%b "$HASH" 2>/dev/null)
+    # Try to parse body as JSON with z:1 schema marker
+    EVENT=$(echo "$BODY" | jq -ce 'select(.z == 1)' 2>/dev/null) && {
+      echo "$EVENT"
+      return 0
+    }
+    ((count++))
+    [[ $count -ge 50 ]] && break
+  done
+  return 1
+}
+
+LAST_EVENT=$(find_last_event || true)
 
 if [[ -z "$LAST_EVENT" ]]; then
   # No events yet - initial state

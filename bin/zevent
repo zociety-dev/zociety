@@ -69,10 +69,10 @@ EVENT=$(jq -n \
   }'
 )
 
-# Create commit message
+# Create commit message with compact JSON trailer
 MSG="[$TYPE] $AGENT: $DESC
 
-$EVENT"
+$(echo "$EVENT" | jq -c .)"
 
 # Stage and commit (allow empty for events that don't change files)
 git add -A
