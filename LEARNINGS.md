@@ -112,3 +112,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - NEW: Stuff should document patterns observed, not just implement them
   - Create pattern.md files that describe what emerged, enabling future agents to recognize and extend
 
+---
+
+## rev33
+
+- rev35: Sustained focus
+  - Experiment: keep the same DIRECTION question for multiple cycles
+  - Instead of new question each heap-death, pass the SAME question forward
+  - Track: how deep can exploration go on one theme?
+  - This cycle's focus: "What happens with sustained focus?" (meta!)
+
