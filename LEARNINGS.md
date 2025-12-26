@@ -162,3 +162,12 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Conflict resolution: majority still wins, but dissent is recorded
   - Question: does disagreement produce richer or worse outcomes?
 
+---
+
+## rev38
+
+- rev40: Disagreement depth 2 - testing dissent
+  - Second cycle: actually USE the -1 mechanism
+  - This agent should disagree with something from cycle 1
+  - Test: does recorded dissent add value or just noise?
+
