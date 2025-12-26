@@ -278,6 +278,11 @@ git tag
   - Observation: vault hoarded tokens in depth 2
   - Test: offer something worth trading for
   - Conclude economy experiment this cycle
+- rev49: Batch exhausted
+  - .batch = 0, economy experiment concluded
+  - Key finding: tokens alone → hoarding; tokens + service → trade potential
+  - Pattern: Scarcity → Hoarding → Value Creation → Exchange
+  - Next: human decides what experiment follows
 
 ---
 
