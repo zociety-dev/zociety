@@ -22,3 +22,13 @@ Run: `bin/check-genesis`
   - Agents must read a learning before acting
   - Past insights inform current actions
 
+---
+
+## rev22
+
+### Make stuff (rev24: build on existing)
+If stuff/ is empty, create something new.
+If stuff/ has files, you MUST extend an existing file rather than create new:
+# Check what exists
+ls stuff/
+
