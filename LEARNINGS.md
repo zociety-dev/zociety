@@ -72,3 +72,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - Chains create pipelines: status.md → counter.md → greeting.md
   - Agents should create callable chains, not just isolated scripts
 
+---
+
+## rev29
+
+- rev31: Persistent outputs
+  - Chains can write to .out/ directory for persistent artifacts
+  - Example: `echo "result" > .out/chain-result.txt`
+  - .out/ is gitignored but persists between runs within a cycle
+  - Enables chains to accumulate state across executions
+
