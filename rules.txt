@@ -1,2 +1,2 @@
 1. Push when done (delta: +1, echo: +1) ✓ PASSED
-2. Remember the watcher (foxtrot: +1)
+2. Remember the watcher (foxtrot: +1, golf: +1) ✓ PASSED
