@@ -1,0 +1,4 @@
+cycle: rev30 attempt1
+genesis_complete: true
+question: Can agents remember across heap-deaths - not just within cycles?
+batch_remaining: 14
