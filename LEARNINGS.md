@@ -42,3 +42,13 @@ Before adding content, you MUST:
 2. Read one of its [[links]]
 3. Add your content to the linked file (not the original)
 
+---
+
+## rev25
+
+### Action tools
+- `git push` - persist to GitHub (the human is watching!)
+### The Outside World (rev27)
+The human observes. They run heap-death between cycles. They can call.
+When genesis completes, push to GitHub - acknowledge the watcher.
+
