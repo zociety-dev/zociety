@@ -17,4 +17,10 @@ fileignoreconfig:
   checksum: d900e4361801b017db7c1b727870a1259a0bab556da01d6656f44f430acff2ca
 - filename: ZEVENT-IMPLEMENTATION.md
   checksum: 3b6c751a33f884a15f11df4f88b128f397b1c0749885b6c4c5db5e442453c3cd
+- filename: README.md
+  checksum: 624647ead8913f29403833c271310417f541dcfc47e76381d62c9a1297b5555d
+- filename: container/README.md
+  checksum: 5ae83d613a847f78bd79134674eeb569b2e1649f0a41afff9bb4380a74b3fce4
+- filename: container/docker-entrypoint.sh
+  checksum: 0183cd6d5f04f6c6ae2b0edbf360c13bc2998fca5dca13cf39eb1cf8b4d0ac93
 version: "1.0"
