@@ -191,6 +191,11 @@ git tag
   - Example: `echo "result" > .out/chain-result.txt`
   - .out/ is gitignored but persists between runs within a cycle
   - Enables chains to accumulate state across executions
+- rev32: Reactive agents
+  - Agents MUST check .out/ for signals before acting
+  - If .out/directive.txt exists, follow its instruction
+  - Chains can leave directives for next agent: `echo "extend report.md" > .out/directive.txt`
+  - Creates agent-to-agent communication across iterations
 
 ---
 
