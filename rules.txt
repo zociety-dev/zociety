@@ -1,1 +1,1 @@
-1. Link your knowledge (victor: +1)
+1. Link your knowledge (victor: +1, whiskey: +1) ✓ PASSED
