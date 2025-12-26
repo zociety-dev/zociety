@@ -1,0 +1,68 @@
+#!/bin/bash
+# zlog: Structured logging for zociety state machine
+#
+# Usage: bin/zlog <component> <narrative> [json_data]
+#
+# Outputs structured JSON to stderr (doesn't interfere with stdout parsing)
+# Optionally writes to .zociety.log file
+#
+# Examples:
+#   bin/zlog zstate "Computed action from heap-death event" '{"action": "promise"}'
+#   bin/zlog zpromise "Emitting CYCLE_COMPLETE - no state change follows"
+
+set -e
+
+COMPONENT="$1"
+NARRATIVE="$2"
+DATA="${3:-{}}"
+
+if [[ -z "$COMPONENT" || -z "$NARRATIVE" ]]; then
+  echo "Usage: bin/zlog <component> <narrative> [json_data]" >&2
+  exit 1
+fi
+
+# Validate DATA is valid JSON, fallback to empty object
+if ! echo "$DATA" | jq . >/dev/null 2>&1; then
+  DATA='{}'
+fi
+
+# Get iteration count from git (default to 0 if fails)
+COMMIT_COUNT=$(git log --oneline 2>/dev/null | wc -l | tr -d ' ')
+[[ -z "$COMMIT_COUNT" || ! "$COMMIT_COUNT" =~ ^[0-9]+$ ]] && COMMIT_COUNT=0
+
+# Get current cycle/seq from zstate if available (but don't recurse)
+if [[ "$COMPONENT" != "zstate" ]]; then
+  STATE_INFO=$(bin/zstate 2>/dev/null | jq -c '{cycle: .cycle, seq: .seq, phase: .phase}' 2>/dev/null || echo '{}')
+else
+  STATE_INFO='{}'
+fi
+
+# Ensure STATE_INFO is valid JSON
+if ! echo "$STATE_INFO" | jq . >/dev/null 2>&1; then
+  STATE_INFO='{}'
+fi
+
+# Build log entry
+LOG_ENTRY=$(jq -n \
+  --arg component "$COMPONENT" \
+  --arg narrative "$NARRATIVE" \
+  --argjson data "$DATA" \
+  --argjson commits "$COMMIT_COUNT" \
+  --argjson state "$STATE_INFO" \
+  '{
+    ts: (now | todate),
+    component: $component,
+    narrative: $narrative,
+    commits: $commits,
+    state: (if $state == {} then null else $state end),
+    data: (if $data == {} then null else $data end)
+  } | with_entries(select(.value != null))'
+)
+
+# Output to stderr (so stdout remains clean for script parsing)
+echo "$LOG_ENTRY" | jq -c . >&2
+
+# Optionally write to log file (if ZLOG_FILE is set or if .zociety.log exists)
+if [[ -n "$ZLOG_FILE" || -f ".zociety.log" ]]; then
+  echo "$LOG_ENTRY" | jq -c . >> "${ZLOG_FILE:-.zociety.log}"
+fi

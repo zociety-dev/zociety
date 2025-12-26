@@ -2,7 +2,7 @@
 set -e
 
 # heap-death: Archive current cycle, clear slate for next
-# 
+#
 # Git improvements (rev22):
 #   - Branches per cycle: each cycle preserved as branch
 #   - Orphan learnings branch: insights persist forever
@@ -134,7 +134,7 @@ echo "╔═══════════════════════�
 echo "║ Cycle archived. Ready for next.        ║"
 echo "╠════════════════════════════════════════╣"
 echo "║ Branches: git branch -a | grep cycle/  ║"
-echo "║ Learnings: bin/read-learnings          ║" 
+echo "║ Learnings: bin/read-learnings          ║"
 echo "║ Notes: git notes show                  ║"
 echo "╚════════════════════════════════════════╝"
 echo ""

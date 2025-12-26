@@ -16,7 +16,7 @@ if [[ -z "$MSG_FILE" ]]; then
     echo "✗ PROMPT.md missing"
     exit 1
   fi
-  
+
   # Check for conflicting state
   if [[ -f DIRECTION.md && -f members.txt ]]; then
     # DIRECTION.md should be consumed before genesis starts
@@ -26,7 +26,7 @@ if [[ -z "$MSG_FILE" ]]; then
       echo "  First agent should delete DIRECTION.md before others join"
     fi
   fi
-  
+
   exit 0
 fi
 

@@ -8,6 +8,8 @@ set -e
 
 AGENT="${1:-system}"
 
+bin/zlog zcomplete "Checking if ready to record completion" '{}' 2>/dev/null || true
+
 # Verify we're in the right state
 STATE=$(bin/zstate)
 ACTION=$(echo "$STATE" | jq -r '.action')
@@ -27,5 +29,8 @@ fi
 
 # Record the completion event
 bin/zevent complete "$AGENT" "genesis complete" '{}'
+
+bin/zlog zcomplete "Completion event recorded - next action will be heap-death" \
+  "$(jq -n --arg agent "$AGENT" '{agent: $agent, next_action: "heap-death"}')" 2>/dev/null || true
 
 echo "Completion event recorded. Next agent should run heap-death."

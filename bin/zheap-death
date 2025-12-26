@@ -13,6 +13,10 @@ if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
   exit 1
 fi
 
+bin/zlog zheap-death "Starting heap-death" \
+  "$(jq -n --arg agent "$AGENT" --arg q "$QUESTION" --argjson batch "$BATCH_SIZE" \
+    '{agent: $agent, question: $q, batch_size: $batch}')" 2>/dev/null || true
+
 # Remember our starting branch
 ORIGINAL_BRANCH=$(git branch --show-current)
 
@@ -81,6 +85,10 @@ git checkout "$ORIGINAL_BRANCH" --quiet 2>/dev/null || true
 #############################################
 
 REMAINING=$((BATCH_SIZE - 1))
+
+bin/zlog zheap-death "Calculated batch remaining: $REMAINING (from $BATCH_SIZE - 1)" \
+  "$(jq -n --argjson batch "$BATCH_SIZE" --argjson remaining "$REMAINING" \
+    '{batch_size: $batch, remaining: $remaining, will_create_direction: ($remaining > 0)}')" 2>/dev/null || true
 
 # Get current cycle from state
 CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
@@ -157,6 +165,10 @@ git rm -f .claude/ralph-loop.local.md --quiet 2>/dev/null || true
 if [[ "$REMAINING" -gt 0 ]]; then
   NEXT_CYCLE=$((CURRENT_CYCLE + 1))
 
+  bin/zlog zheap-death "Creating direction event for next cycle (batch remains)" \
+    "$(jq -n --argjson next "$NEXT_CYCLE" --argjson remaining "$REMAINING" \
+      '{next_cycle: $next, batch_remaining: $remaining, next_action: "evolve"}')" 2>/dev/null || true
+
   DIRECTION_EVENT=$(jq -n \
     --arg type "direction" \
     --arg agent "system" \
@@ -193,6 +205,11 @@ $DIRECTION_EVENT"
   git commit --allow-empty -m "$DIRECTION_MSG" --quiet
   echo "Direction event committed for cycle $NEXT_CYCLE"
 else
+  # CRITICAL: This is where the self-sustainability gap originates
+  # No direction event means zstate will return action="promise"
+  # But zpromise doesn't create a commit, so state won't change
+  bin/zlog zheap-death "BATCH EXHAUSTED - no direction event created" \
+    '{"batch_remaining": 0, "next_action": "promise", "warning": "zpromise does not change git state"}' 2>/dev/null || true
   echo "Batch exhausted - no direction event (next agent will output promise)"
 fi
 

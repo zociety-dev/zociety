@@ -10,6 +10,11 @@ set -e
 STATE=$(bin/zstate)
 ACTION=$(echo "$STATE" | jq -r '.action')
 LAST_EVENT=$(echo "$STATE" | jq -r '.last_event')
+CYCLE=$(echo "$STATE" | jq -r '.cycle')
+SEQ=$(echo "$STATE" | jq -r '.seq')
+
+bin/zlog zpromise "Checking state: action=$ACTION, last_event=$LAST_EVENT" \
+  "$(echo "$STATE" | jq -c '{action: .action, last_event: .last_event, batch: .batch}')" 2>/dev/null || true
 
 if [[ "$ACTION" != "promise" ]]; then
   echo "ERROR: Current action is '$ACTION', not 'promise'" >&2
@@ -23,5 +28,14 @@ if [[ "$LAST_EVENT" != "heap-death" ]]; then
   echo "Proceeding anyway..." >&2
 fi
 
+# CRITICAL: This is where the self-sustainability gap exists
+# We emit the promise but DO NOT create a commit
+# This means bin/zstate will return action="promise" again next iteration
+bin/zlog zpromise "EMITTING CYCLE_COMPLETE - WARNING: no git state change follows" \
+  '{"warning": "next iteration will see same state and re-emit promise"}' 2>/dev/null || true
+
 echo ""
 echo "<promise>CYCLE_COMPLETE</promise>"
+
+bin/zlog zpromise "Promise emitted - loop should terminate now" \
+  "$(jq -n --argjson cycle $CYCLE --argjson seq $SEQ '{cycle: $cycle, seq: $seq, terminal: true}')" 2>/dev/null || true

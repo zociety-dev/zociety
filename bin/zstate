@@ -35,6 +35,7 @@ LAST_EVENT=$(find_last_event || true)
 
 if [[ -z "$LAST_EVENT" ]]; then
   # No events yet - initial state
+  bin/zlog zstate "No events found - returning initial state" '{"action": "join"}' 2>/dev/null || true
   cat <<'EOF'
 {
   "cycle": 1,
@@ -51,8 +52,14 @@ EOF
   exit 0
 fi
 
+# Log the found event
+LAST_EVENT_TYPE=$(echo "$LAST_EVENT" | jq -r '.event')
+LAST_EVENT_AGENT=$(echo "$LAST_EVENT" | jq -r '.agent')
+bin/zlog zstate "Found last event: $LAST_EVENT_TYPE by $LAST_EVENT_AGENT" \
+  "$(echo "$LAST_EVENT" | jq -c '{event: .event, agent: .agent, batch: .data.batch_remaining}')" 2>/dev/null || true
+
 # Parse last event and compute phase and action
-echo "$LAST_EVENT" | jq -r '
+OUTPUT=$(echo "$LAST_EVENT" | jq -r '
   # Determine phase based on last event and state
   .phase = (
     if .event == "heap-death" then
@@ -92,4 +99,13 @@ echo "$LAST_EVENT" | jq -r '
     last_event: .event,
     last_agent: .agent
   }
-'
+')
+
+# Log the computed state with explanation
+ACTION=$(echo "$OUTPUT" | jq -r '.action')
+PHASE=$(echo "$OUTPUT" | jq -r '.phase')
+bin/zlog zstate "Computed: phase=$PHASE, action=$ACTION" \
+  "$(echo "$OUTPUT" | jq -c '{phase: .phase, action: .action, batch: .batch, complete: .genesis.complete}')" 2>/dev/null || true
+
+# Output the state
+echo "$OUTPUT"
