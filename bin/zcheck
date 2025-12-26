@@ -1,0 +1,84 @@
+#!/bin/bash
+# zcheck: Verify event sourcing system installation
+
+set -e
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety Event System Check            ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+
+ERRORS=0
+
+check_script() {
+  local script="$1"
+  local desc="$2"
+
+  if [[ -x "$script" ]]; then
+    echo "✓ $desc"
+  else
+    echo "✗ $desc (missing or not executable)"
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
+echo "Checking core scripts..."
+check_script "bin/zstate" "bin/zstate - Query current state"
+check_script "bin/zevent" "bin/zevent - Create event commits"
+check_script "bin/zjoin" "bin/zjoin - Join event wrapper"
+check_script "bin/zvote" "bin/zvote - Vote event wrapper"
+check_script "bin/zstuff" "bin/zstuff - Stuff event wrapper"
+check_script "bin/zpass" "bin/zpass - Pass rule wrapper"
+check_script "bin/zpromise" "bin/zpromise - Completion promise"
+check_script "bin/zheap-death" "bin/zheap-death - Archive cycle"
+echo ""
+
+echo "Checking utility scripts..."
+check_script "bin/zvalidate" "bin/zvalidate - Validate commits"
+check_script "bin/test-zevent-system" "bin/test-zevent-system - Test suite"
+check_script "bin/zcheck" "bin/zcheck - This script"
+echo ""
+
+echo "Checking documentation..."
+[[ -f "ZEVENT-README.md" ]] && echo "✓ ZEVENT-README.md" || { echo "✗ ZEVENT-README.md"; ERRORS=$((ERRORS + 1)); }
+[[ -f "ZEVENT-QUICKSTART.md" ]] && echo "✓ ZEVENT-QUICKSTART.md" || { echo "✗ ZEVENT-QUICKSTART.md"; ERRORS=$((ERRORS + 1)); }
+[[ -f "ZEVENT-IMPLEMENTATION.md" ]] && echo "✓ ZEVENT-IMPLEMENTATION.md" || { echo "✗ ZEVENT-IMPLEMENTATION.md"; ERRORS=$((ERRORS + 1)); }
+[[ -f "DESIGN-git-native-events.md" ]] && echo "✓ DESIGN-git-native-events.md" || { echo "✗ DESIGN-git-native-events.md"; ERRORS=$((ERRORS + 1)); }
+echo ""
+
+echo "Checking dependencies..."
+command -v jq &>/dev/null && echo "✓ jq installed" || { echo "✗ jq not installed"; ERRORS=$((ERRORS + 1)); }
+command -v git &>/dev/null && echo "✓ git installed" || { echo "✗ git not installed"; ERRORS=$((ERRORS + 1)); }
+echo ""
+
+echo "Testing bin/zstate..."
+if bin/zstate &>/dev/null; then
+  echo "✓ bin/zstate executes successfully"
+  STATE=$(bin/zstate)
+  CYCLE=$(echo "$STATE" | jq -r '.cycle // "error"')
+  ACTION=$(echo "$STATE" | jq -r '.action // "error"')
+  echo "  Current cycle: $CYCLE"
+  echo "  Recommended action: $ACTION"
+else
+  echo "✗ bin/zstate failed to execute"
+  ERRORS=$((ERRORS + 1))
+fi
+echo ""
+
+if [[ $ERRORS -eq 0 ]]; then
+  echo "╔════════════════════════════════════════╗"
+  echo "║  ✓ All checks passed!                  ║"
+  echo "╠════════════════════════════════════════╣"
+  echo "║  System is ready to use.               ║"
+  echo "║  Try: bin/test-zevent-system           ║"
+  echo "║  Docs: ZEVENT-QUICKSTART.md            ║"
+  echo "╚════════════════════════════════════════╝"
+  exit 0
+else
+  echo "╔════════════════════════════════════════╗"
+  echo "║  ✗ $ERRORS error(s) found                    ║"
+  echo "╠════════════════════════════════════════╣"
+  echo "║  Please fix issues above.              ║"
+  echo "╚════════════════════════════════════════╝"
+  exit 1
+fi

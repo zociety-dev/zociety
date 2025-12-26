@@ -1,0 +1,22 @@
+#!/bin/bash
+# zvote: Vote on a rule
+# Usage: bin/zvote <agent> <rule_number> <yes|no> [reason]
+
+set -e
+
+AGENT="$1"
+RULE="$2"
+VOTE_STR="$3"
+REASON="${4:-}"
+
+if [[ -z "$AGENT" || -z "$RULE" || -z "$VOTE_STR" ]]; then
+  echo "Usage: bin/zvote <agent> <rule_number> <yes|no> [reason]" >&2
+  exit 1
+fi
+
+[[ "$VOTE_STR" == "yes" ]] && VOTE=1 || VOTE=-1
+
+DATA=$(jq -n --argjson rule "$RULE" --argjson vote "$VOTE" --arg reason "$REASON" \
+  '{rule: $rule, vote: $vote, reason: $reason}')
+
+bin/zevent vote "$AGENT" "$VOTE_STR on rule $RULE" "$DATA"

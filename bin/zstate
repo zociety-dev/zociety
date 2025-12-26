@@ -1,0 +1,72 @@
+#!/bin/bash
+# zstate: Get current zociety state from git history
+#
+# Returns JSON with:
+#   - cycle: current cycle number
+#   - seq: sequence number in cycle
+#   - phase: initial|direction|building|finishing
+#   - genesis: {members, rules, stuff, complete}
+#   - batch: remaining attempts (null if not set)
+#   - direction: question for cycle (null if not set)
+#   - action: what agent should do next
+#   - last_event: type of last event
+#   - last_agent: who did last event
+
+set -e
+
+# Find most recent event commit (has JSON trailer with z:1)
+LAST_EVENT=$(git log -1 --format=%b --grep='{"z":1' 2>/dev/null | grep '^{"z":1' || true)
+
+if [[ -z "$LAST_EVENT" ]]; then
+  # No events yet - initial state
+  cat <<'EOF'
+{
+  "cycle": 1,
+  "seq": 0,
+  "phase": "initial",
+  "genesis": {"members": 0, "rules": 0, "stuff": 0, "complete": false},
+  "batch": null,
+  "direction": null,
+  "action": "join",
+  "last_event": null,
+  "last_agent": null
+}
+EOF
+  exit 0
+fi
+
+# Parse last event and compute phase and action
+echo "$LAST_EVENT" | jq -r '
+  # Determine phase based on last event and state
+  .phase = (
+    if .event == "heap-death" then "direction"
+    elif .event == "direction" then "building"
+    elif .state.complete then "finishing"
+    else "building"
+    end
+  ) |
+
+  # Determine recommended action based on phase
+  .action = (
+    if .phase == "direction" then "evolve"
+    elif .phase == "finishing" then
+      if (.data.batch_remaining // 0) == 0 then "promise"
+      else "heap-death"
+      end
+    else "contribute"
+    end
+  ) |
+
+  # Build output structure
+  {
+    cycle: .cycle,
+    seq: .seq,
+    phase: .phase,
+    genesis: .state,
+    batch: (.data.batch_remaining // null),
+    direction: (.data.question // null),
+    action: .action,
+    last_event: .event,
+    last_agent: .agent
+  }
+'

@@ -1,0 +1,209 @@
+#!/bin/bash
+# zheap-death: Archive cycle, prepare next (event sourcing version)
+# Usage: bin/zheap-death <agent> <question> [batch_size]
+
+set -e
+
+AGENT="$1"
+QUESTION="$2"
+BATCH_SIZE="${3:-1}"
+
+if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
+  echo "Usage: bin/zheap-death <agent> <question> [batch_size]" >&2
+  exit 1
+fi
+
+#############################################
+# 1. Parse existing tags to find next rev/attempt
+#############################################
+
+LAST_TAG=$(git tag --sort=-version:refname | head -1)
+
+if [[ -z "$LAST_TAG" ]]; then
+  REV=1
+  ATTEMPT=1
+else
+  REV=$(echo "$LAST_TAG" | sed -n 's/rev\([0-9]*\).*/\1/p')
+  ATTEMPT=$(echo "$LAST_TAG" | sed -n 's/.*attempt\([0-9]*\).*/\1/p')
+
+  # Check if PROMPT.md changed since last tag - if so, new rev
+  if git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/null; then
+    ATTEMPT=$((ATTEMPT + 1))
+  else
+    REV=$((REV + 1))
+    ATTEMPT=1
+  fi
+fi
+
+# Get iteration count
+if [[ -f .claude/ralph-loop.local.md ]]; then
+  ITERATIONS=$(grep '^iteration:' .claude/ralph-loop.local.md | sed 's/iteration: *//')
+  MAX_ITER=$(grep '^max_iterations:' .claude/ralph-loop.local.md | sed 's/max_iterations: *//')
+else
+  ITERATIONS=$(git log --oneline | wc -l | tr -d ' ')
+  MAX_ITER="60"
+fi
+
+TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
+CYCLE_BRANCH="cycle/rev${REV}-attempt${ATTEMPT}"
+
+echo "╔════════════════════════════════════════╗"
+echo "║           HEAP DEATH                   ║"
+echo "╠════════════════════════════════════════╣"
+echo "║ Tag:      $TAG"
+echo "║ Branch:   $CYCLE_BRANCH"
+echo "║ Question: ${QUESTION:0:40}..."
+echo "╚════════════════════════════════════════╝"
+echo ""
+
+#############################################
+# 2. Save learning to orphan branch (if insight provided)
+#############################################
+
+# Extract insight from PROMPT.md learnings section if it changed
+if [[ -n "$LAST_TAG" ]] && ! git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/null; then
+  # PROMPT.md changed - there might be new learnings
+  INSIGHT=$(git diff "$LAST_TAG" -- PROMPT.md 2>/dev/null | grep "^+" | grep -v "^+++" | head -5 | sed 's/^+//')
+  if [[ -n "$INSIGHT" ]]; then
+    echo "Saving insight to learnings branch..."
+    bin/save-learning "rev$REV" "$INSIGHT" 2>/dev/null || echo "  (learnings branch not updated)"
+  fi
+fi
+
+#############################################
+# 3. Calculate remaining batch
+#############################################
+
+REMAINING=$((BATCH_SIZE - 1))
+
+# Get current cycle from state
+CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
+
+#############################################
+# 4. Commit heap-death event
+#############################################
+
+DATA=$(jq -n \
+  --arg tag "$TAG" \
+  --arg branch "$CYCLE_BRANCH" \
+  --arg question "$QUESTION" \
+  --argjson remaining "$REMAINING" \
+  '{
+    tag: $tag,
+    branch: $branch,
+    question: $question,
+    batch_remaining: $remaining
+  }')
+
+echo "Recording heap-death event..."
+bin/zevent heap-death "$AGENT" "$QUESTION" "$DATA"
+
+#############################################
+# 5. Create cycle branch and tag
+#############################################
+
+echo "Creating cycle branch: $CYCLE_BRANCH"
+git checkout -b "$CYCLE_BRANCH" 2>/dev/null || git checkout "$CYCLE_BRANCH"
+git checkout - --quiet
+
+echo "Tagging: $TAG"
+git tag "$TAG" -m "$QUESTION"
+
+# Add git note with cycle metadata
+echo "Adding git notes..."
+git notes add -f -m "cycle: rev$REV attempt$ATTEMPT
+genesis_complete: true
+question: $QUESTION
+batch_remaining: $REMAINING" HEAD 2>/dev/null || true
+
+#############################################
+# 6. Push to GitHub
+#############################################
+
+if git remote get-url origin &>/dev/null; then
+  echo "Pushing to GitHub..."
+  git push origin HEAD --quiet 2>/dev/null || echo "  (push failed - continuing)"
+  git push origin "$TAG" --quiet 2>/dev/null || echo "  (tag push failed)"
+  git push origin "$CYCLE_BRANCH" --quiet 2>/dev/null || echo "  (branch push failed)"
+  git push origin refs/notes/commits --quiet 2>/dev/null || echo "  (notes push failed)"
+fi
+
+#############################################
+# 7. Clear generated files
+#############################################
+
+echo "Clearing generated files..."
+
+for f in members.txt rules.txt REGISTRY.md LAWS.md .batch DIRECTION.md; do
+  [[ -f "$f" ]] && git rm -f "$f" --quiet
+done
+
+for d in stuff artifacts; do
+  [[ -d "$d" ]] && git rm -rf "$d" --quiet
+done
+
+git rm -f .claude/ralph-loop.local.md --quiet 2>/dev/null || true
+
+#############################################
+# 8. Commit direction event for next cycle
+#############################################
+
+NEXT_CYCLE=$((CURRENT_CYCLE + 1))
+
+# DIRECTION_DATA is created but used in manual commit below (shellcheck ignore)
+# shellcheck disable=SC2034
+DIRECTION_DATA=$(jq -n \
+  --arg question "$QUESTION" \
+  --argjson total "$BATCH_SIZE" \
+  --argjson remaining "$REMAINING" \
+  '{question: $question, batch_total: $total, batch_remaining: $remaining}')
+
+# Create a special commit for direction event with incremented cycle
+# This requires a custom commit since zevent would use current cycle
+DIRECTION_EVENT=$(jq -n \
+  --arg type "direction" \
+  --arg agent "system" \
+  --argjson cycle "$NEXT_CYCLE" \
+  --argjson seq 1 \
+  --arg question "$QUESTION" \
+  --argjson total "$BATCH_SIZE" \
+  --argjson remaining "$REMAINING" \
+  '{
+    z: 1,
+    event: $type,
+    cycle: $cycle,
+    seq: $seq,
+    agent: $agent,
+    ts: (now | todate),
+    state: {
+      members: 0,
+      rules: 0,
+      stuff: 0,
+      complete: false
+    },
+    data: {
+      question: $question,
+      batch_total: $total,
+      batch_remaining: $remaining
+    }
+  }'
+)
+
+DIRECTION_MSG="[direction] system: $QUESTION
+
+$DIRECTION_EVENT"
+
+git commit --allow-empty -m "$DIRECTION_MSG" --quiet
+
+echo ""
+echo "╔════════════════════════════════════════╗"
+echo "║ Cycle archived. Ready for next.        ║"
+echo "╠════════════════════════════════════════╣"
+echo "║ Branches: git branch -a | grep cycle/  ║"
+echo "║ Learnings: bin/read-learnings          ║"
+echo "║ Notes: git notes show                  ║"
+echo "║ State: bin/zstate                      ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+echo "Tags:"
+git tag | tail -5

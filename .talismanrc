@@ -1,0 +1,16 @@
+fileignoreconfig:
+- filename: ZEVENT-QUICKSTART.md
+  checksum: 5d059a25a8a2c36a7e060d402bb8c0eed6cdd5dcd242ac08538ee44f5d6ae0fd
+- filename: bin/zevent
+  checksum: a26890ff6e5e71d1a3ca0e10a927bbde8d7cefb07233121613fb50f49d7eacb8
+- filename: bin/zpass
+  checksum: 2f3961f4613551fc32323b1d690e1bab545cf1595a59b52e3e5c6dc067d94a4d
+- filename: ZEVENT-README.md
+  checksum: 1014b79104cf172dc967df7529e8c023adce0aad0b43f0234510e7d9709f882c
+- filename: bin/test-zevent-system
+  checksum: 59de39f6b7d956a012de6d142c37ff59b5840d9ec13ee3ad60ad1ca5b879cbff
+- filename: DESIGN-git-native-events.md
+  checksum: d900e4361801b017db7c1b727870a1259a0bab556da01d6656f44f430acff2ca
+- filename: ZEVENT-IMPLEMENTATION.md
+  checksum: 3b6c751a33f884a15f11df4f88b128f397b1c0749885b6c4c5db5e442453c3cd
+version: "1.0"

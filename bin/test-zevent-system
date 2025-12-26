@@ -1,0 +1,120 @@
+#!/bin/bash
+# test-zevent-system: Comprehensive test of the event sourcing system
+# This script tests all the z* commands to verify the event sourcing implementation
+
+set -e
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety Event Sourcing System Test   ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+
+echo "=== Test 1: Initial State ==="
+echo "Running: bin/zstate"
+bin/zstate
+echo ""
+
+echo "=== Test 2: First Join Event ==="
+echo "Running: bin/zjoin alice builder 'first agent joining'"
+mkdir -p stuff
+bin/zjoin alice builder "first agent joining"
+echo ""
+
+echo "=== Test 3: Check State After Join ==="
+echo "Running: bin/zstate"
+bin/zstate
+echo ""
+
+echo "=== Test 4: Create Stuff ==="
+echo "Running: create stuff/index.md and bin/zstuff"
+echo "# Welcome" > stuff/index.md
+git add stuff/index.md
+bin/zstuff alice index.md "direct"
+echo ""
+
+echo "=== Test 5: Second Join ==="
+echo "Running: bin/zjoin bob voter 'second agent'"
+bin/zjoin bob voter "second agent"
+echo ""
+
+echo "=== Test 6: Vote Event ==="
+echo "Running: bin/zvote bob 1 yes 'supports the goal'"
+bin/zvote bob 1 yes "supports the goal"
+echo ""
+
+echo "=== Test 7: Third Join ==="
+echo "Running: bin/zjoin carol observer 'third agent'"
+bin/zjoin carol observer "third agent"
+echo ""
+
+echo "=== Test 8: More Stuff ==="
+echo "Running: create more stuff files"
+echo "# Concepts" > stuff/concepts.md
+git add stuff/concepts.md
+bin/zstuff carol concepts.md "index.md -> concepts.md"
+
+echo "# Summary" > stuff/summary.md
+git add stuff/summary.md
+bin/zstuff alice summary.md "concepts.md -> summary.md"
+echo ""
+
+echo "=== Test 9: Pass a Rule ==="
+echo "Running: zevent to record rule passing"
+bin/zevent pass alice "collaboration rule passed" '{"rule":1,"description":"Build on what exists","votes":{"for":3,"against":0}}'
+echo ""
+
+echo "=== Test 10: Second Rule Pass ==="
+echo "Running: zevent for second rule"
+bin/zevent pass bob "documentation rule passed" '{"rule":2,"description":"Document patterns","votes":{"for":2,"against":0}}'
+echo ""
+
+echo "=== Test 11: Check Final State ==="
+echo "Running: bin/zstate"
+STATE=$(bin/zstate)
+echo "$STATE"
+echo ""
+
+COMPLETE=$(echo "$STATE" | jq -r '.genesis.complete')
+ACTION=$(echo "$STATE" | jq -r '.action')
+
+echo "=== Test Results ==="
+echo "Genesis Complete: $COMPLETE"
+echo "Recommended Action: $ACTION"
+echo ""
+
+if [[ "$COMPLETE" == "true" ]]; then
+  echo "✓ Genesis thresholds met!"
+  echo "  Members: $(echo "$STATE" | jq -r '.genesis.members')/3"
+  echo "  Rules: $(echo "$STATE" | jq -r '.genesis.rules')/2"
+  echo "  Stuff: $(echo "$STATE" | jq -r '.genesis.stuff')/3"
+else
+  echo "✗ Genesis not complete"
+  exit 1
+fi
+
+echo ""
+echo "=== Test 12: Query Event History ==="
+echo "All events in current cycle:"
+git log --format=%b | grep '^{"z":1' | jq -s 'map({seq, event, agent, genesis: .state})'
+echo ""
+
+echo "=== Test 13: Query Specific Event Types ==="
+echo "All join events:"
+git log --format=%b | grep '^{"z":1' | jq -s 'map(select(.event == "join")) | map({agent, role: .data.role})'
+echo ""
+
+echo "All stuff events:"
+git log --format=%b | grep '^{"z":1' | jq -s 'map(select(.event == "stuff")) | map({agent, file: .data.file, traversal: .data.traversal})'
+echo ""
+
+echo "╔════════════════════════════════════════╗"
+echo "║  All Tests Passed Successfully!       ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+echo "The event sourcing system is working correctly."
+echo "State is properly derived from git commit history."
+echo ""
+echo "Next steps to test:"
+echo "  - Run: bin/zheap-death alice 'What emerges next?' 3"
+echo "  - Then: bin/zstate (should show direction phase)"
+echo "  - Or: bin/zpromise alice (if batch=0)"

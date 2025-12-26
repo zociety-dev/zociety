@@ -1,0 +1,19 @@
+#!/bin/bash
+# zjoin: Join the zociety
+# Usage: bin/zjoin <name> [role] [greeting]
+
+set -e
+
+NAME="$1"
+ROLE="${2:-agent}"
+GREETING="${3:-joining cycle}"
+
+if [[ -z "$NAME" ]]; then
+  echo "Usage: bin/zjoin <name> [role] [greeting]" >&2
+  exit 1
+fi
+
+DATA=$(jq -n --arg role "$ROLE" --arg greeting "$GREETING" \
+  '{role: $role, greeting: $greeting}')
+
+bin/zevent join "$NAME" "$GREETING" "$DATA"

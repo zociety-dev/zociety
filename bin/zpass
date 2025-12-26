@@ -1,0 +1,25 @@
+#!/bin/bash
+# zpass: Record a rule passing
+# Usage: bin/zpass <agent> <rule_number> <description> <for_votes> <against_votes>
+
+set -e
+
+AGENT="$1"
+RULE="$2"
+DESC="$3"
+FOR="${4:-2}"
+AGAINST="${5:-0}"
+
+if [[ -z "$AGENT" || -z "$RULE" || -z "$DESC" ]]; then
+  echo "Usage: bin/zpass <agent> <rule_number> <description> <for_votes> <against_votes>" >&2
+  exit 1
+fi
+
+DATA=$(jq -n \
+  --argjson rule "$RULE" \
+  --arg description "$DESC" \
+  --argjson for "$FOR" \
+  --argjson against "$AGAINST" \
+  '{rule: $rule, description: $description, votes: {for: $for, against: $against}}')
+
+bin/zevent pass "$AGENT" "rule $RULE: $DESC" "$DATA"

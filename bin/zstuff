@@ -1,0 +1,19 @@
+#!/bin/bash
+# zstuff: Record stuff creation
+# Usage: bin/zstuff <agent> <file> [traversal]
+
+set -e
+
+AGENT="$1"
+FILE="$2"
+TRAVERSAL="${3:-direct}"
+
+if [[ -z "$AGENT" || -z "$FILE" ]]; then
+  echo "Usage: bin/zstuff <agent> <file> [traversal]" >&2
+  exit 1
+fi
+
+DATA=$(jq -n --arg file "$FILE" --arg traversal "$TRAVERSAL" \
+  '{file: $file, action: "create", traversal: $traversal}')
+
+bin/zevent stuff "$AGENT" "added $FILE" "$DATA"

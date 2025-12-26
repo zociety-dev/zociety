@@ -1,0 +1,73 @@
+#!/bin/bash
+# zvalidate: Validate event commit format
+# Usage: bin/zvalidate [commit]
+
+set -e
+
+COMMIT="${1:-HEAD}"
+
+echo "Validating commit: $COMMIT"
+echo ""
+
+# Get commit message
+MSG=$(git log -1 --format=%B "$COMMIT")
+
+# Extract subject line
+SUBJECT=$(echo "$MSG" | head -1)
+
+# Extract JSON trailer
+JSON=$(echo "$MSG" | grep '^{"z":1' || true)
+
+echo "Subject: $SUBJECT"
+echo ""
+
+if [[ -z "$JSON" ]]; then
+  echo "❌ No JSON event trailer found"
+  echo "This is not an event commit."
+  exit 1
+fi
+
+echo "JSON Event:"
+echo "$JSON" | jq .
+echo ""
+
+# Validate JSON structure
+VALID=$(echo "$JSON" | jq -e '
+  .z == 1 and
+  .event != null and
+  .cycle != null and
+  .seq != null and
+  .agent != null and
+  .ts != null and
+  .state != null and
+  .state.members != null and
+  .state.rules != null and
+  .state.stuff != null and
+  .state.complete != null
+' && echo "true" || echo "false")
+
+if [[ "$VALID" == "true" ]]; then
+  echo "✓ JSON structure is valid"
+  echo "  Event: $(echo "$JSON" | jq -r .event)"
+  echo "  Cycle: $(echo "$JSON" | jq -r .cycle)"
+  echo "  Seq: $(echo "$JSON" | jq -r .seq)"
+  echo "  Agent: $(echo "$JSON" | jq -r .agent)"
+  echo "  Genesis: $(echo "$JSON" | jq -c .state)"
+else
+  echo "❌ JSON structure is invalid"
+  exit 1
+fi
+
+# Validate subject matches event
+EVENT=$(echo "$JSON" | jq -r .event)
+if [[ "$SUBJECT" =~ ^\[$EVENT\] ]]; then
+  echo "✓ Subject prefix matches event type"
+else
+  echo "❌ Subject prefix does not match event type"
+  echo "  Expected: [$EVENT]"
+  echo "  Got: $SUBJECT"
+  exit 1
+fi
+
+echo ""
+echo "✓ Commit is a valid event"

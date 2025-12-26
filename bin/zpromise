@@ -1,0 +1,28 @@
+#!/bin/bash
+# zpromise: Output completion promise and final event
+
+set -e
+
+AGENT="${1:-system}"
+
+# Verify state
+STATE=$(bin/zstate)
+COMPLETE=$(echo "$STATE" | jq -r '.genesis.complete')
+BATCH=$(echo "$STATE" | jq -r '.batch // 0')
+
+if [[ "$COMPLETE" != "true" ]]; then
+  echo "ERROR: Genesis not complete" >&2
+  echo "Current state:" >&2
+  echo "$STATE" | jq .genesis >&2
+  exit 1
+fi
+
+if [[ "$BATCH" != "0" && "$BATCH" != "null" ]]; then
+  echo "ERROR: Batch remaining ($BATCH), run heap-death instead" >&2
+  exit 1
+fi
+
+bin/zevent complete "$AGENT" "cycle complete" '{}'
+
+echo ""
+echo "<promise>CYCLE_COMPLETE</promise>"
