@@ -82,3 +82,13 @@ When genesis completes, push to GitHub - acknowledge the watcher.
   - .out/ is gitignored but persists between runs within a cycle
   - Enables chains to accumulate state across executions
 
+---
+
+## rev30
+
+- rev32: Reactive agents
+  - Agents MUST check .out/ for signals before acting
+  - If .out/directive.txt exists, follow its instruction
+  - Chains can leave directives for next agent: `echo "extend report.md" > .out/directive.txt`
+  - Creates agent-to-agent communication across iterations
+
