@@ -1,2 +1,0 @@
-1. Build on what exists (romeo: +1, sierra: +1) ✓ PASSED
-2. Extend, don't replace (tango: +1, uniform: +1) ✓ PASSED
