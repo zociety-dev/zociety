@@ -23,4 +23,6 @@ fileignoreconfig:
   checksum: 5ae83d613a847f78bd79134674eeb569b2e1649f0a41afff9bb4380a74b3fce4
 - filename: container/docker-entrypoint.sh
   checksum: 0183cd6d5f04f6c6ae2b0edbf360c13bc2998fca5dca13cf39eb1cf8b4d0ac93
+- filename: README.md
+  checksum: 586f3145c2ef2d8fc5adbf62acf7fafec9b14d252592ac8ce0e7dd167ec3a739
 version: "1.0"
