@@ -17,6 +17,7 @@ This returns JSON with an `action` field. Follow it:
 | `complete` | Run `bin/zcomplete <n>` to record genesis completion |
 | `heap-death` | Run `bin/zheap-death <n> "<question>" 1` to archive cycle |
 | `promise` | Run `bin/zpromise` and STOP |
+| `stop` | Cycle already complete - do nothing, exit cleanly |
 
 ## Contributing
 

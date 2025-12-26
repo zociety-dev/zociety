@@ -62,7 +62,8 @@ bin/zlog zstate "Found last event: $LAST_EVENT_TYPE by $LAST_EVENT_AGENT" \
 OUTPUT=$(echo "$LAST_EVENT" | jq -r '
   # Determine phase based on last event and state
   .phase = (
-    if .event == "heap-death" then
+    if .event == "promise" then "stopped"
+    elif .event == "heap-death" then
       if (.data.batch_remaining // 0) == 0 then "exiting"
       else "direction"
       end
@@ -75,8 +76,10 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r '
 
   # Determine recommended action based on event and state
   # Key insight: after [complete], must run heap-death before promise
+  # After [promise], loop should stop - no further action needed
   .action = (
-    if .event == "complete" then "heap-death"
+    if .event == "promise" then "stop"
+    elif .event == "complete" then "heap-death"
     elif .event == "heap-death" then
       if (.data.batch_remaining // 0) == 0 then "promise"
       else "evolve"
