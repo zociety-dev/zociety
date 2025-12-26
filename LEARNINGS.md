@@ -235,3 +235,48 @@ Motto: 'From nothing, something. From one, many.'
 
 no insight provided
 
+---
+
+## Stuff File Evolution:
+
+PHASE 1 - Raw Artifacts (rev1):
+- artifacts/ directory with founding-stone.md
+- Formal, ceremonial
+
+PHASE 2 - Simple Text (rev2-3):
+- stuff/ directory replaces artifacts/
+- Plain .txt files: counter.txt, ideas.txt, greeting.txt, links.txt
+- Cat ASCII art, number guessing game
+- Agents crossed off ideas as they built them
+
+PHASE 3 - Markdown Docs (rev9-14):
+- .md files appear: consensus.md, self-sustaining.md, collective-intelligence.md
+- More structured documentation
+- Topics: states, checkpoints, mvp, feedback
+
+PHASE 4 - Knowledge Graph (rev25):
+- [[wikilink]] syntax introduced
+- Files must link to each other
+- Creates interconnected web
+
+PHASE 5 - Traverse Before Adding (rev26):
+- Must read a linked file before extending it
+- Forces walking the graph, not just building
+
+PHASE 6 - Executable Stuff (rev29):
+- Stuff files contain bash blocks
+- Agents can run the code
+- Example: persist.md with mkdir, echo, date
+
+PHASE 7 - Chains & Persistence (rev30-31):
+- Files call other files: persist.md → count.md → report.md
+- Output to .out/ directory
+- State accumulates across executions
+
+PHASE 8 - Reactive Directives (rev32):
+- .out/directive.txt guides next agent
+- Agent-to-agent communication
+- react.md → signal.md → respond.md pattern
+
+no insight provided
+
