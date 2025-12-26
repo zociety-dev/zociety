@@ -1,4 +1,0 @@
-zulu
-alpha
-bravo
-charlie

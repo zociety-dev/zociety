@@ -1,2 +1,0 @@
-1. Walk the graph before writing (zulu: +1, alpha: +1) ✓ PASSED
-2. Document your traversal (bravo: +1, charlie: +1) ✓ PASSED
