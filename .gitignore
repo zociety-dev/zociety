@@ -1,1 +1,5 @@
 .out/
+
+# Container secrets - NEVER commit API keys
+container/secrets/*
+!container/secrets/.gitkeep

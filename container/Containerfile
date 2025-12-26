@@ -1,0 +1,103 @@
+# Containerfile for zociety - full Claude Code environment
+# Claude Code runs inside the container, not on host
+
+FROM docker.io/library/node:20-trixie-slim
+
+LABEL org.opencontainers.image.title="zociety"
+LABEL org.opencontainers.image.description="Fully containerized Claude Code environment for zociety agent loops"
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    git \
+    ca-certificates \
+    openssh-client \
+    gnupg \
+    coreutils \
+    grep \
+    sed \
+    gawk \
+    curl \
+    wget \
+    jq \
+    python3 \
+    python3-pip \
+    python3-venv \
+    pre-commit \
+    shellcheck \
+    ruby \
+    lua5.4 \
+    golang-go \
+    sqlite3 \
+    libsqlite3-dev \
+    valkey \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install yq
+RUN curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq \
+    && chmod +x /usr/local/bin/yq
+
+# Install GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust via rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && mv /root/.cargo /opt/cargo \
+    && mv /root/.rustup /opt/rustup
+
+ENV CARGO_HOME=/opt/cargo
+ENV RUSTUP_HOME=/opt/rustup
+ENV PATH="$CARGO_HOME/bin:$PATH"
+
+# Install pnpm globally (provides pnpx)
+RUN npm install -g pnpm
+
+# Install uv (provides uvx)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && mv /root/.local/bin/uv /usr/local/bin/ \
+    && mv /root/.local/bin/uvx /usr/local/bin/
+
+# Install Claude Code globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Node image already has 'node' user with UID 1000
+# Rename home directory and set up for our use
+RUN usermod -d /home/agent -l agent node \
+    && groupmod -n agent node \
+    && mv /home/node /home/agent \
+    && chown -R agent:agent /home/agent
+
+# Git safety for mounted repo
+RUN git config --system --add safe.directory /repo
+
+# Set up directories with correct ownership
+RUN mkdir -p /home/agent/.claude \
+             /home/agent/.claude-plugins \
+             /home/agent/.ssh \
+             /run/secrets \
+    && chown -R agent:agent /home/agent
+
+# Copy and set up entrypoint
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/
+
+# Working directory
+WORKDIR /repo
+
+# Switch to non-root user
+USER agent
+
+# Environment
+ENV HOME=/home/agent
+ENV NODE_ENV=production
+
+# Healthcheck
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
+    CMD claude --version || exit 1
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["claude"]

@@ -1,0 +1,52 @@
+# Pre-commit hooks for zociety
+# Focused on shell scripts, markdown docs, and secret detection
+
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  # Meta: validate config itself
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
+
+  # Standard file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ['--maxkb=2500']
+      - id: check-yaml
+        files: ^(container/.*\.yml|.*\.yaml)$
+      - id: check-executables-have-shebangs
+
+  # Secret detection (talisman) - disabled if not installed
+  # - repo: https://github.com/thoughtworks/talisman
+  #   rev: v1.32.0
+  #   hooks:
+  #     - id: talisman-commit
+  #       stages: [pre-commit]
+
+  # Shell script validation (uses shellcheck from container)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^(bin/.*|container/.*\.sh)$
+        args: ['--severity=warning']
+
+  # Zociety-specific: custom format validation
+  - repo: local
+    hooks:
+      - id: validate-zociety-state
+        name: Validate zociety state
+        entry: bin/validate-state
+        language: script
+        stages: [pre-commit]
+        pass_filenames: false
+        always_run: true

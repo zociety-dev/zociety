@@ -38,5 +38,12 @@ else
 fi
 
 echo ""
-echo "Setup complete! Run the loop:"
-echo '  /ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "CYCLE_COMPLETE"'
+echo "Setup complete!"
+echo ""
+echo "Container setup (required for running loops):"
+echo "  1. echo 'sk-ant-...' > container/secrets/anthropic_api_key"
+echo "  2. chmod 600 container/secrets/anthropic_api_key"
+echo "  3. bin/zociety --build"
+echo ""
+echo "Run the loop:"
+echo "  bin/zociety ralph-loop"

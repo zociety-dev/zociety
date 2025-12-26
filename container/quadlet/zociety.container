@@ -1,0 +1,65 @@
+# Quadlet container unit for zociety
+# Systemd integration for running zociety as a user service
+#
+# Install:
+#   mkdir -p ~/.config/containers/systemd
+#   cp quadlet/zociety.container ~/.config/containers/systemd/
+#   # Edit paths below to match your system
+#   systemctl --user daemon-reload
+#   systemctl --user start zociety
+#
+# NOTE: This runs as a long-lived container for exec-based access.
+#       For interactive Claude sessions, use bin/zociety instead.
+
+[Unit]
+Description=Zociety Claude Code Environment
+After=network-online.target
+
+[Container]
+ContainerName=zociety-sandbox
+Image=localhost/zociety:latest
+
+# Security: read-only root
+ReadOnly=true
+Tmpfs=/tmp:size=200M,mode=1777
+Tmpfs=/run:size=50M,mode=755
+
+# Mount the repo
+# UPDATE THIS PATH for your system
+Volume=%h/Projects/opensource/zociety:/repo:Z
+
+# Claude configuration (persistent)
+Volume=zociety-claude-config:/home/agent/.claude
+
+# Plugins (read-only from host)
+# UPDATE THIS PATH for your system
+Volume=%h/.claude/plugins:/home/agent/.claude-plugins:ro
+
+# Git credentials (read-only)
+Volume=%h/.ssh:/home/agent/.ssh:ro
+Volume=%h/.gitconfig:/home/agent/.gitconfig:ro
+
+# Secrets
+# UPDATE THIS PATH for your system
+Volume=%h/Projects/opensource/zociety/container/secrets:/run/secrets:ro
+
+# Run as non-root
+User=1000
+Group=1000
+
+# Resource limits
+Memory=1G
+
+# Security hardening
+NoNewPrivileges=true
+
+# Keep running for exec access
+Exec=sleep infinity
+
+[Service]
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=60s
+
+[Install]
+WantedBy=default.target

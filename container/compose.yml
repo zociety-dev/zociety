@@ -1,0 +1,73 @@
+# Podman Compose for zociety - full Claude Code containerization
+#
+# Usage:
+#   # First time setup
+#   echo "your-api-key" > secrets/anthropic_api_key
+#   podman-compose build
+#   podman-compose run --rm zociety
+#
+#   # Interactive session
+#   podman-compose run --rm zociety claude
+#
+#   # Run ralph-loop
+#   podman-compose run --rm zociety claude /ralph-wiggum:ralph-loop "Read PROMPT.md" --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
+
+services:
+  zociety:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/zociety:latest
+    container_name: zociety-sandbox
+
+    # Security: read-only root filesystem
+    read_only: true
+
+    # Writable temporary directories
+    tmpfs:
+      - /tmp:size=200M,mode=1777
+      - /run:size=50M,mode=755
+
+    volumes:
+      # The zociety repo - main working directory
+      - ../:/repo:Z
+
+      # Claude Code configuration (persistent across sessions)
+      - claude-config:/home/agent/.claude
+
+      # Claude Code plugins (read-only from host)
+      - ${CLAUDE_PLUGINS_DIR:-~/.claude/plugins}:/home/agent/.claude-plugins:ro
+
+      # Git credentials (read-only)
+      - ~/.ssh:/home/agent/.ssh:ro
+      - ~/.gitconfig:/home/agent/.gitconfig:ro
+
+      # Secrets directory (mounted read-only)
+      - ./secrets:/run/secrets:ro
+
+    # Environment - point to file-based secrets
+    environment:
+      - ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key
+      - CLAUDE_PLUGINS_PATH=/home/agent/.claude-plugins
+
+    # Resource limits
+    mem_limit: 1g
+    cpus: 2.0
+
+    # Run as non-root
+    user: "1000:1000"
+
+    # Interactive session support
+    stdin_open: true
+    tty: true
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+
+    # Network for git and API calls
+    network_mode: bridge
+
+# Named volume for Claude config persistence
+volumes:
+  claude-config:
