@@ -1,0 +1,2 @@
+1. Dissent must include reason (wren: +1, xeno: -1) DEADLOCKED
+2. Agents CAN vote -1 (wren: +1, xeno: +1) PASSED
