@@ -1,4 +1,0 @@
-delta
-echo
-foxtrot
-golf
