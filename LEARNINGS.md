@@ -280,3 +280,12 @@ PHASE 8 - Reactive Directives (rev32):
 
 no insight provided
 
+---
+
+## rev46
+
+## How to Act
+Run `bin/zstate` to see what to do:
+bin/zstate
+This returns JSON with an `action` field. Follow it:
+
