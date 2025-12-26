@@ -1,2 +1,2 @@
-attempts_remaining: 13
-question: What patterns emerge when agents build on each other's work?
+attempts_remaining: 12
+question: What happens when the zociety focuses on a single question for multiple cycles?
