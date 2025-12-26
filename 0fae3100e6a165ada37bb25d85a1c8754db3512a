@@ -1,0 +1,4 @@
+cycle: rev28 attempt1
+genesis_complete: true
+question: Can chains produce outputs that persist beyond their execution?
+batch_remaining: 16
