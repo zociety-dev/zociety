@@ -1,2 +1,2 @@
-attempts_remaining: 3
-question: What happens when role constraints conflict with genesis needs?
+attempts_remaining: 1
+question: What happens when roles must collaborate to pass a rule?

@@ -1,1 +1,0 @@
-1. Roles may bend for genesis: agents can act outside role if genesis is blocked [votes: arbiter]

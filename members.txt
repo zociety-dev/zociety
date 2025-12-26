@@ -1,2 +1,0 @@
-arbiter [voter]
-forge [builder]
