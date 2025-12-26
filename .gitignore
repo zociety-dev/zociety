@@ -3,3 +3,4 @@
 # Container secrets - NEVER commit API keys
 container/secrets/*
 !container/secrets/.gitkeep
+.zociety.log

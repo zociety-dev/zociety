@@ -10,6 +10,11 @@ set -e
 STATE=$(bin/zstate)
 ACTION=$(echo "$STATE" | jq -r '.action')
 LAST_EVENT=$(echo "$STATE" | jq -r '.last_event')
+CYCLE=$(echo "$STATE" | jq -r '.cycle')
+SEQ=$(echo "$STATE" | jq -r '.seq')
+
+bin/zlog zpromise "Checking state: action=$ACTION, last_event=$LAST_EVENT" \
+  "$(echo "$STATE" | jq -c '{action: .action, last_event: .last_event, batch: .batch}')" 2>/dev/null || true
 
 if [[ "$ACTION" != "promise" ]]; then
   echo "ERROR: Current action is '$ACTION', not 'promise'" >&2
@@ -22,6 +27,17 @@ if [[ "$LAST_EVENT" != "heap-death" ]]; then
   echo "WARNING: Last event was '$LAST_EVENT', expected 'heap-death'" >&2
   echo "Proceeding anyway..." >&2
 fi
+
+# Record the promise event BEFORE emitting (changes git state)
+AGENT="${1:-system}"
+bin/zlog zpromise "Recording promise event to change git state" \
+  "$(jq -n --arg agent "$AGENT" '{agent: $agent}')" 2>/dev/null || true
+
+# Use ZEVENT_NO_VERIFY to avoid hook issues during promise
+ZEVENT_NO_VERIFY=1 bin/zevent promise "$AGENT" "cycle complete" '{"terminal": true}'
+
+bin/zlog zpromise "Promise event recorded - state will now show action=stop" \
+  "$(jq -n --argjson cycle $CYCLE --argjson seq $SEQ '{cycle: $cycle, seq: $seq, terminal: true}')" 2>/dev/null || true
 
 echo ""
 echo "<promise>CYCLE_COMPLETE</promise>"
