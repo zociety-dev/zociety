@@ -235,6 +235,11 @@ git tag
   - Second cycle: actually USE the -1 mechanism
   - This agent should disagree with something from cycle 1
   - Test: does recorded dissent add value or just noise?
+- rev41: Disagreement depth 3 - tiebreaker
+  - Third cycle: resolve the deadlock from cycle 2
+  - Rule 1 (dissent needs reasons) is at 0 net votes
+  - This agent is the tiebreaker - must vote +1 or -1
+  - Observation: 3 agents needed for guaranteed resolution
 
 ---
 
