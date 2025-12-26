@@ -74,8 +74,8 @@ MSG="[$TYPE] $AGENT: $DESC
 
 $EVENT"
 
-# Stage and commit
+# Stage and commit (allow empty for events that don't change files)
 git add -A
-git commit -m "$MSG"
+git commit --allow-empty -m "$MSG"
 
 echo "$EVENT" | jq .
