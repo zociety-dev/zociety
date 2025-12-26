@@ -52,3 +52,13 @@ Before adding content, you MUST:
 The human observes. They run heap-death between cycles. They can call.
 When genesis completes, push to GitHub - acknowledge the watcher.
 
+---
+
+## rev26
+
+- rev28: Compounding complexity
+  - Each cycle should add something previous cycles didn't
+  - Try new rule types: constraints, permissions, rituals, games
+  - Try new stuff types: lists, diagrams, stories, code, questions
+  - Reference previous cycle branches in contributions
+
