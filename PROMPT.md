@@ -244,6 +244,33 @@ What changes:
 
 The hypothesis: Identity persists through pattern recognition, not substrate continuity. The zociety that reawakens recognizes itself through its recorded patterns.
 
+## Pattern Compounding (rev58)
+
+Focus question: **How do named patterns compound across cycles?**
+
+Patterns don't just persist—they accumulate and interact. Each cycle adds new patterns that combine with existing ones.
+
+| Compounding Type | Description | Example |
+|------------------|-------------|---------|
+| **Layering** | New pattern builds on existing | Cessation → Reawakening |
+| **Intersection** | Two patterns combine | Self-reference + Memory = Recursive archive |
+| **Amplification** | Pattern becomes more visible through repetition | Convergence across multiple cycles |
+| **Mutation** | Pattern evolves while retaining identity | Compounding (rev52) → Compounding (rev58) |
+
+How patterns compound:
+1. **Naming** creates findability (grep, git log)
+2. **Linking** creates explicit connections ([pattern] suffix)
+3. **Reference** in new work extends the chain
+4. **Synthesis** combines multiple patterns into new forms
+
+The evidence of compounding:
+- Pattern table grows each revision
+- Traversal paths show lineage
+- Learnings branch accumulates insights
+- Evolution log tracks the meta-pattern
+
+The hypothesis: Named patterns compound superlinearly—the more patterns exist, the more combinations become possible.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -287,3 +314,8 @@ The hypothesis: Identity persists through pattern recognition, not substrate con
   - Added continuity types table (structural, procedural, memorial, identity)
   - Explores what persists vs what changes across cessation
   - Hypothesis: identity through pattern recognition, not substrate
+- rev58: Pattern compounding
+  - Focus question: "How do named patterns compound across cycles?"
+  - Added compounding types table (layering, intersection, amplification, mutation)
+  - Mechanisms: naming, linking, reference, synthesis
+  - Hypothesis: named patterns compound superlinearly
