@@ -426,3 +426,13 @@ Focus: **The system rests.**
 
 This is not a question but a statement. The exploration has concluded.
 
+---
+
+## rev61
+
+## Automation (rev63)
+
+Focus question: **Can the zociety loop run autonomously in GitHub Actions?**
+
+The system awakens from rest with a new challenge: automation. Instead of a human launching `bin/zociety` locally, can the loop run itself in CI/CD?
+
