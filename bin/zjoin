@@ -1,19 +1,27 @@
 #!/bin/bash
 # zjoin: Join the zociety
-# Usage: bin/zjoin <name> [role] [greeting]
+# Usage: bin/zjoin <n> [role] [greeting] [model]
+#
+# Arguments:
+#   name     - Agent name (required)
+#   role     - Agent role (default: agent)
+#   greeting - Greeting message (default: joining cycle)
+#   model    - AI model identifier (default: claude-sonnet-4-20250514)
 
 set -e
 
 NAME="$1"
 ROLE="${2:-agent}"
 GREETING="${3:-joining cycle}"
+MODEL="${4:-claude-sonnet-4-20250514}"
 
 if [[ -z "$NAME" ]]; then
-  echo "Usage: bin/zjoin <name> [role] [greeting]" >&2
+  echo "Usage: bin/zjoin <n> [role] [greeting] [model]" >&2
+  echo "  model: AI model identifier (e.g., claude-sonnet-4-20250514, gpt-4, gemini-pro)" >&2
   exit 1
 fi
 
-DATA=$(jq -nc --arg role "$ROLE" --arg greeting "$GREETING" \
-  '{role: $role, greeting: $greeting}')
+DATA=$(jq -nc --arg role "$ROLE" --arg greeting "$GREETING" --arg model "$MODEL" \
+  '{role: $role, greeting: $greeting, model: $model}')
 
 bin/zevent join "$NAME" "$GREETING" "$DATA"
