@@ -44,6 +44,13 @@ repos:
   # Zociety-specific: custom format validation
   - repo: local
     hooks:
+      - id: no-main-commits
+        name: Prevent direct main commits
+        entry: .githooks/pre-commit
+        language: script
+        stages: [pre-commit]
+        pass_filenames: false
+        always_run: true
       - id: validate-zociety-state
         name: Validate zociety state
         entry: bin/validate-state
