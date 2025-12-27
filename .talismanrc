@@ -25,4 +25,6 @@ fileignoreconfig:
   checksum: 0183cd6d5f04f6c6ae2b0edbf360c13bc2998fca5dca13cf39eb1cf8b4d0ac93
 - filename: README.md
   checksum: 586f3145c2ef2d8fc5adbf62acf7fafec9b14d252592ac8ce0e7dd167ec3a739
+- filename: bin/zworkflow
+  checksum: 938c7c5f28ab16409797fca51068a4c1ac23441d62450ba4341b67c586290b19
 version: "1.0"

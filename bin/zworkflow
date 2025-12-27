@@ -1,0 +1,80 @@
+#!/bin/bash
+# zworkflow: Propose a GitHub Actions workflow
+# Usage: bin/zworkflow <agent> <workflow_name> <workflow_file> [description]
+#
+# The workflow file should be a valid YAML file. It will be staged but NOT
+# committed to .github/workflows/ until the workflow passes via zworkflow-pass.
+#
+# Example:
+#   bin/zworkflow alice daily-heartbeat workflows/daily.yml "Run daily status check"
+
+set -e
+
+AGENT="$1"
+WORKFLOW_NAME="$2"
+WORKFLOW_FILE="$3"
+DESCRIPTION="${4:-proposed workflow}"
+
+if [[ -z "$AGENT" || -z "$WORKFLOW_NAME" || -z "$WORKFLOW_FILE" ]]; then
+  echo "Usage: bin/zworkflow <agent> <workflow_name> <workflow_file> [description]" >&2
+  echo "" >&2
+  echo "Arguments:" >&2
+  echo "  agent         - Agent proposing the workflow" >&2
+  echo "  workflow_name - Short identifier (e.g., daily-heartbeat)" >&2
+  echo "  workflow_file - Path to YAML file with workflow definition" >&2
+  echo "  description   - What the workflow does" >&2
+  exit 1
+fi
+
+# Validate workflow file exists
+if [[ ! -f "$WORKFLOW_FILE" ]]; then
+  echo "Error: Workflow file not found: $WORKFLOW_FILE" >&2
+  exit 1
+fi
+
+# Validate YAML syntax (basic check)
+if ! command -v yq &>/dev/null; then
+  # Fall back to checking it looks like YAML
+  if ! grep -q "^name:" "$WORKFLOW_FILE" 2>/dev/null; then
+    echo "Warning: Workflow file may not be valid YAML (no 'name:' found)" >&2
+  fi
+else
+  if ! yq eval '.' "$WORKFLOW_FILE" >/dev/null 2>&1; then
+    echo "Error: Invalid YAML in workflow file" >&2
+    exit 1
+  fi
+fi
+
+# Read workflow content for storage in event
+WORKFLOW_CONTENT=$(cat "$WORKFLOW_FILE")
+
+# Assign workflow number based on existing workflow proposals
+WORKFLOW_NUM=$(git log --format=%b | grep '^{"z":1' | jq -s '[.[] | select(.event == "workflow") | .data.workflow_num] | max // 0' 2>/dev/null || echo "0")
+WORKFLOW_NUM=$((WORKFLOW_NUM + 1))
+
+# Store proposed workflow in staging area
+mkdir -p .proposed-workflows
+cp "$WORKFLOW_FILE" ".proposed-workflows/${WORKFLOW_NAME}.yml"
+git add ".proposed-workflows/${WORKFLOW_NAME}.yml"
+
+DATA=$(jq -nc \
+  --argjson workflow_num "$WORKFLOW_NUM" \
+  --arg workflow_name "$WORKFLOW_NAME" \
+  --arg description "$DESCRIPTION" \
+  --arg target_file ".github/workflows/${WORKFLOW_NAME}.yml" \
+  --arg content "$WORKFLOW_CONTENT" \
+  '{
+    workflow_num: $workflow_num,
+    workflow_name: $workflow_name,
+    description: $description,
+    target_file: $target_file,
+    content: $content,
+    status: "proposed"
+  }')
+
+bin/zevent workflow "$AGENT" "proposed workflow: $WORKFLOW_NAME" "$DATA"
+
+echo ""
+echo "Workflow #$WORKFLOW_NUM proposed: $WORKFLOW_NAME"
+echo "Other agents can vote with: bin/zworkflow-vote <agent> $WORKFLOW_NUM yes|no"
+echo "Pass with: bin/zworkflow-pass <agent> $WORKFLOW_NUM"
