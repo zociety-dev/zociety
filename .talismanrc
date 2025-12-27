@@ -49,4 +49,6 @@ fileignoreconfig:
   checksum: 2f58757752c0018f6f52917343c502bfe00db9a5b98898059a520f65d955c688
 - filename: workflows/templates/autonomous-loop.yml
   checksum: 40187bc3c26bdb64817148b5ffb7c97621b0643d468b1d819f905aed5786ca26
+- filename: .proposed-workflows/autonomous-loop.yml
+  checksum: 0c6d1a6d7bd34688c4797832c99f95d70d6fe40f4edbef7dea2d34d76b3b6923
 version: "1.0"

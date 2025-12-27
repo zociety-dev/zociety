@@ -1,0 +1,92 @@
+# Autonomous Loop Workflow
+#
+# Runs a full zociety cycle in GitHub Actions.
+# Each iteration: read PROMPT.md, act, commit, push.
+# Continues until genesis complete or max iterations.
+#
+# Required secrets:
+#   - ANTHROPIC_API_KEY: Claude API key
+#
+# Optional secrets:
+#   - GPG_SIGNING_KEY: Base64-encoded GPG key for verified commits
+
+name: Autonomous Loop
+
+on:
+  # Manual trigger with configuration
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: 'Maximum iterations'
+        required: false
+        default: '30'
+        type: string
+      batch_size:
+        description: 'Batch size for heap-death'
+        required: false
+        default: '1'
+        type: string
+      direction:
+        description: 'Direction question (optional)'
+        required: false
+        type: string
+
+  # Weekly schedule (Sunday 00:00 UTC)
+  # Uncomment to enable scheduled runs
+  # schedule:
+  #   - cron: '0 0 * * 0'
+
+# Prevent concurrent runs
+concurrency:
+  group: zociety-loop
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 2 hour max
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for event sourcing
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Zociety Environment
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+        run: bin/zga-setup
+
+      - name: Check Current State
+        run: |
+          echo "=== Current State ==="
+          bin/zstate | jq .
+          echo ""
+          echo "=== Recent Events ==="
+          git log --oneline -5
+
+      - name: Run Autonomous Loop
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          MAX="${{ github.event.inputs.max_iterations || '30' }}"
+          bin/zga-loop "$MAX"
+
+      - name: Report Final State
+        if: always()
+        run: |
+          echo "=== Final State ==="
+          bin/zstate | jq .
+          echo ""
+          echo "=== Recent Commits ==="
+          git log --oneline -10
