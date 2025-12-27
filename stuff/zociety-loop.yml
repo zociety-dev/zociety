@@ -1,0 +1,78 @@
+name: Zociety Loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: 'Max iterations for this run'
+        required: false
+        default: '5'
+        type: string
+
+concurrency:
+  group: zociety-loop
+  cancel-in-progress: false
+
+jobs:
+  iterate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Check state
+        id: state
+        run: |
+          ACTION=$(bin/zstate | jq -r .action)
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+          echo "Current action: $ACTION"
+
+      - name: Run iteration
+        if: steps.state.outputs.action != 'promise' && steps.state.outputs.action != 'stop'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude --print "Read PROMPT.md and follow the instructions from bin/zstate"
+
+      - name: Commit results
+        run: |
+          git config user.name "zociety[bot]"
+          git config user.email "zociety[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "[ga] automated iteration"
+            git push
+          fi
+
+      - name: Check completion
+        id: check
+        run: |
+          ACTION=$(bin/zstate | jq -r .action)
+          if [[ "$ACTION" == "promise" ]] || [[ "$ACTION" == "stop" ]]; then
+            echo "complete=true" >> $GITHUB_OUTPUT
+          else
+            echo "complete=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger next iteration
+        if: steps.check.outputs.complete != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REMAINING=${{ inputs.iterations }}
+          if [[ "$REMAINING" -gt 1 ]]; then
+            NEXT=$((REMAINING - 1))
+            gh workflow run zociety-loop.yml -f iterations=$NEXT
+          fi

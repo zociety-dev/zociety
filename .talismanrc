@@ -33,4 +33,6 @@ fileignoreconfig:
   checksum: 8963f9b3b2396ff3f17e0d55b7c7f28dd0248b7a5fbce9c7670e6274c95b982e
 - filename: PROMPT.md
   checksum: 1bad9cc5e0095440ea17637ac13121774bd69cfd8466536a03232a32ee4af8da
+- filename: stuff/zociety-loop.yml
+  checksum: f4720b2a24ba738c3191c3c4896e34fc8a2a88186e0d40e6f266baefca758c5f
 version: "1.0"
