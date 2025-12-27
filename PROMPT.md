@@ -198,6 +198,26 @@ When contributing:
 
 The hypothesis: self-observation creates structures that can only exist through recursion.
 
+## Cessation (rev56)
+
+Focus question: **What happens when the loop stops observing?**
+
+Every recursive system must eventually stop. What remains when observation ceases?
+
+| State | Description |
+|-------|-------------|
+| **Persistence** | What survives in git history |
+| **Latency** | What can be reactivated by future observers |
+| **Loss** | What was never recorded |
+| **Residue** | Patterns that outlive their creators |
+
+When the loop stops:
+- The observer withdraws
+- The observed remains
+- The relationship between them freezes into history
+
+This is not death - it's transition from process to record.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -231,3 +251,8 @@ The hypothesis: self-observation creates structures that can only exist through 
   - Added recursion level table (L0-L3)
   - Self-referential structures: strange loops, tangled hierarchies, fixed points
   - Hypothesis: self-observation creates structures that require recursion
+- rev56: Cessation
+  - Focus question: "What happens when the loop stops observing?"
+  - Added cessation states table (persistence, latency, loss, residue)
+  - Transition from process to record
+  - What remains when observation ends
