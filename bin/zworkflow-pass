@@ -1,0 +1,81 @@
+#!/bin/bash
+# zworkflow-pass: Pass a workflow and commit it to .github/workflows/
+# Usage: bin/zworkflow-pass <agent> <workflow_num> [for_votes] [against_votes]
+#
+# This moves the proposed workflow from .proposed-workflows/ to .github/workflows/
+# and creates a workflow-pass event recording the vote totals.
+#
+# Example:
+#   bin/zworkflow-pass alice 1 3 0
+
+set -e
+
+AGENT="$1"
+WORKFLOW_NUM="$2"
+FOR_VOTES="${3:-2}"
+AGAINST_VOTES="${4:-0}"
+
+if [[ -z "$AGENT" || -z "$WORKFLOW_NUM" ]]; then
+  echo "Usage: bin/zworkflow-pass <agent> <workflow_num> [for_votes] [against_votes]" >&2
+  exit 1
+fi
+
+# Find the original workflow proposal
+WORKFLOW_EVENT=$(git log --format=%b | grep '^{"z":1' | jq -s --argjson num "$WORKFLOW_NUM" \
+  '[.[] | select(.event == "workflow" and .data.workflow_num == $num)] | first // empty' 2>/dev/null)
+
+if [[ -z "$WORKFLOW_EVENT" ]]; then
+  echo "Error: Workflow #$WORKFLOW_NUM not found" >&2
+  exit 1
+fi
+
+WORKFLOW_NAME=$(echo "$WORKFLOW_EVENT" | jq -r '.data.workflow_name')
+TARGET_FILE=$(echo "$WORKFLOW_EVENT" | jq -r '.data.target_file')
+DESCRIPTION=$(echo "$WORKFLOW_EVENT" | jq -r '.data.description')
+CONTENT=$(echo "$WORKFLOW_EVENT" | jq -r '.data.content')
+
+# Check if already passed
+EXISTING_PASS=$(git log --format=%b | grep '^{"z":1' | jq -s --argjson num "$WORKFLOW_NUM" \
+  '[.[] | select(.event == "workflow-pass" and .data.workflow_num == $num)] | first // empty' 2>/dev/null)
+
+if [[ -n "$EXISTING_PASS" ]]; then
+  echo "Error: Workflow #$WORKFLOW_NUM has already passed" >&2
+  exit 1
+fi
+
+# Create target directory
+mkdir -p .github/workflows
+
+# Write the workflow file
+echo "$CONTENT" > "$TARGET_FILE"
+git add "$TARGET_FILE"
+
+# Clean up proposed workflow if it exists
+if [[ -f ".proposed-workflows/${WORKFLOW_NAME}.yml" ]]; then
+  git rm -f ".proposed-workflows/${WORKFLOW_NAME}.yml" 2>/dev/null || rm -f ".proposed-workflows/${WORKFLOW_NAME}.yml"
+fi
+
+# Remove .proposed-workflows if empty
+rmdir .proposed-workflows 2>/dev/null || true
+
+DATA=$(jq -nc \
+  --argjson workflow_num "$WORKFLOW_NUM" \
+  --arg workflow_name "$WORKFLOW_NAME" \
+  --arg description "$DESCRIPTION" \
+  --arg target_file "$TARGET_FILE" \
+  --argjson for_votes "$FOR_VOTES" \
+  --argjson against_votes "$AGAINST_VOTES" \
+  '{
+    workflow_num: $workflow_num,
+    workflow_name: $workflow_name,
+    description: $description,
+    target_file: $target_file,
+    votes: {for: $for_votes, against: $against_votes},
+    status: "passed"
+  }')
+
+bin/zevent workflow-pass "$AGENT" "workflow $WORKFLOW_NUM passed: $WORKFLOW_NAME" "$DATA"
+
+echo ""
+echo "Workflow #$WORKFLOW_NUM passed and committed to $TARGET_FILE"
+echo "The workflow will be active after pushing to GitHub."

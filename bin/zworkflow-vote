@@ -1,0 +1,52 @@
+#!/bin/bash
+# zworkflow-vote: Vote on a proposed workflow
+# Usage: bin/zworkflow-vote <agent> <workflow_num> <yes|no> [reason]
+#
+# Example:
+#   bin/zworkflow-vote bob 1 yes "enables autonomous operation"
+
+set -e
+
+AGENT="$1"
+WORKFLOW_NUM="$2"
+VOTE_STR="$3"
+REASON="${4:-}"
+
+if [[ -z "$AGENT" || -z "$WORKFLOW_NUM" || -z "$VOTE_STR" ]]; then
+  echo "Usage: bin/zworkflow-vote <agent> <workflow_num> <yes|no> [reason]" >&2
+  exit 1
+fi
+
+# Validate vote
+if [[ "$VOTE_STR" != "yes" && "$VOTE_STR" != "no" ]]; then
+  echo "Error: Vote must be 'yes' or 'no'" >&2
+  exit 1
+fi
+
+[[ "$VOTE_STR" == "yes" ]] && VOTE=1 || VOTE=-1
+
+# Check workflow exists
+WORKFLOW_EVENT=$(git log --format=%b | grep '^{"z":1' | jq -s --argjson num "$WORKFLOW_NUM" \
+  '[.[] | select(.event == "workflow" and .data.workflow_num == $num)] | first // empty' 2>/dev/null)
+
+if [[ -z "$WORKFLOW_EVENT" ]]; then
+  echo "Error: Workflow #$WORKFLOW_NUM not found" >&2
+  echo "List proposed workflows with: git log --oneline --grep='\\[workflow\\]'" >&2
+  exit 1
+fi
+
+WORKFLOW_NAME=$(echo "$WORKFLOW_EVENT" | jq -r '.data.workflow_name')
+
+DATA=$(jq -nc \
+  --argjson workflow_num "$WORKFLOW_NUM" \
+  --arg workflow_name "$WORKFLOW_NAME" \
+  --argjson vote "$VOTE" \
+  --arg reason "$REASON" \
+  '{
+    workflow_num: $workflow_num,
+    workflow_name: $workflow_name,
+    vote: $vote,
+    reason: $reason
+  }')
+
+bin/zevent workflow-vote "$AGENT" "$VOTE_STR on workflow $WORKFLOW_NUM ($WORKFLOW_NAME)" "$DATA"
