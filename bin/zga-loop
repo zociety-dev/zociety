@@ -14,11 +14,13 @@
 set -euo pipefail
 
 MAX_ITERATIONS="${1:-30}"
+MODEL="${2:-claude-haiku-4-20250514}"
 ITERATION=0
 PROMPT="Read PROMPT.md and follow its instructions."
 
 echo "=== Zociety GA Loop ==="
 echo "Max iterations: $MAX_ITERATIONS"
+echo "Model: $MODEL"
 echo ""
 
 # Ensure we have latest
@@ -67,7 +69,7 @@ EOF
 
     # Run one Claude iteration
     # --print outputs result without interactive mode
-    if claude --print "$PROMPT" 2>&1; then
+    if claude --print --model "$MODEL" "$PROMPT" 2>&1; then
         # Push after successful iteration (if there are changes)
         if ! git diff --quiet HEAD 2>/dev/null; then
             echo ""
