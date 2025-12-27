@@ -406,3 +406,13 @@ Focus question: **What emerges when coherence is maintained?**
 
 When patterns are selected for coherence rather than quantity, what new properties appear?
 
+---
+
+## rev59
+
+## Equilibrium (rev61)
+
+Focus question: **What is the natural resting state of a coherent system?**
+
+A system that has achieved coherent emergence—what does it do when not actively observed?
+
