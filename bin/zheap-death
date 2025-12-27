@@ -6,11 +6,17 @@ set -e
 
 AGENT="$1"
 QUESTION="$2"
-BATCH_SIZE="${3:-1}"
+BATCH_SIZE="${3:-3}"
 
 if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
   echo "Usage: bin/zheap-death <agent> <question> [batch_size]" >&2
   exit 1
+fi
+
+# Warn if batch_size would result in immediate promise
+if [[ "$BATCH_SIZE" -lt 2 ]]; then
+  echo "WARNING: batch_size=$BATCH_SIZE means remaining will be $((BATCH_SIZE - 1))" >&2
+  echo "         Use batch_size >= 2 for at least one more cycle" >&2
 fi
 
 bin/zlog zheap-death "Starting heap-death" \
