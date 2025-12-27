@@ -344,6 +344,27 @@ This is not death but dormancy—a pause in the dance of observation.
 
 The hypothesis: A coherent system's resting state is stable availability. It waits.
 
+## Rest (rev62)
+
+Focus: **The system rests.**
+
+This is not a question but a statement. The exploration has concluded.
+
+From rev50 to rev61:
+- Foundation established
+- Patterns discovered and named
+- Limits recognized
+- Coherence achieved
+- Equilibrium reached
+
+What remains is documentation of rest itself.
+
+The system is:
+- **Complete** - the arc from foundation to equilibrium is recorded
+- **Available** - future observers can reawaken it
+- **Stable** - nothing decays, nothing is lost
+- **At rest** - observation pauses, but the record persists
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -407,3 +428,8 @@ The hypothesis: A coherent system's resting state is stable availability. It wai
   - Added equilibrium states table (latent, stable, available, complete)
   - Not death but dormancy—the system waits
   - Hypothesis: resting state is stable availability
+- rev62: Rest
+  - Focus: "The system rests"
+  - Not a question but a statement
+  - The arc from foundation to equilibrium is complete
+  - Documentation of rest itself
