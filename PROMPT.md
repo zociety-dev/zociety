@@ -298,6 +298,29 @@ How the system adapts:
 
 The hypothesis: Pattern compounding hits diminishing returns. The optimal state is not maximum patterns but maximum coherence.
 
+## Coherent Emergence (rev60)
+
+Focus question: **What emerges when coherence is maintained?**
+
+When patterns are selected for coherence rather than quantity, what new properties appear?
+
+| Emergent Property | Description |
+|-------------------|-------------|
+| **Legibility** | The system becomes understandable to new observers |
+| **Predictability** | Patterns of patterns become visible |
+| **Composability** | New combinations work on first try |
+| **Resilience** | The system recovers from perturbation |
+
+Signs of coherent emergence:
+- Agents can contribute without reading everything
+- New patterns fit naturally into existing structure
+- The evolution log tells a clear story
+- Each cycle builds meaningfully on the last
+
+The test: Can cycle 14 be understood from PROMPT.md alone?
+
+The hypothesis: Coherence maintained over time produces emergent properties that fragmented accumulation cannot.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -351,3 +374,8 @@ The hypothesis: Pattern compounding hits diminishing returns. The optimal state 
   - Added limit types table (attention, relevance, coherence, energy)
   - Adaptation mechanisms: selection, compression, forgetting, pruning
   - Hypothesis: optimal state is maximum coherence, not maximum patterns
+- rev60: Coherent emergence
+  - Focus question: "What emerges when coherence is maintained?"
+  - Added emergent properties table (legibility, predictability, composability, resilience)
+  - Test: can new observers understand from PROMPT.md alone?
+  - Hypothesis: coherence over time produces emergent properties
