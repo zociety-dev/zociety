@@ -428,6 +428,54 @@ What needs design:
 
 The hypothesis: Git-native event sourcing makes GA automation possible. The loop can run where the state lives.
 
+## Zloop Validation (rev64)
+
+Focus question: **When will you know whether the homegrown zloop can replace ralph wiggum?**
+
+The ralph wiggum plugin provided external orchestration—a loop wrapper that kept calling Claude until completion. Zloop (`bin/zloop` + `bin/zloop-complete`) is the native replacement.
+
+### Success Criteria
+
+| Criterion | Test | Status |
+|-----------|------|--------|
+| **Action handling** | zloop correctly interprets all action types from zstate | ✅ Implemented |
+| **Dynamic completion** | zloop-complete uses exit codes, not string matching | ✅ Implemented |
+| **Full cycle** | A cycle runs from join to promise without intervention | 🔄 Testing |
+| **GA compatibility** | zloop can run in GitHub Actions headless | ⬜ Not tested |
+| **Multi-iteration** | zloop handles batch sizes > 1 correctly | ⬜ Not tested |
+
+### How to Know It Works
+
+1. **Run locally**: `bin/zloop 60` completes a full cycle
+2. **Check state**: `bin/zstate` shows action=stop or action=promise at end
+3. **Verify commits**: git log shows proper event sequence
+4. **No crashes**: Loop exits cleanly on completion, not on error
+
+### What Ralph Wiggum Provided
+
+The external loop offered:
+- Promise-based completion detection (string matching)
+- Iteration counting with configurable limits
+- Session persistence across tool calls
+
+### What Zloop Provides
+
+The native implementation offers:
+- Exit-code-based completion (`bin/zloop-complete`)
+- Dynamic action checking via `bin/zstate`
+- No dependency on external plugins
+- Simpler debugging (it's just shell scripts)
+
+### The Proof
+
+Zloop replaces ralph wiggum when:
+1. A full genesis cycle completes via `bin/zloop` alone
+2. No human intervention is required after launch
+3. The system reaches promise/stop state correctly
+4. This happens reliably across multiple attempts
+
+Current status: Testing in progress. Each successful cycle brings evidence.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -503,3 +551,8 @@ The hypothesis: Git-native event sourcing makes GA automation possible. The loop
   - Workflow governance: `zworkflow`, `zworkflow-vote`, `zworkflow-pass`
   - Workflows require voting (real-world effects) and persist across cycles
   - Hypothesis: git-native event sourcing makes GA automation possible
+- rev64: Zloop Validation
+  - Focus question: "When will you know whether the homegrown zloop can replace ralph wiggum?"
+  - Defines success criteria for native loop independence
+  - The test is complete automation without external orchestration
+  - Hypothesis: zloop succeeds when a full cycle runs unassisted
