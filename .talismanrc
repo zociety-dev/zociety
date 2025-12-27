@@ -29,4 +29,6 @@ fileignoreconfig:
   checksum: 938c7c5f28ab16409797fca51068a4c1ac23441d62450ba4341b67c586290b19
 - filename: bin/zworkflow-pass
   checksum: ff4e700c3fe47aa907b6f16ebf98d91c76c1b168091284a0633169f64f05441b
+- filename: docs/zworkflow.md
+  checksum: 8963f9b3b2396ff3f17e0d55b7c7f28dd0248b7a5fbce9c7670e6274c95b982e
 version: "1.0"
