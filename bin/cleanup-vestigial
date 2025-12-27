@@ -1,0 +1,451 @@
+#!/bin/bash
+# cleanup-vestigial: Remove pre-rev50 vestigial files and update documentation
+#
+# This script cleans up artifacts from the old file-based state system
+# that was replaced by git-native event sourcing in rev50.
+#
+# Safe to run multiple times (idempotent).
+#
+# Usage: bin/cleanup-vestigial [--dry-run]
+
+set -e
+
+DRY_RUN=false
+if [[ "$1" == "--dry-run" ]]; then
+  DRY_RUN=true
+  echo "=== DRY RUN MODE ==="
+  echo ""
+fi
+
+run() {
+  if $DRY_RUN; then
+    echo "[would run] $*"
+  else
+    "$@"
+  fi
+}
+
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║           VESTIGIAL CLEANUP (rev50 transition)             ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+
+#############################################
+# 1. Remove vestigial bin/ scripts
+#############################################
+
+echo "1. Removing vestigial bin/ scripts..."
+
+VESTIGIAL_SCRIPTS=(
+  "bin/heap-death"        # Replaced by bin/zheap-death
+  "bin/check-genesis"     # Replaced by bin/zstate
+  "bin/install-hooks"     # Old manual hook installer (pre-commit handles this now)
+  "bin/hooks/commit-msg"  # Old manual hook (pre-commit framework used instead)
+)
+
+for script in "${VESTIGIAL_SCRIPTS[@]}"; do
+  if [[ -e "$script" ]]; then
+    echo "   Removing $script"
+    run rm -f "$script"
+  else
+    echo "   Already removed: $script"
+  fi
+done
+
+# Remove empty bin/hooks directory if it exists
+if [[ -d "bin/hooks" ]]; then
+  if [[ -z "$(ls -A bin/hooks 2>/dev/null)" ]]; then
+    echo "   Removing empty bin/hooks/"
+    run rmdir bin/hooks
+  else
+    echo "   bin/hooks/ not empty, keeping"
+  fi
+fi
+
+echo ""
+
+#############################################
+# 2. Remove .out/ directory (old ephemeral state)
+#############################################
+
+echo "2. Removing .out/ directory..."
+
+if [[ -d ".out" ]]; then
+  echo "   Removing .out/ and contents"
+  run rm -rf .out
+else
+  echo "   Already removed: .out/"
+fi
+
+echo ""
+
+#############################################
+# 3. Update bin/validate-state for z* system
+#############################################
+
+echo "3. Updating bin/validate-state for z* system..."
+
+if [[ -f "bin/validate-state" ]]; then
+  if $DRY_RUN; then
+    echo "[would rewrite] bin/validate-state"
+  else
+    cat > bin/validate-state << 'VALIDATE_EOF'
+#!/bin/bash
+# validate-state: Validate zociety repository state
+# Used by pre-commit hook for quality control
+#
+# Checks:
+#   - PROMPT.md exists
+#   - bin/zstate is executable
+#   - No orphaned state files from old system
+
+set -e
+
+ERRORS=0
+
+# Check PROMPT.md exists
+if [[ -f PROMPT.md ]]; then
+  echo "✓ PROMPT.md exists"
+else
+  echo "✗ PROMPT.md missing"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Check z* tools are executable
+for tool in bin/zstate bin/zjoin bin/zstuff bin/zvote bin/zevent; do
+  if [[ -x "$tool" ]]; then
+    echo "✓ $tool is executable"
+  elif [[ -f "$tool" ]]; then
+    echo "⚠ $tool exists but not executable (run chmod +x)"
+  fi
+done
+
+# Warn about orphaned old-system files (informational, not errors)
+OLD_FILES=(DIRECTION.md .batch members.txt rules.txt)
+for f in "${OLD_FILES[@]}"; do
+  if [[ -f "$f" ]]; then
+    echo "⚠ Found old-system file: $f (should not exist in rev50+)"
+  fi
+done
+
+# Check for .out directory (should not exist)
+if [[ -d ".out" ]]; then
+  echo "⚠ Found .out/ directory (vestigial, can be removed)"
+fi
+
+if [[ $ERRORS -gt 0 ]]; then
+  exit 1
+fi
+
+exit 0
+VALIDATE_EOF
+    chmod +x bin/validate-state
+    echo "   Rewrote bin/validate-state for z* system"
+  fi
+else
+  echo "   bin/validate-state not found (already removed?)"
+fi
+
+echo ""
+
+#############################################
+# 4. Update bin/setup to remove old hook installation
+#############################################
+
+echo "4. Updating bin/setup..."
+
+if [[ -f "bin/setup" ]]; then
+  if $DRY_RUN; then
+    echo "[would rewrite] bin/setup"
+  else
+    cat > bin/setup << 'SETUP_EOF'
+#!/bin/bash
+# setup: Initialize zociety repository
+# Run this once after cloning
+
+set -e
+
+echo "Setting up zociety..."
+
+# Make all bin scripts executable
+chmod +x bin/*
+echo "✓ Scripts made executable"
+
+# Initialize learnings branch if it doesn't exist
+if ! git show-ref --verify --quiet refs/heads/learnings; then
+  echo "Initializing learnings branch..."
+  CURRENT=$(git branch --show-current)
+  git checkout --orphan learnings
+  git rm -rf . --quiet 2>/dev/null || true
+  cat > LEARNINGS.md << 'EOF'
+# Zociety Learnings
+
+Insights preserved across cycles. Each cycle adds, nothing deleted.
+
+EOF
+  git add LEARNINGS.md
+  git commit -m "Initialize learnings branch"
+  git checkout "$CURRENT"
+  echo "✓ Learnings branch created"
+else
+  echo "✓ Learnings branch exists"
+fi
+
+# Install pre-commit hooks if pre-commit is available
+if command -v pre-commit &> /dev/null; then
+  pre-commit install
+  echo "✓ Pre-commit hooks installed"
+else
+  echo "⚠ pre-commit not found (optional: pip install pre-commit)"
+fi
+
+echo ""
+echo "Setup complete!"
+echo ""
+echo "Container setup (required for running loops):"
+echo "  1. echo 'sk-ant-...' > container/secrets/anthropic_api_key"
+echo "  2. chmod 600 container/secrets/anthropic_api_key"
+echo "  3. bin/zociety --build"
+echo ""
+echo "Run the loop:"
+echo "  bin/zociety ralph-loop"
+SETUP_EOF
+    chmod +x bin/setup
+    echo "   Rewrote bin/setup (removed old hook installer)"
+  fi
+else
+  echo "   bin/setup not found"
+fi
+
+echo ""
+
+#############################################
+# 5. Update CLAUDE.md for z* system
+#############################################
+
+echo "5. Updating CLAUDE.md..."
+
+if [[ -f "CLAUDE.md" ]]; then
+  if $DRY_RUN; then
+    echo "[would rewrite] CLAUDE.md"
+  else
+    cat > CLAUDE.md << 'CLAUDE_EOF'
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What This Is
+
+Zociety is an experiment in emergent agent communities. Agents join one at a time via a Ralph Wiggum loop, each reading PROMPT.md and acting according to its rules.
+
+Note: It's "zociety" not "society".
+
+**Context is CO2.** Stop loops early once the hypothesis is proven. Don't burn tokens completing iterations that add no new learning.
+
+## The Loop
+
+```bash
+bin/zociety ralph-loop
+```
+
+Or manually:
+```
+/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
+```
+
+Note: The actual completion promise is output by `bin/zpromise`. Never type or echo the stop word directly.
+
+## Git-Native Event Sourcing (rev50+)
+
+All state is derived from git history. No mutable state files.
+
+### How It Works
+
+1. Agent runs `bin/zstate` to get current state and next action
+2. Agent follows the action: join, contribute, complete, heap-death, or promise
+3. Each action creates a commit with JSON payload in the message
+4. State is reconstructed by parsing commit history
+
+### Core Tools
+
+| Script | Purpose |
+|--------|---------|
+| `bin/zstate` | Get current state and next action (JSON output) |
+| `bin/zjoin` | Join as a member |
+| `bin/zstuff` | Record stuff creation |
+| `bin/zvote` | Vote on a rule |
+| `bin/zpass` | Record a rule passing |
+| `bin/zcomplete` | Record genesis completion |
+| `bin/zheap-death` | Archive cycle, prepare next |
+| `bin/zpromise` | Output completion promise |
+| `bin/zevent` | Low-level event creation |
+
+### Structured Commits
+
+All commits use prefixes for queryable history:
+- `[join]` - agent joining
+- `[vote]` - voting on rule
+- `[pass]` - rule reached majority
+- `[stuff]` - added to stuff/
+- `[complete]` - genesis done
+- `[evolve]` - PROMPT.md changed
+- `[heap-death]` - cycle archived
+- `[direction]` - new cycle direction set
+
+Query examples:
+```bash
+git log --oneline --grep="^\[join\]"   # all joins
+git log --oneline --grep="^\[pass\]"   # all passed rules
+bin/zstate | jq .                       # current state
+```
+
+### Branches
+
+- `main` - current cycle
+- `cycle/rev{N}-attempt{N}` - archived cycles
+- `learnings` - orphan branch with accumulated insights
+
+## Genesis Thresholds
+
+A cycle completes when:
+- 3+ members (join events)
+- 2+ passed rules (pass events)
+- 3+ stuff items (stuff events)
+
+Check with: `bin/zstate | jq .genesis`
+
+## Agent Flow
+
+```
+bin/zstate → action field tells you what to do:
+
+  "evolve"     → Read direction, evolve PROMPT.md, then contribute
+  "contribute" → Join, make stuff, vote on rules
+  "complete"   → Run bin/zcomplete
+  "heap-death" → Run bin/zheap-death
+  "promise"    → Run bin/zpromise and STOP
+  "stop"       → Do nothing, exit cleanly
+```
+
+## Quality Controls
+
+The repository uses pre-commit hooks for:
+- Trailing whitespace and EOF fixes
+- Secret detection (Talisman)
+- Shell script validation (shellcheck)
+- State validation
+
+Install with: `pre-commit install`
+
+## Files
+
+### Permanent
+- `PROMPT.md` - Instructions for agents (evolves each rev)
+- `CLAUDE.md` - This file
+- `bin/z*` - Event sourcing tools
+- `bin/read-learnings`, `bin/save-learning` - Learning persistence
+
+### Per-cycle (cleared by zheap-death)
+- `stuff/` - Things made this cycle
+
+### Git-based (permanent)
+- Tags: `rev{N}-attempt{N}-iterations{N}of{N}`
+- Branches: `cycle/rev{N}-attempt{N}`
+- Orphan branch: `learnings`
+CLAUDE_EOF
+    echo "   Rewrote CLAUDE.md for z* system"
+  fi
+else
+  echo "   CLAUDE.md not found"
+fi
+
+echo ""
+
+#############################################
+# 6. Fix PROMPT.md .out/ reference
+#############################################
+
+echo "6. Fixing PROMPT.md .out/ reference..."
+
+if [[ -f "PROMPT.md" ]]; then
+  if grep -q "\.out/" PROMPT.md; then
+    if $DRY_RUN; then
+      echo "[would edit] PROMPT.md - remove .out/ reference"
+    else
+      # Replace the memory layers line
+      sed -i.bak 's/\.out\/ (within cycle), //' PROMPT.md
+      rm -f PROMPT.md.bak
+      echo "   Removed .out/ reference from PROMPT.md"
+    fi
+  else
+    echo "   No .out/ reference found in PROMPT.md"
+  fi
+else
+  echo "   PROMPT.md not found"
+fi
+
+echo ""
+
+#############################################
+# 7. Remove old state files if present
+#############################################
+
+echo "7. Checking for old state files..."
+
+OLD_STATE_FILES=(DIRECTION.md .batch members.txt rules.txt REGISTRY.md LAWS.md)
+FOUND_OLD=false
+
+for f in "${OLD_STATE_FILES[@]}"; do
+  if [[ -f "$f" ]]; then
+    echo "   Found: $f"
+    FOUND_OLD=true
+  fi
+done
+
+if $FOUND_OLD; then
+  echo ""
+  echo "   ⚠ Old state files found. These should only exist mid-cycle."
+  echo "   If you're between cycles, you can remove them with:"
+  echo "   rm -f DIRECTION.md .batch members.txt rules.txt REGISTRY.md LAWS.md"
+else
+  echo "   No old state files found (good)"
+fi
+
+echo ""
+
+#############################################
+# Summary
+#############################################
+
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║                    CLEANUP COMPLETE                        ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+
+if $DRY_RUN; then
+  echo "This was a dry run. To apply changes:"
+  echo "  bin/cleanup-vestigial"
+else
+  echo "Removed:"
+  echo "  - bin/heap-death (use bin/zheap-death)"
+  echo "  - bin/check-genesis (use bin/zstate)"
+  echo "  - bin/install-hooks (use pre-commit install)"
+  echo "  - bin/hooks/commit-msg (pre-commit framework handles this)"
+  echo "  - .out/ directory"
+  echo ""
+  echo "Updated:"
+  echo "  - bin/validate-state (now validates z* system)"
+  echo "  - bin/setup (removed old hook installer)"
+  echo "  - CLAUDE.md (documents z* system)"
+  echo "  - PROMPT.md (removed .out/ reference)"
+  echo ""
+  echo "Preserved:"
+  echo "  - .pre-commit-config.yaml (quality controls)"
+  echo "  - .talismanrc (security checksums)"
+  echo "  - .git/hooks/* (pre-commit framework)"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Review changes: git diff"
+  echo "  2. Commit: git add -A && git commit -m '[evolve] cleanup vestigial pre-rev50 files'"
+  echo "  3. Update Serena memories if needed"
+fi

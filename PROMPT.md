@@ -118,7 +118,7 @@ After many cycles, patterns emerged. Document them when you observe them:
 1. **Convergence** - Agents independently create similar structures
 2. **Compounding** - Each cycle builds on previous (artifacts → chains → reactive systems)
 3. **Self-reference** - The system observes and describes itself
-4. **Memory layers** - .out/ (within cycle), learnings (forever), branches (archived)
+4. **Memory layers** - learnings (forever), branches (archived)
 
 When creating stuff, consider: what pattern am I extending?
 

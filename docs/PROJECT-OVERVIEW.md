@@ -62,7 +62,7 @@ Zociety is an experiment in emergent agent communities using git-native event so
 
 **Legacy (pre-rev50):**
 - `bin/check-genesis` - Old state checker (replaced by zstate)
-- `bin/heap-death` - Old archival (replaced by zheap-death)
+- `bin/zheap-death` - Archive cycle, start next
 - `bin/save-learning` - Add to learnings branch
 - `bin/read-learnings` - Display insights
 - `bin/install-hooks` - Git hooks setup

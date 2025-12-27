@@ -1,51 +1,48 @@
 #!/bin/bash
-# validate-state: Ensure commit follows conventions
-# Used by pre-commit hook
+# validate-state: Validate zociety repository state
+# Used by pre-commit hook for quality control
+#
+# Checks:
+#   - PROMPT.md exists
+#   - bin/zstate is executable
+#   - No orphaned state files from old system
 
 set -e
 
-# Get the commit message from staged changes
-MSG_FILE="$1"
+ERRORS=0
 
-# If called without arg, we're validating current state not a commit
-if [[ -z "$MSG_FILE" ]]; then
-  # Basic state validation
-  if [[ -f PROMPT.md ]]; then
-    echo "✓ PROMPT.md exists"
-  else
-    echo "✗ PROMPT.md missing"
-    exit 1
+# Check PROMPT.md exists
+if [[ -f PROMPT.md ]]; then
+  echo "✓ PROMPT.md exists"
+else
+  echo "✗ PROMPT.md missing"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Check z* tools are executable
+for tool in bin/zstate bin/zjoin bin/zstuff bin/zvote bin/zevent; do
+  if [[ -x "$tool" ]]; then
+    echo "✓ $tool is executable"
+  elif [[ -f "$tool" ]]; then
+    echo "⚠ $tool exists but not executable (run chmod +x)"
   fi
+done
 
-  # Check for conflicting state
-  if [[ -f DIRECTION.md && -f members.txt ]]; then
-    # DIRECTION.md should be consumed before genesis starts
-    MEMBERS=$(wc -l < members.txt | tr -d ' ')
-    if [[ $MEMBERS -gt 1 ]]; then
-      echo "⚠ DIRECTION.md exists but genesis has $MEMBERS members"
-      echo "  First agent should delete DIRECTION.md before others join"
-    fi
+# Warn about orphaned old-system files (informational, not errors)
+OLD_FILES=(DIRECTION.md .batch members.txt rules.txt)
+for f in "${OLD_FILES[@]}"; do
+  if [[ -f "$f" ]]; then
+    echo "⚠ Found old-system file: $f (should not exist in rev50+)"
   fi
+done
 
-  exit 0
+# Check for .out directory (should not exist)
+if [[ -d ".out" ]]; then
+  echo "⚠ Found .out/ directory (vestigial, can be removed)"
 fi
 
-# Validate commit message format
-MSG=$(cat "$MSG_FILE" | head -1)
-
-# Check for structured prefix
-if [[ "$MSG" =~ ^\[(join|vote|pass|stuff|complete|evolve|heap-death)\] ]]; then
-  echo "✓ Commit message follows convention: $MSG"
-  exit 0
+if [[ $ERRORS -gt 0 ]]; then
+  exit 1
 fi
 
-# Allow merge commits and other git-generated messages
-if [[ "$MSG" =~ ^(Merge|Revert|fixup!|squash!) ]]; then
-  exit 0
-fi
-
-# Warn but don't block (yet)
-echo "⚠ Commit message doesn't follow convention: $MSG"
-echo "  Expected: [join|vote|pass|stuff|complete|evolve|heap-death] description"
-echo "  Allowing anyway (convention is advisory)"
 exit 0

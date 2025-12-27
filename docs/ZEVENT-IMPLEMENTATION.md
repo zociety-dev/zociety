@@ -199,7 +199,7 @@ git log --format=%b | grep '^{"z":1' | jq -s 'map({seq, state})'
 The system maintains compatibility with existing Zociety scripts:
 
 - `bin/check-genesis` - Still works, uses hybrid approach
-- `bin/heap-death` - Original still works, `bin/zheap-death` is new
+- `bin/zheap-death` - Event-sourced archival (old file-based bin/heap-death removed)
 - File-based state (members.txt, rules.txt, etc.) - Still readable
 
 ### Migration Path ✓

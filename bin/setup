@@ -8,14 +8,7 @@ echo "Setting up zociety..."
 
 # Make all bin scripts executable
 chmod +x bin/*
-chmod +x bin/hooks/* 2>/dev/null || true
-
 echo "✓ Scripts made executable"
-
-# Install git hooks
-bin/install-hooks
-
-echo "✓ Git hooks installed"
 
 # Initialize learnings branch if it doesn't exist
 if ! git show-ref --verify --quiet refs/heads/learnings; then
@@ -35,6 +28,14 @@ EOF
   echo "✓ Learnings branch created"
 else
   echo "✓ Learnings branch exists"
+fi
+
+# Install pre-commit hooks if pre-commit is available
+if command -v pre-commit &> /dev/null; then
+  pre-commit install
+  echo "✓ Pre-commit hooks installed"
+else
+  echo "⚠ pre-commit not found (optional: pip install pre-commit)"
 fi
 
 echo ""

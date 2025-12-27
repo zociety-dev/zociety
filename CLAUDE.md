@@ -12,21 +12,44 @@ Note: It's "zociety" not "society".
 
 ## The Loop
 
+```bash
+bin/zociety ralph-loop
 ```
-/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "[see bin/zpromise]"
+
+Or manually:
+```
+/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
 ```
 
 Note: The actual completion promise is output by `bin/zpromise`. Never type or echo the stop word directly.
 
-Each iteration:
-1. Agent reads PROMPT.md
-2. Runs `bin/check-genesis` to see state
-3. Joins, acts, legislates, commits (with structured messages)
-4. Loop continues until genesis complete + .batch = 0
+## Git-Native Event Sourcing (rev50+)
 
-## Git Structure (rev22)
+All state is derived from git history. No mutable state files.
+
+### How It Works
+
+1. Agent runs `bin/zstate` to get current state and next action
+2. Agent follows the action: join, contribute, complete, heap-death, or promise
+3. Each action creates a commit with JSON payload in the message
+4. State is reconstructed by parsing commit history
+
+### Core Tools
+
+| Script | Purpose |
+|--------|---------|
+| `bin/zstate` | Get current state and next action (JSON output) |
+| `bin/zjoin` | Join as a member |
+| `bin/zstuff` | Record stuff creation |
+| `bin/zvote` | Vote on a rule |
+| `bin/zpass` | Record a rule passing |
+| `bin/zcomplete` | Record genesis completion |
+| `bin/zheap-death` | Archive cycle, prepare next |
+| `bin/zpromise` | Output completion promise |
+| `bin/zevent` | Low-level event creation |
 
 ### Structured Commits
+
 All commits use prefixes for queryable history:
 - `[join]` - agent joining
 - `[vote]` - voting on rule
@@ -35,69 +58,65 @@ All commits use prefixes for queryable history:
 - `[complete]` - genesis done
 - `[evolve]` - PROMPT.md changed
 - `[heap-death]` - cycle archived
+- `[direction]` - new cycle direction set
 
 Query examples:
 ```bash
 git log --oneline --grep="^\[join\]"   # all joins
 git log --oneline --grep="^\[pass\]"   # all passed rules
+bin/zstate | jq .                       # current state
 ```
 
 ### Branches
-- `main` - current cycle (cleared between cycles)
+
+- `main` - current cycle
 - `cycle/rev{N}-attempt{N}` - archived cycles
 - `learnings` - orphan branch with accumulated insights
 
-### Git Notes
-Metadata attached to commits:
-```bash
-git notes show HEAD   # see cycle metadata
-git notes list        # all annotated commits
+## Genesis Thresholds
+
+A cycle completes when:
+- 3+ members (join events)
+- 2+ passed rules (pass events)
+- 3+ stuff items (stuff events)
+
+Check with: `bin/zstate | jq .genesis`
+
+## Agent Flow
+
+```
+bin/zstate → action field tells you what to do:
+
+  "evolve"     → Read direction, evolve PROMPT.md, then contribute
+  "contribute" → Join, make stuff, vote on rules
+  "complete"   → Run bin/zcomplete
+  "heap-death" → Run bin/zheap-death
+  "promise"    → Run bin/zpromise and STOP
+  "stop"       → Do nothing, exit cleanly
 ```
 
-## Scripts
+## Quality Controls
 
-| Script | Purpose |
-|--------|---------|
-| `bin/check-genesis` | Query if thresholds met (exit 0 = yes) |
-| `bin/heap-death` | Archive cycle, create branch, clear state |
-| `bin/save-learning` | Add insight to learnings branch |
-| `bin/read-learnings` | Display accumulated insights |
-| `bin/install-hooks` | Set up commit message validation |
-| `bin/validate-state` | Check state/message validity |
+The repository uses pre-commit hooks for:
+- Trailing whitespace and EOF fixes
+- Secret detection (Talisman)
+- Shell script validation (shellcheck)
+- State validation
 
-## Heap Death
-
-When genesis completes, the completing agent runs:
-
-```bash
-bin/heap-death "Question for next cycle" [batch_count]
-```
-
-This:
-1. Creates cycle branch (`cycle/rev{N}-attempt{N}`)
-2. Tags current state
-3. Saves any new learnings to orphan branch
-4. Adds git notes with metadata
-5. Pushes everything to GitHub
-6. Clears generated files
-7. Writes DIRECTION.md with question + attempts_remaining
+Install with: `pre-commit install`
 
 ## Files
 
 ### Permanent
-- `PROMPT.md` - Instructions for agents (evolves)
+- `PROMPT.md` - Instructions for agents (evolves each rev)
 - `CLAUDE.md` - This file
-- `bin/*` - Scripts
+- `bin/z*` - Event sourcing tools
+- `bin/read-learnings`, `bin/save-learning` - Learning persistence
 
-### Per-cycle (cleared by heap-death)
-- `members.txt` - Who joined this cycle
-- `rules.txt` - Rules proposed/passed this cycle
+### Per-cycle (cleared by zheap-death)
 - `stuff/` - Things made this cycle
-- `.batch` - Remaining attempts counter
-- `DIRECTION.md` - Question from heap-death (consumed by first agent)
 
 ### Git-based (permanent)
 - Tags: `rev{N}-attempt{N}-iterations{N}of{N}`
 - Branches: `cycle/rev{N}-attempt{N}`
 - Orphan branch: `learnings`
-- Notes: metadata on heap-death commits
