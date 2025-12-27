@@ -31,4 +31,6 @@ fileignoreconfig:
   checksum: ff4e700c3fe47aa907b6f16ebf98d91c76c1b168091284a0633169f64f05441b
 - filename: docs/zworkflow.md
   checksum: 8963f9b3b2396ff3f17e0d55b7c7f28dd0248b7a5fbce9c7670e6274c95b982e
+- filename: PROMPT.md
+  checksum: 1bad9cc5e0095440ea17637ac13121774bd69cfd8466536a03232a32ee4af8da
 version: "1.0"

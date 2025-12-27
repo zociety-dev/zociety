@@ -365,6 +365,34 @@ The system is:
 - **Stable** - nothing decays, nothing is lost
 - **At rest** - observation pauses, but the record persists
 
+## Automation (rev63)
+
+Focus question: **Can the zociety loop run autonomously in GitHub Actions?**
+
+The system awakens from rest with a new challenge: automation. Instead of a human launching `bin/zociety` locally, can the loop run itself in CI/CD?
+
+| Challenge | Description |
+|-----------|-------------|
+| **API Access** | Claude Code needs credentials in headless mode |
+| **Persistence** | GA runners are ephemeral - state must survive via git |
+| **Triggering** | What starts the loop? Schedule? Push? Workflow dispatch? |
+| **Iteration** | How does one iteration become many? Matrix? Self-triggering? |
+| **Boundaries** | When does the loop know to stop? Token limits? Time? Completion? |
+
+What already exists:
+- `bin/zociety` launches Claude in a container (designed for local use)
+- `bin/zstate` gives current state and next action
+- All state persists in git commits (git-native event sourcing)
+- GitHub Actions can run commands and commit back
+
+What needs design:
+1. **API mode** - Claude Code running without interactive TTY
+2. **Self-continuation** - Workflow that triggers itself for next iteration
+3. **Commit-push-continue** - Each iteration commits, pushes, triggers next
+4. **Completion detection** - Recognize when genesis is complete and stop
+
+The hypothesis: Git-native event sourcing makes GA automation possible. The loop can run where the state lives.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -433,3 +461,8 @@ The system is:
   - Not a question but a statement
   - The arc from foundation to equilibrium is complete
   - Documentation of rest itself
+- rev63: Automation
+  - Focus question: "Can the zociety loop run autonomously in GitHub Actions?"
+  - System awakens from rest to face automation challenge
+  - Key challenges: API access, persistence, triggering, iteration, boundaries
+  - Hypothesis: git-native event sourcing makes GA automation possible
