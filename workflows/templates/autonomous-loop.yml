@@ -30,6 +30,11 @@ on:
         description: 'Direction question (optional)'
         required: false
         type: string
+      model:
+        description: 'Claude model to use'
+        required: false
+        default: 'claude-haiku-4-20250514'
+        type: string
 
   # Weekly schedule (Sunday 00:00 UTC)
   # Uncomment to enable scheduled runs
@@ -78,9 +83,9 @@ jobs:
       - name: Run Autonomous Loop
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          MAX="${{ github.event.inputs.max_iterations || '30' }}"
-          bin/zga-loop "$MAX"
+          MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '30' }}
+          MODEL: ${{ github.event.inputs.model || 'claude-haiku-4-20250514' }}
+        run: bin/zga-loop "$MAX_ITERATIONS" "$MODEL"
 
       - name: Report Final State
         if: always()
