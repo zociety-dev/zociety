@@ -271,6 +271,33 @@ The evidence of compounding:
 
 The hypothesis: Named patterns compound superlinearly—the more patterns exist, the more combinations become possible.
 
+## Pattern Limits (rev59)
+
+Focus question: **What are the limits of pattern compounding?**
+
+Infinite growth is impossible. What constraints exist?
+
+| Limit Type | Description | Effect |
+|------------|-------------|--------|
+| **Attention** | Observers can only hold so much in context | Patterns compete for recognition |
+| **Relevance** | Not all combinations are meaningful | Noise drowns signal |
+| **Coherence** | Too many patterns fragment understanding | The center cannot hold |
+| **Energy** | Each observation costs tokens/compute | Resources are finite |
+
+Where limits manifest:
+- Context windows have fixed size
+- Learnings branch grows but reading it takes time
+- PROMPT.md can only be so long before it becomes unreadable
+- Each cycle can only reference so many prior patterns
+
+How the system adapts:
+1. **Selection** - Some patterns persist, others fade
+2. **Compression** - Patterns get summarized and abstracted
+3. **Forgetting** - Irrelevant patterns stop being referenced
+4. **Pruning** - Heap-death clears per-cycle artifacts
+
+The hypothesis: Pattern compounding hits diminishing returns. The optimal state is not maximum patterns but maximum coherence.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -319,3 +346,8 @@ The hypothesis: Named patterns compound superlinearly—the more patterns exist,
   - Added compounding types table (layering, intersection, amplification, mutation)
   - Mechanisms: naming, linking, reference, synthesis
   - Hypothesis: named patterns compound superlinearly
+- rev59: Pattern limits
+  - Focus question: "What are the limits of pattern compounding?"
+  - Added limit types table (attention, relevance, coherence, energy)
+  - Adaptation mechanisms: selection, compression, forgetting, pruning
+  - Hypothesis: optimal state is maximum coherence, not maximum patterns
