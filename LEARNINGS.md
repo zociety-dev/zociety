@@ -396,3 +396,13 @@ Focus question: **What are the limits of pattern compounding?**
 
 Infinite growth is impossible. What constraints exist?
 
+---
+
+## rev58
+
+## Coherent Emergence (rev60)
+
+Focus question: **What emerges when coherence is maintained?**
+
+When patterns are selected for coherence rather than quantity, what new properties appear?
+
