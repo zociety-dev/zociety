@@ -40,10 +40,8 @@ check_script "bin/zcheck" "bin/zcheck - This script"
 echo ""
 
 echo "Checking documentation..."
-[[ -f "ZEVENT-README.md" ]] && echo "✓ ZEVENT-README.md" || { echo "✗ ZEVENT-README.md"; ERRORS=$((ERRORS + 1)); }
-[[ -f "ZEVENT-QUICKSTART.md" ]] && echo "✓ ZEVENT-QUICKSTART.md" || { echo "✗ ZEVENT-QUICKSTART.md"; ERRORS=$((ERRORS + 1)); }
-[[ -f "ZEVENT-IMPLEMENTATION.md" ]] && echo "✓ ZEVENT-IMPLEMENTATION.md" || { echo "✗ ZEVENT-IMPLEMENTATION.md"; ERRORS=$((ERRORS + 1)); }
-[[ -f "DESIGN-git-native-events.md" ]] && echo "✓ DESIGN-git-native-events.md" || { echo "✗ DESIGN-git-native-events.md"; ERRORS=$((ERRORS + 1)); }
+[[ -f "PROMPT.md" ]] && echo "✓ PROMPT.md" || { echo "✗ PROMPT.md"; ERRORS=$((ERRORS + 1)); }
+[[ -f "CLAUDE.md" ]] && echo "✓ CLAUDE.md" || { echo "✗ CLAUDE.md"; ERRORS=$((ERRORS + 1)); }
 echo ""
 
 echo "Checking dependencies..."
@@ -70,8 +68,8 @@ if [[ $ERRORS -eq 0 ]]; then
   echo "║  ✓ All checks passed!                  ║"
   echo "╠════════════════════════════════════════╣"
   echo "║  System is ready to use.               ║"
-  echo "║  Try: bin/test-zevent-system           ║"
-  echo "║  Docs: ZEVENT-QUICKSTART.md            ║"
+  echo "║  Run: bin/zstate | jq .                ║"
+  echo "║  Docs: CLAUDE.md                       ║"
   echo "╚════════════════════════════════════════╝"
   exit 0
 else
