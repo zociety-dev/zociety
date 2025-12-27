@@ -446,3 +446,13 @@ Workflows require voting because they have real-world effects (CI minutes, deplo
 
 ```bash
 
+---
+
+## rev62
+
+### Propose workflows (GitHub Actions)
+
+Workflows require voting because they have real-world effects (CI minutes, deployments, notifications).
+
+```bash
+
