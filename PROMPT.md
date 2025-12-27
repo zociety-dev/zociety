@@ -476,6 +476,50 @@ Zloop replaces ralph wiggum when:
 
 Current status: Testing in progress. Each successful cycle brings evidence.
 
+## Zloop Edge Cases (rev65)
+
+Focus question: **How does zloop handle edge cases like failed commits or interrupted iterations?**
+
+Robust systems handle failure gracefully. What happens when things go wrong in zloop?
+
+| Edge Case | Current Behavior | Impact |
+|-----------|------------------|--------|
+| **Claude failure** | `|| true` swallows error, loop continues | Silent no-op iterations |
+| **Commit rejection** | Pre-commit hook fails, changes unstaged | State diverges from intent |
+| **Interruption** | SIGTERM/SIGKILL mid-iteration | Partial state possible |
+| **Rate limiting** | API returns 429, treated as failure | Wasted iterations |
+| **Git conflicts** | Unlikely in single-agent, but possible | Loop stuck |
+
+### Current Recovery Mechanisms
+
+The system already has implicit recovery:
+- **Git is the checkpoint**: Each successful commit is a savepoint
+- **Idempotent actions**: `bin/zstate` always returns valid next action
+- **Stateless iterations**: Each Claude invocation starts fresh
+- **Restart resilience**: `bin/zloop` can be killed and restarted
+
+### Design Tension
+
+Two philosophies in tension:
+1. **Fail fast**: Stop on first error, require human intervention
+2. **Fail soft**: Absorb errors, keep trying (current approach)
+
+The `|| true` pattern chooses fail-soft. This is appropriate for autonomous operation where:
+- Human intervention is not available
+- Most failures are transient (rate limits, network)
+- Git ensures no committed state is lost
+- The worst case is wasted iterations, not corruption
+
+### What Would Make It Better
+
+Without adding complexity:
+1. **Log failures**: Capture stderr to a file for post-mortem
+2. **Count failures**: Stop after N consecutive failures
+3. **Exponential backoff**: Longer delays after failures
+4. **Exit codes**: Different codes for different failure modes
+
+The hypothesis: Git-native design already handles most edge cases. The loop's job is to keep trying; git's job is to preserve state.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -556,3 +600,9 @@ Current status: Testing in progress. Each successful cycle brings evidence.
   - Defines success criteria for native loop independence
   - The test is complete automation without external orchestration
   - Hypothesis: zloop succeeds when a full cycle runs unassisted
+- rev65: Zloop Edge Cases
+  - Focus question: "How does zloop handle edge cases like failed commits or interrupted iterations?"
+  - Edge case taxonomy: commit failures, interruptions, partial state, rate limits
+  - Current behavior: failures silently ignored (`|| true`), no retry, no rollback
+  - Design tension: resilience vs simplicity (git-native means git is the recovery mechanism)
+  - Hypothesis: explicit failure modes are better than silent continuation
