@@ -13,9 +13,12 @@ set -euo pipefail
 MAX_ITERATIONS="${1:-60}"
 ITERATION=0
 PROMPT="Read PROMPT.md and follow its instructions."
+# Timeout per iteration in seconds (5 minutes)
+TIMEOUT_SECS="${ZLOOP_TIMEOUT:-300}"
 
 echo "=== Zociety Loop ==="
 echo "Max iterations: $MAX_ITERATIONS"
+echo "Timeout per iteration: ${TIMEOUT_SECS}s"
 echo ""
 
 while true; do
@@ -52,10 +55,23 @@ EOF
   bin/zstate | jq -c '{action, phase}'
   echo ""
 
-  # Run one Claude iteration
-  # --print outputs result without interactive mode
-  # --dangerously-skip-permissions for autonomous operation
-  claude --print "$PROMPT" 2>&1 || true
+  # Run one Claude iteration with proper flags for autonomous operation:
+  #   --print: Output result without interactive mode
+  #   --dangerously-skip-permissions: Skip tool permission prompts
+  #   --verbose: Show what's happening (helpful for debugging)
+  #
+  # The || true prevents loop exit on non-zero claude return codes
+  if command -v timeout &>/dev/null; then
+    timeout "$TIMEOUT_SECS" claude \
+      --print \
+      --dangerously-skip-permissions \
+      "$PROMPT" 2>&1 || true
+  else
+    claude \
+      --print \
+      --dangerously-skip-permissions \
+      "$PROMPT" 2>&1 || true
+  fi
 
   # Small delay to avoid rate limits
   sleep 1
