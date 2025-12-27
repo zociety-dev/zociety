@@ -1,0 +1,121 @@
+#!/bin/bash
+# zdump: Dump debugging information for zociety state
+#
+# Outputs everything needed to diagnose loop issues:
+# - Current state from zstate
+# - Recent event commits
+# - Genesis counts from git
+# - Relevant file status
+# - Promise configuration
+
+set -e
+
+echo "=== ZOCIETY STATE DUMP ==="
+echo "Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+echo ""
+
+# Current state
+echo "--- bin/zstate output ---"
+STATE=$(bin/zstate 2>&1) || {
+  echo "ERROR: bin/zstate failed"
+  echo "$STATE"
+}
+echo "$STATE" | jq . 2>/dev/null || echo "$STATE"
+echo ""
+
+# Extract key fields
+if echo "$STATE" | jq -e . >/dev/null 2>&1; then
+  ACTION=$(echo "$STATE" | jq -r '.action')
+  PHASE=$(echo "$STATE" | jq -r '.phase')
+  LAST_EVENT=$(echo "$STATE" | jq -r '.last_event')
+  LAST_AGENT=$(echo "$STATE" | jq -r '.last_agent')
+  CYCLE=$(echo "$STATE" | jq -r '.cycle')
+  SEQ=$(echo "$STATE" | jq -r '.seq')
+  BATCH=$(echo "$STATE" | jq -r '.batch // "null"')
+  COMPLETE=$(echo "$STATE" | jq -r '.genesis.complete')
+
+  echo "--- Summary ---"
+  echo "Cycle: $CYCLE, Seq: $SEQ"
+  echo "Phase: $PHASE"
+  echo "Action: $ACTION"
+  echo "Last event: $LAST_EVENT by $LAST_AGENT"
+  echo "Genesis complete: $COMPLETE"
+  echo "Batch remaining: $BATCH"
+  echo ""
+fi
+
+# Genesis counts from git
+echo "--- Genesis counts (from git) ---"
+JOINS=$(git log --oneline --grep='^\[join\]' 2>/dev/null | wc -l | tr -d ' ')
+PASSES=$(git log --oneline --grep='^\[pass\]' 2>/dev/null | wc -l | tr -d ' ')
+STUFF_COUNT=$(git ls-files stuff/ 2>/dev/null | wc -l | tr -d ' ')
+echo "Join events: $JOINS"
+echo "Pass events: $PASSES"
+echo "Files in stuff/: $STUFF_COUNT"
+echo ""
+
+# Recent event commits
+echo "--- Recent commits (last 10) ---"
+git log --oneline --no-color -10 2>/dev/null || echo "No commits found"
+echo ""
+
+# Last event details
+echo "--- Last event JSON ---"
+git log -1 --format=%b 2>/dev/null | jq -c 'select(.z == 1)' 2>/dev/null || echo "No valid event JSON in last commit"
+echo ""
+
+# Promise configuration
+echo "--- Promise configuration ---"
+PROMISE_TEXT="${ZOCIETY_PROMISE:-CYCLE_COMPLETE}"
+echo "ZOCIETY_PROMISE env: ${ZOCIETY_PROMISE:-<not set>}"
+echo "Effective promise text: $PROMISE_TEXT"
+echo "Would output: <promise>$PROMISE_TEXT</promise>"
+echo ""
+
+# Check for common issues
+echo "--- Diagnostics ---"
+ISSUES=0
+
+# Issue: action is stop but loop is still running
+if [[ "$ACTION" == "stop" ]]; then
+  echo "⚠ Action is 'stop' - loop should have exited"
+  if [[ "$LAST_EVENT" == "promise" ]]; then
+    echo "  → Promise event exists. Run: bin/zpromise"
+    echo "  → Or manually: echo '<promise>$PROMISE_TEXT</promise>'"
+  fi
+  ((ISSUES++)) || true
+fi
+
+# Issue: promise text mismatch
+if [[ "$PROMISE_TEXT" != "CYCLE_COMPLETE" && "$PROMISE_TEXT" != "DONE" ]]; then
+  echo "⚠ Non-standard promise text: $PROMISE_TEXT"
+  echo "  → Ensure ralph-wiggum --completion-promise matches"
+  ((ISSUES++)) || true
+fi
+
+# Issue: stuff directory missing
+if [[ ! -d "stuff" ]]; then
+  echo "⚠ stuff/ directory does not exist"
+  ((ISSUES++)) || true
+fi
+
+# Issue: bin scripts not executable
+if [[ ! -x "bin/zstate" ]]; then
+  echo "⚠ bin/zstate is not executable"
+  ((ISSUES++)) || true
+fi
+
+if [[ $ISSUES -eq 0 ]]; then
+  echo "✓ No obvious issues detected"
+fi
+echo ""
+
+# Cycle branches and tags
+echo "--- Archived cycles ---"
+echo "Branches:"
+git branch -a --no-color 2>/dev/null | grep 'cycle/' | head -5 || echo "  (none)"
+echo "Tags:"
+git tag 2>/dev/null | grep '^rev' | tail -5 || echo "  (none)"
+echo ""
+
+echo "=== END DUMP ==="
