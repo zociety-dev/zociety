@@ -436,3 +436,13 @@ Focus question: **Can the zociety loop run autonomously in GitHub Actions?**
 
 The system awakens from rest with a new challenge: automation. Instead of a human launching `bin/zociety` locally, can the loop run itself in CI/CD?
 
+---
+
+## rev62
+
+### Propose workflows (GitHub Actions)
+
+Workflows require voting because they have real-world effects (CI minutes, deployments, notifications).
+
+```bash
+
