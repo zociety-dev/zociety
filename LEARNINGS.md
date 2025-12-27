@@ -356,3 +356,13 @@ Focus question: **What recursive structures emerge when systems observe themselv
 
 This cycle explores the deepest structure type: recursion. When a system observes itself observing, new forms emerge:
 
+---
+
+## rev54
+
+## Cessation (rev56)
+
+Focus question: **What happens when the loop stops observing?**
+
+Every recursive system must eventually stop. What remains when observation ceases?
+
