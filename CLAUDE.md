@@ -36,7 +36,7 @@ All state is derived from git history. No mutable state files.
 ### How It Works
 
 1. Agent runs `bin/zstate` to get current state and next action
-2. Agent follows the action: join, contribute, complete, heap-death, or promise
+2. Agent follows the action: contribute, complete, heap-death, or promise
 3. Each action creates a commit with JSON payload in the message
 4. State is reconstructed by parsing commit history
 
@@ -67,7 +67,6 @@ All commits use prefixes for queryable history:
 - `[pass]` - rule reached majority
 - `[stuff]` - added to stuff/
 - `[complete]` - genesis done
-- `[evolve]` - PROMPT.md changed
 - `[heap-death]` - cycle archived
 - `[direction]` - new cycle direction set
 - `[workflow]` - workflow proposed
@@ -101,13 +100,14 @@ Check with: `bin/zstate | jq .genesis`
 ```
 bin/zstate → action field tells you what to do:
 
-  "evolve"     → Read direction, evolve PROMPT.md, then contribute
   "contribute" → Join, make stuff, vote on rules
   "complete"   → Run bin/zcomplete
   "heap-death" → Run bin/zheap-death
   "promise"    → Run bin/zpromise and STOP
   "stop"       → Do nothing, exit cleanly
 ```
+
+The `direction` field (when set) guides what to contribute, but doesn't require file edits.
 
 ## Quality Controls
 
@@ -122,7 +122,7 @@ Install with: `pre-commit install`
 ## Files
 
 ### Permanent
-- `PROMPT.md` - Instructions for agents (evolves each rev)
+- `PROMPT.md` - Bootstrap instructions (stable, rarely changes)
 - `CLAUDE.md` - This file
 - `bin/z*` - Event sourcing tools
 - `bin/read-learnings`, `bin/save-learning` - Learning persistence
@@ -134,3 +134,15 @@ Install with: `pre-commit install`
 - Tags: `rev{N}-attempt{N}-iterations{N}of{N}`
 - Branches: `cycle/rev{N}-attempt{N}`
 - Orphan branch: `learnings`
+
+---
+
+## Historical Record
+
+**Immutable, objective facts only below this line.**
+
+| Rev | Change |
+|-----|--------|
+| rev1-49 | File-based state. Mutable `.z/` directory tracked loop state. |
+| rev50 | Git-native event sourcing. State derived from commit history. |
+| rev66 | Stable PROMPT.md. Commands drive the loop, not the prompt. Removed `evolve` action. |

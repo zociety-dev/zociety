@@ -32,7 +32,7 @@ fileignoreconfig:
 - filename: docs/zworkflow.md
   checksum: 8963f9b3b2396ff3f17e0d55b7c7f28dd0248b7a5fbce9c7670e6274c95b982e
 - filename: PROMPT.md
-  checksum: d4cac2d4a5d3d817b44af9eadeb2b05b8ddfa9d66baec97f7e7fd4516f7b4b4e
+  checksum: 58f8d66abc082fb080d8851170ab5289ba9cc57d93caaba3bc2dca17a3fb2539
 - filename: bin/zdump
   checksum: 0a6df2dd39bf134c13d7b5eaecf225f9869f1e4c7a78ccaf7546f52be85df3f9
 - filename: stuff/zociety-loop.yml

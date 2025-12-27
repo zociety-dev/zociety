@@ -77,14 +77,14 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r '
   # Determine recommended action based on event and state
   # Key insight: after [complete], must run heap-death before promise
   # After [promise], loop should stop - no further action needed
+  # Direction guides contribution, not file editing
   .action = (
     if .event == "promise" then "stop"
     elif .event == "complete" then "heap-death"
     elif .event == "heap-death" then
       if (.data.batch_remaining // 0) == 0 then "promise"
-      else "evolve"
+      else "contribute"
       end
-    elif .event == "direction" then "evolve"
     elif .state.complete then "complete"
     else "contribute"
     end
