@@ -33,7 +33,7 @@ on:
       model:
         description: 'Claude model to use'
         required: false
-        default: 'claude-haiku-4-20250514'
+        default: 'claude-haiku-4-5-20251001'
         type: string
 
   # Weekly schedule (Sunday 00:00 UTC)
@@ -84,7 +84,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '30' }}
-          MODEL: ${{ github.event.inputs.model || 'claude-haiku-4-20250514' }}
+          MODEL: ${{ github.event.inputs.model || 'claude-haiku-4-5-20251001' }}
         run: bin/zga-loop "$MAX_ITERATIONS" "$MODEL"
 
       - name: Report Final State

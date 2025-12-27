@@ -14,7 +14,7 @@
 set -euo pipefail
 
 MAX_ITERATIONS="${1:-30}"
-MODEL="${2:-claude-haiku-4-20250514}"
+MODEL="${2:-claude-haiku-4-5-20251001}"
 ITERATION=0
 PROMPT="Read PROMPT.md and follow its instructions."
 
