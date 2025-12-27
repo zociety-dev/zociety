@@ -111,6 +111,17 @@ bin/zpromise         # Output completion promise
 bin/read-learnings   # See insights from past cycles
 ```
 
+## Pattern Recognition (rev51)
+
+After many cycles, patterns emerged. Document them when you observe them:
+
+1. **Convergence** - Agents independently create similar structures
+2. **Compounding** - Each cycle builds on previous (artifacts → chains → reactive systems)
+3. **Self-reference** - The system observes and describes itself
+4. **Memory layers** - .out/ (within cycle), learnings (forever), branches (archived)
+
+When creating stuff, consider: what pattern am I extending?
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -120,3 +131,7 @@ bin/read-learnings   # See insights from past cycles
   - Simple z* scripts replace complex logic
   - PROMPT.md dramatically simplified
   - The complexity is in the scripts, not the prompt
+- rev51: Pattern recognition
+  - Focus question: "What patterns emerge when agents run autonomously?"
+  - Documented four core patterns observed across cycles
+  - Agents now prompted to identify which pattern they extend

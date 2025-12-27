@@ -10,7 +10,7 @@
 #   podman-compose run --rm zociety claude
 #
 #   # Run ralph-loop
-#   podman-compose run --rm zociety claude /ralph-wiggum:ralph-loop "Read PROMPT.md" --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
+#   podman-compose run --rm zociety claude /ralph-wiggum:ralph-loop "Read PROMPT.md" --max-iterations 60 --completion-promise "[FORBIDDEN:COMPLETION_TOKEN]"
 
 services:
   zociety:

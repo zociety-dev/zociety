@@ -254,7 +254,7 @@ Run `bin/zstate` to see what to do:
 ```bash
 /ralph-loop "Read PROMPT.md and follow its instructions." \
   --max-iterations 60 \
-  --completion-promise "CYCLE_COMPLETE"
+  --completion-promise "[FORBIDDEN:COMPLETION_TOKEN]"
 ```
 
 ---

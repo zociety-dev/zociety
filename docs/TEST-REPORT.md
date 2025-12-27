@@ -103,7 +103,7 @@ ZEVENT_NO_VERIFY=1 bin/zpromise alice
 
 **Output:**
 ```
-<promise>CYCLE_COMPLETE</promise>
+<promise>[FORBIDDEN:COMPLETION_TOKEN]</promise>
 ```
 
 **Verification:**
@@ -357,7 +357,7 @@ All event commits validated successfully:
 3. **Finishing Phase** (seq 11)
    - Action: promise (because batch=null)
    - zpromise creates complete event
-   - Outputs `<promise>CYCLE_COMPLETE</promise>`
+   - Outputs `<promise>[FORBIDDEN:COMPLETION_TOKEN]</promise>`
 
 4. **Heap Death** (seq 12)
    - zheap-death archives cycle 1
@@ -405,7 +405,7 @@ All event commits validated successfully:
 ```bash
 /ralph-loop "Read PROMPT.md and follow its instructions." \
   --max-iterations 60 \
-  --completion-promise "CYCLE_COMPLETE"
+  --completion-promise "[FORBIDDEN:COMPLETION_TOKEN]"
 ```
 
 ### Agent Workflow:
@@ -433,7 +433,7 @@ All event commits validated successfully:
 **Scenario A: batch=null (final attempt)**
 - Genesis complete → action="promise"
 - Agent runs `bin/zpromise <name>`
-- Outputs `<promise>CYCLE_COMPLETE</promise>`
+- Outputs `<promise>[FORBIDDEN:COMPLETION_TOKEN]</promise>`
 - Loop stops ✓
 
 **Scenario B: batch>0 (more attempts remain)**

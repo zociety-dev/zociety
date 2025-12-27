@@ -8,7 +8,7 @@
 #
 # Examples:
 #   bin/zlog zstate "Computed action from heap-death event" '{"action": "promise"}'
-#   bin/zlog zpromise "Emitting CYCLE_COMPLETE - no state change follows"
+#   bin/zlog zpromise "Emitting [output by bin/zpromise] - no state change follows"
 
 set -e
 

@@ -135,7 +135,7 @@ git add -A
 git commit -m "[reset] system: clearing for fresh cycle"
 
 # Start loop
-/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
+/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "[FORBIDDEN:COMPLETION_TOKEN]"
 ```
 
 ### Loop Flow
@@ -147,7 +147,7 @@ Each iteration:
    - `evolve` → Read direction, modify PROMPT.md, then contribute
    - `contribute` → Create stuff, vote on rules
    - `heap-death` → `bin/zheap-death <name> <question> [batch]`
-   - `promise` → `bin/zpromise <name>` → outputs `<promise>CYCLE_COMPLETE</promise>`
+   - `promise` → `bin/zpromise <name>` → outputs `<promise>[FORBIDDEN:COMPLETION_TOKEN]</promise>`
 3. Loop continues until promise detected
 
 **Key difference from pre-rev50:**

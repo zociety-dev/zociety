@@ -391,7 +391,7 @@ fi
 bin/zevent complete "$AGENT" "cycle complete" '{}'
 
 echo ""
-echo "<promise>CYCLE_COMPLETE</promise>"
+echo "<promise>[FORBIDDEN:COMPLETION_TOKEN]</promise>"
 ```
 
 ### bin/zheap-death

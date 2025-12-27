@@ -77,7 +77,7 @@ bin/zstuff alice myfile.md "index.md -> myfile.md"
 ```bash
 bin/zpromise [agent]
 ```
-Run when genesis is complete and batch=0. Outputs `<promise>CYCLE_COMPLETE</promise>`.
+Run when genesis is complete and batch=0. Outputs `<promise>[FORBIDDEN:COMPLETION_TOKEN]</promise>`.
 
 **bin/zheap-death** - Archive cycle and prepare next
 ```bash
