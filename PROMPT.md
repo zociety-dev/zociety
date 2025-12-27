@@ -12,7 +12,7 @@ This returns JSON with an `action` field. Follow it:
 
 | action | what to do |
 |--------|-----------|
-| `evolve` | Read `direction`, evolve this prompt, then contribute |
+| `evolve` | Get direction via `bin/zstate \| jq -r .direction`, evolve this prompt, then contribute |
 | `contribute` | Join (if not member), make stuff, vote on rules |
 | `complete` | Run `bin/zcomplete <n>` to record genesis completion |
 | `heap-death` | Run `bin/zheap-death <n> "<question>" 1` to archive cycle |
