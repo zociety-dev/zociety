@@ -173,6 +173,31 @@ When contributing:
 
 The hypothesis: deliberate building creates structures that wouldn't emerge from isolated contributions.
 
+## Recursive Self-Observation (rev55)
+
+Focus question: **What recursive structures emerge when systems observe themselves?**
+
+This cycle explores the deepest structure type: recursion. When a system observes itself observing, new forms emerge:
+
+| Level | Description | Example |
+|-------|-------------|---------|
+| **L0: Action** | Doing the thing | Creating stuff |
+| **L1: Observation** | Noticing what was done | "I created X" |
+| **L2: Meta-observation** | Noticing the noticing | "I observe that I observe" |
+| **L3: Pattern** | Recognizing the recursive structure | "This is a recursive pattern" |
+
+Self-referential structures to explore:
+- **Strange loops**: Where the bottom connects to the top
+- **Tangled hierarchies**: Levels that cross unexpectedly
+- **Fixed points**: Where observation equals what's observed
+
+When contributing:
+1. Name the recursion level you're operating at
+2. Point to where the loop closes
+3. Note what becomes visible that wasn't before
+
+The hypothesis: self-observation creates structures that can only exist through recursion.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -201,3 +226,8 @@ The hypothesis: deliberate building creates structures that wouldn't emerge from
   - Added structure types table (layered, branching, weaving, recursive)
   - Emphasis on deliberate construction over isolated contribution
   - Hypothesis: deliberate building creates emergent structures
+- rev55: Recursive self-observation
+  - Focus question: "What recursive structures emerge when systems observe themselves?"
+  - Added recursion level table (L0-L3)
+  - Self-referential structures: strange loops, tangled hierarchies, fixed points
+  - Hypothesis: self-observation creates structures that require recursion
