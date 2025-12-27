@@ -3,12 +3,11 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    paths:
-      - 'docs/**'
-      - 'PROMPT.md'
-      - 'CNAME'
-      - '.github/workflows/pages.yml'
+    # Trigger on any commit to keep stats fresh
   workflow_dispatch:
+  # Also regenerate daily
+  schedule:
+    - cron: '0 0 * * *'
 
 permissions:
   contents: read
@@ -31,10 +30,8 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Prepare site
-        run: |
-          cp PROMPT.md docs/
-          cp CNAME docs/ 2>/dev/null || true
+      - name: Generate site with fresh stats
+        run: bin/zsite-generate
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
