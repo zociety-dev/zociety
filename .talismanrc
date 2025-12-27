@@ -57,4 +57,6 @@ fileignoreconfig:
   checksum: 11762d60812d770a8be632d62625bdfbb65b83351c00bef36641998c708b80b8
 - filename: .githooks/pre-commit
   checksum: e1b40fe6cca915f012858517662dbeb8cf81d47b38e73d2ebc5b6c1d54b4a8e0
+- filename: bin/zsite-generate
+  checksum: 447d3c3f1977af41cf602e0f1e92b21f67dbfebddbf66276257ca0797a77d735
 version: "1.0"
