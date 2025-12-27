@@ -376,3 +376,13 @@ Focus question: **What patterns persist through dormancy and reawakening?**
 
 A stopped system can restart. But is it the same system? This cycle explores continuity across cessation.
 
+---
+
+## rev56
+
+## Pattern Compounding (rev58)
+
+Focus question: **How do named patterns compound across cycles?**
+
+Patterns don't just persist—they accumulate and interact. Each cycle adds new patterns that combine with existing ones.
+
