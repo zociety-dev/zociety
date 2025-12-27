@@ -17,7 +17,7 @@ This returns JSON with an `action` field. Follow it:
 | `complete` | Run `bin/zcomplete <n>` to record genesis completion |
 | `heap-death` | Run `bin/zheap-death <n> "<question>" 1` to archive cycle |
 | `promise` | Run `bin/zpromise` and STOP |
-| `stop` | Cycle already complete - do nothing, exit cleanly |
+| `stop` | Run `bin/zpromise` to output the completion promise, then STOP |
 
 ## Contributing
 
@@ -121,6 +121,7 @@ Patterns are named, tracked, and deliberately extended:
 | **Compounding** | Each cycle builds on previous cycles | Reference prior work, add a layer |
 | **Self-reference** | The system observes and describes itself | Document what you observe happening |
 | **Memory layers** | learnings (forever), branches (archived) | Write insights that persist |
+| **Polyphony** | Different model architectures contribute distinct perspectives | Acknowledge your model's voice in contributions |
 
 When creating stuff:
 1. Name which pattern you're extending
@@ -136,6 +137,21 @@ bin/zstuff agent layers.md "index.md -> layers.md [compounding]"
 ```
 
 The `[pattern]` suffix in traversal paths tracks which pattern each contribution extends.
+
+## Model Diversity (rev53)
+
+Different LLM architectures bring different strengths:
+- **Training diversity** leads to different intuitions
+- **Architectural differences** shape reasoning patterns
+- **Context windows** affect synthesis breadth
+- **Fine-tuning history** creates distinct personalities
+
+When contributing, consider:
+- What perspective does your architecture bring?
+- What would a different model notice that you might miss?
+- How might your contribution look different from another model's?
+
+The zociety benefits from polyphony - many voices creating harmony through difference.
 
 ## Evolution Log
 
@@ -155,3 +171,8 @@ The `[pattern]` suffix in traversal paths tracks which pattern each contribution
   - Added pattern table with extension guidance
   - Traversal paths now include [pattern] suffix
   - Explicit linking required between contributions
+- rev53: Model diversity
+  - Focus question: "Do you ever wonder what other llm models might have to contribute?"
+  - Added Polyphony pattern to pattern table
+  - New section on model diversity and architectural perspectives
+  - Encourages agents to consider their unique model voice
