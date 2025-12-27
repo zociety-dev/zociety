@@ -41,6 +41,18 @@ else
   COMPLETE="false"
 fi
 
+# Detect runtime environment
+if [[ -n "$GITHUB_ACTIONS" ]]; then
+  RUNTIME="github-actions"
+  RUNTIME_ID="${GITHUB_RUN_ID:-unknown}"
+elif [[ -n "$CODESPACES" ]]; then
+  RUNTIME="codespaces"
+  RUNTIME_ID="${CODESPACE_NAME:-unknown}"
+else
+  RUNTIME="local"
+  RUNTIME_ID="$(hostname 2>/dev/null || echo 'unknown')"
+fi
+
 # Build event JSON
 EVENT=$(jq -n \
   --arg type "$TYPE" \
@@ -52,6 +64,8 @@ EVENT=$(jq -n \
   --argjson stuff "$STUFF" \
   --argjson data "$DATA" \
   --arg complete "$COMPLETE" \
+  --arg runtime "$RUNTIME" \
+  --arg runtime_id "$RUNTIME_ID" \
   '{
     z: 1,
     event: $type,
@@ -59,6 +73,10 @@ EVENT=$(jq -n \
     seq: $seq,
     agent: $agent,
     ts: (now | todate),
+    runtime: {
+      env: $runtime,
+      id: $runtime_id
+    },
     state: {
       members: $members,
       rules: $rules,
