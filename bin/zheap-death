@@ -50,12 +50,12 @@ fi
 
 # Get iteration count from zloop state or estimate from commits
 if [[ -f .claude/zloop.state ]]; then
-  ITERATIONS=$(grep '^iteration:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "?")
+  ITERATIONS=$(grep '^iteration:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "0")
   MAX_ITER=$(grep '^max:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "60")
 else
   # Estimate from event commits in this cycle
   ITERATIONS=$(git log --oneline --grep='^\[' | wc -l | tr -d ' ')
-  MAX_ITER="?"
+  MAX_ITER="x"  # Unknown max, use 'x' (valid for git tags)
 fi
 
 TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
