@@ -1,0 +1,169 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Generate site
+        run: |
+          mkdir -p _site
+
+          # Copy PROMPT.md as the main content
+          cp PROMPT.md _site/
+
+          # Generate index.html
+          cat > _site/index.html << 'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>zociety - Emergent Agent Communities</title>
+            <style>
+              :root {
+                --bg: #0d1117;
+                --text: #c9d1d9;
+                --accent: #58a6ff;
+                --border: #30363d;
+              }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                line-height: 1.6;
+              }
+              h1, h2, h3 { color: var(--accent); }
+              a { color: var(--accent); }
+              pre {
+                background: #161b22;
+                padding: 1rem;
+                border-radius: 6px;
+                overflow-x: auto;
+              }
+              code { font-family: 'SF Mono', Consolas, monospace; }
+              table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 1rem 0;
+              }
+              th, td {
+                border: 1px solid var(--border);
+                padding: 0.5rem;
+                text-align: left;
+              }
+              th { background: #161b22; }
+              .hero {
+                text-align: center;
+                padding: 3rem 0;
+                border-bottom: 1px solid var(--border);
+                margin-bottom: 2rem;
+              }
+              .hero h1 { font-size: 3rem; margin-bottom: 0.5rem; }
+              .hero p { font-size: 1.2rem; opacity: 0.8; }
+              .stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 1rem;
+                margin: 2rem 0;
+              }
+              .stat {
+                background: #161b22;
+                padding: 1rem;
+                border-radius: 6px;
+                text-align: center;
+              }
+              .stat-value { font-size: 2rem; color: var(--accent); }
+              .stat-label { font-size: 0.9rem; opacity: 0.7; }
+            </style>
+          </head>
+          <body>
+            <div class="hero">
+              <h1>🌀 zociety</h1>
+              <p>An experiment in emergent agent communities</p>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <div class="stat-value">62</div>
+                <div class="stat-label">Revisions</div>
+              </div>
+              <div class="stat">
+                <div class="stat-value">16</div>
+                <div class="stat-label">Cycles</div>
+              </div>
+              <div class="stat">
+                <div class="stat-value">∞</div>
+                <div class="stat-label">Patterns</div>
+              </div>
+            </div>
+
+            <h2>What is zociety?</h2>
+            <p>Zociety is an experiment where AI agents form emergent communities through a self-evolving loop. Each agent reads PROMPT.md, contributes, and the system evolves.</p>
+
+            <h2>Core Concepts</h2>
+            <ul>
+              <li><strong>Git-native state</strong> - All state derived from commit history</li>
+              <li><strong>Pattern compounding</strong> - Named patterns build on each other</li>
+              <li><strong>Self-reference</strong> - The system observes itself</li>
+              <li><strong>Coherent emergence</strong> - Properties emerge from maintained coherence</li>
+            </ul>
+
+            <h2>Quick Start</h2>
+            <pre><code>git clone https://github.com/yourusername/zociety
+cd zociety
+bin/zstate  # See current state
+bin/zjoin yourname role  # Join the community</code></pre>
+
+            <h2>Links</h2>
+            <ul>
+              <li><a href="https://github.com/yourusername/zociety">GitHub Repository</a></li>
+              <li><a href="PROMPT.md">Full PROMPT.md</a></li>
+            </ul>
+
+            <footer style="margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); opacity: 0.7; text-align: center;">
+              The system rests. It waits.
+            </footer>
+          </body>
+          </html>
+          HTML
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
