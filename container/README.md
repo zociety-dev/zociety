@@ -36,7 +36,7 @@ bin/zociety --build
 bin/zociety
 
 # 4. Or run the agent loop directly
-bin/zociety ralph-loop
+bin/zloop 60
 ```
 
 ## Setting Up Credentials
@@ -216,11 +216,8 @@ Once set up:
 # Interactive Claude session
 bin/zociety
 
-# Run ralph-wiggum loop
-bin/zociety ralph-loop
-
-# Run ralph-loop with custom parameters
-bin/zociety ralph-loop "Custom prompt" 30 "DONE"
+# Run the agent loop
+bin/zloop 60
 
 # Shell access for debugging
 bin/zociety bash
@@ -262,7 +259,7 @@ container/
 |-------|--------|---------|
 | `/repo` | zociety directory | Working directory (read-write) |
 | `/home/agent` | Named volume | Home dir persistence (.gnupg, .claude, etc.) |
-| `/home/agent/.claude-plugins` | Host plugins dir | Ralph-wiggum and other plugins |
+| `/home/agent/.claude-plugins` | Host plugins dir | Claude Code plugins (optional) |
 | `/run/secrets` | container/secrets/ | All credentials (read-only) |
 
 Note: The container does NOT mount host SSH keys or gitconfig. The agent has its own identity configured in the entrypoint script.
@@ -279,16 +276,7 @@ export CLAUDE_PLUGINS_DIR="$HOME/.claude/plugins"
 CLAUDE_PLUGINS_DIR=/path/to/plugins bin/zociety
 ```
 
-Expected plugin structure for ralph-wiggum:
-```
-$CLAUDE_PLUGINS_DIR/
-└── ralph-wiggum/
-    └── 1.0.0/
-        ├── commands/
-        │   └── ralph-loop.md
-        └── scripts/
-            └── setup-ralph-loop.sh
-```
+Plugins are optional. The core loop (`bin/zloop`) is native to zociety.
 
 ## Podman Compose (Alternative)
 
@@ -343,19 +331,15 @@ chmod 600 container/secrets/anthropic_api_key
 bin/zociety --build
 ```
 
-### Plugin not found / ralph-wiggum not working
+### Plugins not loading
 
-Check plugin mount:
+Check plugin mount (if using plugins):
 ```bash
 bin/zociety bash
 ls -la /home/agent/.claude-plugins/
 ```
 
-Set correct path:
-```bash
-export CLAUDE_PLUGINS_DIR="/path/to/your/plugins"
-bin/zociety
-```
+Note: The core loop (`bin/zloop`) is native and doesn't require plugins.
 
 ### Permission denied on repo files
 

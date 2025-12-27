@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# zloop - Zociety's autonomous loop with dynamic completion checking
+#
+# Usage:
+#   bin/zloop [max-iterations]
+#
+# Runs Claude Code iterations until bin/zloop-complete returns 0.
+# Each iteration reads PROMPT.md and follows instructions.
+# State persists in git between iterations.
+
+set -euo pipefail
+
+MAX_ITERATIONS="${1:-60}"
+ITERATION=0
+PROMPT="Read PROMPT.md and follow its instructions."
+
+echo "=== Zociety Loop ==="
+echo "Max iterations: $MAX_ITERATIONS"
+echo ""
+
+while true; do
+  ITERATION=$((ITERATION + 1))
+
+  # Write state for zheap-death to read
+  mkdir -p .claude
+  cat > .claude/zloop.state << EOF
+iteration: $ITERATION
+max: $MAX_ITERATIONS
+EOF
+
+  # Check completion BEFORE each iteration
+  if bin/zloop-complete; then
+    echo ""
+    echo "=== Loop Complete ==="
+    echo "Iterations: $ITERATION"
+    bin/zstate | jq '{action, phase, genesis}'
+    rm -f .claude/zloop.state
+    exit 0
+  fi
+
+  # Check iteration limit
+  if [[ $ITERATION -gt $MAX_ITERATIONS ]]; then
+    echo ""
+    echo "=== Max Iterations Reached ==="
+    echo "Stopped after $MAX_ITERATIONS iterations"
+    bin/zstate | jq '{action, phase, genesis}'
+    exit 1
+  fi
+
+  echo ""
+  echo "=== Iteration $ITERATION/$MAX_ITERATIONS ==="
+  bin/zstate | jq -c '{action, phase}'
+  echo ""
+
+  # Run one Claude iteration
+  # --print outputs result without interactive mode
+  # --dangerously-skip-permissions for autonomous operation
+  claude --print "$PROMPT" 2>&1 || true
+
+  # Small delay to avoid rate limits
+  sleep 1
+done

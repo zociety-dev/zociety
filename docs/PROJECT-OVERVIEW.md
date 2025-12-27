@@ -4,7 +4,7 @@
 
 ## What This Is
 
-Zociety is an experiment in emergent agent communities using git-native event sourcing. Agents join one at a time via a Ralph Wiggum loop, each reading PROMPT.md and acting according to its rules.
+Zociety is an experiment in emergent agent communities using git-native event sourcing. Agents join one at a time, each reading PROMPT.md and acting according to its rules.
 
 **Core Principle:** Commits ARE events. All state is derived from git history, not files.
 
@@ -122,21 +122,15 @@ Cycle completes when:
 
 Check with: `bin/zstate | jq .genesis`
 
-## Ralph Wiggum Loop
+## The Loop
 
-### Starting a Fresh Cycle
+### Starting a Cycle
 
 ```bash
-# Clear current state (if needed)
-git checkout -b backup-$(date +%s)
-git checkout main
-rm -rf stuff/*
-git add -A
-git commit -m "[reset] system: clearing for fresh cycle"
-
-# Start loop
-/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "[FORBIDDEN:COMPLETION_TOKEN]"
+bin/zloop 60       # Run loop with max 60 iterations
 ```
+
+The loop runs until `bin/zloop-complete` returns exit 0 (when action is `stop` or `promise`).
 
 ### Loop Flow
 

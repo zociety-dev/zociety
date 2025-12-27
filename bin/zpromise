@@ -40,4 +40,4 @@ bin/zlog zpromise "Promise event recorded - state will now show action=stop" \
   "$(jq -n --argjson cycle $CYCLE --argjson seq $SEQ '{cycle: $cycle, seq: $seq, terminal: true}')" 2>/dev/null || true
 
 echo ""
-echo "<promise>CYCLE_COMPLETE</promise>"
+echo "Cycle complete. Loop will exit on next iteration check."

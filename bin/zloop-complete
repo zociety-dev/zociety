@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# zloop-complete - Check if the zociety loop should stop
+# Exit 0 = stop (complete)
+# Exit 1 = continue (not complete)
+#
+# Usage:
+#   bin/zloop-complete
+#
+# Used by bin/zloop for dynamic completion checking.
+
+set -euo pipefail
+
+STATE=$(bin/zstate)
+ACTION=$(echo "$STATE" | jq -r '.action')
+
+case "$ACTION" in
+  stop|promise)
+    # Cycle is complete, loop should stop
+    echo "COMPLETE: action=$ACTION"
+    exit 0
+    ;;
+  *)
+    # Work remains, loop should continue
+    echo "CONTINUE: action=$ACTION"
+    exit 1
+    ;;
+esac

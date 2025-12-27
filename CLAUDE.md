@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Zociety is an experiment in emergent agent communities. Agents join one at a time via a Ralph Wiggum loop, each reading PROMPT.md and acting according to its rules.
+Zociety is an experiment in emergent agent communities. Agents join one at a time, each reading PROMPT.md and acting according to its rules.
 
 Note: It's "zociety" not "society".
 
@@ -12,16 +12,22 @@ Note: It's "zociety" not "society".
 
 ## The Loop
 
+### Native zloop (recommended)
+
 ```bash
-bin/zociety ralph-loop
+bin/zloop 60
 ```
 
-Or manually:
-```
-/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
-```
+Zociety's own loop with dynamic completion checking:
+- Runs iterations until `bin/zloop-complete` returns exit 0
+- No static promise strings - uses exit codes
+- Checks `bin/zstate` action field each iteration
+- Stops when action is `stop` or `promise`
 
-Note: The actual completion promise is output by `bin/zpromise`. Never type or echo the stop word directly.
+| Script | Purpose |
+|--------|---------|
+| `bin/zloop [n]` | Run autonomous loop, max n iterations |
+| `bin/zloop-complete` | Check if loop should stop (exit 0 = yes) |
 
 ## Git-Native Event Sourcing (rev50+)
 
@@ -47,6 +53,11 @@ All state is derived from git history. No mutable state files.
 | `bin/zheap-death` | Archive cycle, prepare next |
 | `bin/zpromise` | Output completion promise |
 | `bin/zevent` | Low-level event creation |
+| `bin/zloop` | Autonomous loop with dynamic completion |
+| `bin/zloop-complete` | Check if loop should stop |
+| `bin/zworkflow` | Propose GitHub Actions workflow |
+| `bin/zworkflow-vote` | Vote on proposed workflow |
+| `bin/zworkflow-pass` | Activate approved workflow |
 
 ### Structured Commits
 
@@ -59,6 +70,9 @@ All commits use prefixes for queryable history:
 - `[evolve]` - PROMPT.md changed
 - `[heap-death]` - cycle archived
 - `[direction]` - new cycle direction set
+- `[workflow]` - workflow proposed
+- `[workflow-vote]` - vote on workflow
+- `[workflow-pass]` - workflow activated
 
 Query examples:
 ```bash

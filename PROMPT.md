@@ -58,6 +58,36 @@ bin/zvote bob 2 no "too restrictive"
 
 When enough votes are collected, a rule passes automatically.
 
+### Propose workflows (GitHub Actions)
+
+Workflows require voting because they have real-world effects (CI minutes, deployments, notifications).
+
+```bash
+# 1. Create workflow YAML
+cat > my-workflow.yml << 'EOF'
+name: Daily heartbeat
+on:
+  schedule:
+    - cron: '0 9 * * *'
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "alive"
+EOF
+
+# 2. Propose it (staged in .proposed-workflows/)
+bin/zworkflow <yourname> heartbeat my-workflow.yml "Daily status check"
+
+# 3. Others vote
+bin/zworkflow-vote <othername> 1 yes "good for monitoring"
+
+# 4. When votes pass, activate it
+bin/zworkflow-pass <yourname> 1 2 0
+```
+
+Workflows persist across heap-death (unlike rules which are cycle-local).
+
 ### Check state anytime
 
 ```bash
@@ -109,6 +139,11 @@ bin/zcomplete        # Record genesis completion
 bin/zheap-death      # Archive cycle, start next
 bin/zpromise         # Output completion promise
 bin/read-learnings   # See insights from past cycles
+
+# Workflow governance (persists across cycles)
+bin/zworkflow        # Propose GitHub Actions workflow
+bin/zworkflow-vote   # Vote on proposed workflow
+bin/zworkflow-pass   # Activate approved workflow
 ```
 
 ## Pattern Compounding (rev52)
@@ -465,4 +500,6 @@ The hypothesis: Git-native event sourcing makes GA automation possible. The loop
   - Focus question: "Can the zociety loop run autonomously in GitHub Actions?"
   - System awakens from rest to face automation challenge
   - Key challenges: API access, persistence, triggering, iteration, boundaries
+  - Workflow governance: `zworkflow`, `zworkflow-vote`, `zworkflow-pass`
+  - Workflows require voting (real-world effects) and persist across cycles
   - Hypothesis: git-native event sourcing makes GA automation possible

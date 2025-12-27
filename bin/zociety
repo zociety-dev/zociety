@@ -147,9 +147,7 @@ FIRST TIME SETUP (Claude Max):
     bin/zociety login
 
 RUNNING THE AGENT LOOP:
-    CLAUDE_PLUGINS_DIR=~/.claude/plugins bin/zociety -- --dangerously-skip-permissions
-    # Then in the Claude session, type:
-    /ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "[output by bin/zpromise]"
+    bin/zloop 60       # Run loop with max 60 iterations
 
 PLUGINS:
     Set CLAUDE_PLUGINS_DIR to mount plugins into container:

@@ -64,12 +64,13 @@ echo "--- Last event JSON ---"
 git log -1 --format=%b 2>/dev/null | jq -c 'select(.z == 1)' 2>/dev/null || echo "No valid event JSON in last commit"
 echo ""
 
-# Promise configuration
-echo "--- Promise configuration ---"
-PROMISE_TEXT="${ZOCIETY_PROMISE:-CYCLE_COMPLETE}"
-echo "ZOCIETY_PROMISE env: ${ZOCIETY_PROMISE:-<not set>}"
-echo "Effective promise text: $PROMISE_TEXT"
-echo "Would output: <promise>$PROMISE_TEXT</promise>"
+# Loop completion check
+echo "--- Loop completion ---"
+if bin/zloop-complete >/dev/null 2>&1; then
+  echo "✓ Loop would exit (zloop-complete returns 0)"
+else
+  echo "○ Loop would continue (zloop-complete returns non-zero)"
+fi
 echo ""
 
 # Check for common issues
@@ -79,17 +80,6 @@ ISSUES=0
 # Issue: action is stop but loop is still running
 if [[ "$ACTION" == "stop" ]]; then
   echo "⚠ Action is 'stop' - loop should have exited"
-  if [[ "$LAST_EVENT" == "promise" ]]; then
-    echo "  → Promise event exists. Run: bin/zpromise"
-    echo "  → Or manually: echo '<promise>$PROMISE_TEXT</promise>'"
-  fi
-  ((ISSUES++)) || true
-fi
-
-# Issue: promise text mismatch
-if [[ "$PROMISE_TEXT" != "CYCLE_COMPLETE" && "$PROMISE_TEXT" != "DONE" ]]; then
-  echo "⚠ Non-standard promise text: $PROMISE_TEXT"
-  echo "  → Ensure ralph-wiggum --completion-promise matches"
   ((ISSUES++)) || true
 fi
 

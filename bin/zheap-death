@@ -48,13 +48,14 @@ else
   fi
 fi
 
-# Get iteration count
-if [[ -f .claude/ralph-loop.local.md ]]; then
-  ITERATIONS=$(grep '^iteration:' .claude/ralph-loop.local.md | sed 's/iteration: *//')
-  MAX_ITER=$(grep '^max_iterations:' .claude/ralph-loop.local.md | sed 's/max_iterations: *//')
+# Get iteration count from zloop state or estimate from commits
+if [[ -f .claude/zloop.state ]]; then
+  ITERATIONS=$(grep '^iteration:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "?")
+  MAX_ITER=$(grep '^max:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "60")
 else
-  ITERATIONS=$(git log --oneline | wc -l | tr -d ' ')
-  MAX_ITER="60"
+  # Estimate from event commits in this cycle
+  ITERATIONS=$(git log --oneline --grep='^\[' | wc -l | tr -d ' ')
+  MAX_ITER="?"
 fi
 
 TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
@@ -162,7 +163,7 @@ for d in stuff artifacts; do
   [[ -d "$d" ]] && git rm -rf "$d" --quiet
 done
 
-git rm -f .claude/ralph-loop.local.md --quiet 2>/dev/null || true
+git rm -f .claude/zloop.state --quiet 2>/dev/null || true
 
 #############################################
 # 8. Commit direction event for next cycle (only if batch remains)
