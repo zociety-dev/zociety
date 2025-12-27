@@ -70,13 +70,16 @@ CYCLES_JSON+="]"
 # ============================================================
 echo "Extracting learnings..."
 
+# Fetch learnings branch if not available
+git fetch origin learnings:learnings 2>/dev/null || true
+
 LEARNINGS_HTML=""
 if git show learnings:LEARNINGS.md &>/dev/null; then
     LEARNINGS_CONTENT=$(git show learnings:LEARNINGS.md 2>/dev/null || echo "No learnings yet.")
     # Convert markdown to HTML (simple version)
     LEARNINGS_HTML=$(echo "$LEARNINGS_CONTENT" | sed 's/^# \(.*\)/<h1>\1<\/h1>/; s/^## \(.*\)/<h2>\1<\/h2>/; s/^### \(.*\)/<h3>\1<\/h3>/; s/^- \(.*\)/<li>\1<\/li>/; s/^\* \(.*\)/<li>\1<\/li>/')
 else
-    LEARNINGS_HTML="<p>No learnings branch found.</p>"
+    LEARNINGS_HTML="<p>No learnings branch found. Try: git fetch origin learnings</p>"
 fi
 
 # ============================================================
