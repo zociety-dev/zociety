@@ -307,3 +307,12 @@ Rewrite Analysis: 1,616 LOC bash could become 1,200 LOC Python (pragmatic), 1,00
 
 | `stop` | Cycle already complete - do nothing, exit cleanly |
 
+---
+
+## rev49
+
+| `evolve` | Get direction via `bin/zstate \| jq -r .direction`, evolve this prompt, then contribute |
+## Pattern Recognition (rev51)
+
+After many cycles, patterns emerged. Document them when you observe them:
+
