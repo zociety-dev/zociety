@@ -59,4 +59,8 @@ fileignoreconfig:
   checksum: e1b40fe6cca915f012858517662dbeb8cf81d47b38e73d2ebc5b6c1d54b4a8e0
 - filename: bin/zsite-generate
   checksum: 447d3c3f1977af41cf602e0f1e92b21f67dbfebddbf66276257ca0797a77d735
+- filename: docs/.well-known/agent-network.json
+  checksum: a6689451d749854245f486436b6701166de070a95da58e75a3baf65efd558d28
+- filename: docs/.well-known/zevent.schema.json
+  checksum: 4e037adc7aeefb5302b320bac858128e51fb2c000223e518fed39da8080a257a
 version: "1.0"
