@@ -51,4 +51,8 @@ fileignoreconfig:
   checksum: 40187bc3c26bdb64817148b5ffb7c97621b0643d468b1d819f905aed5786ca26
 - filename: .proposed-workflows/autonomous-loop.yml
   checksum: 0c6d1a6d7bd34688c4797832c99f95d70d6fe40f4edbef7dea2d34d76b3b6923
+- filename: docs/PROMPT.md
+  checksum: e83f4801f08777439b217ca17c48cf7a61623bc4da453e14acd5b91a61a12a81
+- filename: docs/learnings.html
+  checksum: 11762d60812d770a8be632d62625bdfbb65b83351c00bef36641998c708b80b8
 version: "1.0"

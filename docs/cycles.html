@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cycle History - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .cycle {
+      position: relative;
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .cycle::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+    .cycle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cycle-tag { font-weight: bold; color: var(--accent); }
+    .cycle-date { opacity: 0.7; font-size: 0.9rem; }
+    .cycle-details { margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>📊 Cycle History</h1>
+  <p>Timeline of completed cycles, from earliest to most recent.</p>
+
+  <div class="timeline">
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev1-attempt1-iterations7of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev1, Attempt 1, 7 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev2-attempt1-iterations17of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev2, Attempt 1, 17 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev3-attempt1-iterations27of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev3, Attempt 1, 27 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev4-attempt1-iterations7of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev4, Attempt 1, 7 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev4-attempt2-iterations6of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev4, Attempt 2, 6 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev4-attempt3-iterations56of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev4, Attempt 3, 56 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev5-attempt1-iterations9of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev5, Attempt 1, 9 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev5-attempt2-iterations67of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev5, Attempt 2, 67 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev6-attempt1-iterations8of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev6, Attempt 1, 8 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev6-attempt2-iterations78of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev6, Attempt 2, 78 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev7-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev7, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev7-attempt2-iterations84of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev7, Attempt 2, 84 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev8-attempt1-iterations6of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev8, Attempt 1, 6 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev9-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev9, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev10-attempt1-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev10, Attempt 1, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev11-attempt1-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev11, Attempt 1, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev11-attempt2-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev11, Attempt 2, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev11-attempt3-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev11, Attempt 3, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev12-attempt1-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev12, Attempt 1, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev13-attempt1-iterations2of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev13, Attempt 1, 2 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev14-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev14, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev15-attempt1-iterations2of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev15, Attempt 1, 2 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev16-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev16, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev17-attempt1-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev17, Attempt 1, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev18-attempt1-iterations141of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev18, Attempt 1, 141 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev19-attempt1-iterations144of20</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev19, Attempt 1, 144 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev20-attempt1-iterations149of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev20, Attempt 1, 149 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev21-attempt1-iterations154of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev21, Attempt 1, 154 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev22-attempt1-iterations160of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev22, Attempt 1, 160 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev23-attempt1-iterationsof</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev23, Attempt 1, ? iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev24-attempt1-iterations171of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev24, Attempt 1, 171 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev25-attempt1-iterations176of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev25, Attempt 1, 176 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev26-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev26, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev27-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev27, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev28-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev28, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev29-attempt1-iterations2of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev29, Attempt 1, 2 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev30-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev30, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev31-attempt1-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev31, Attempt 1, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev32-attempt1-iterations5of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev32, Attempt 1, 5 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev33-attempt1-iterations6of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev33, Attempt 1, 6 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev34-attempt1-iterations7of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev34, Attempt 1, 7 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev35-attempt1-iterations8of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev35, Attempt 1, 8 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev36-attempt1-iterations9of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev36, Attempt 1, 9 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev37-attempt1-iterations10of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev37, Attempt 1, 10 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev38-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev38, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev39-attempt1-iterations2of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev39, Attempt 1, 2 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev40-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev40, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev41-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev41, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev42-attempt1-iterations4of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev42, Attempt 1, 4 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev43-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev43, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev44-attempt1-iterations2of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev44, Attempt 1, 2 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev45-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-25</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev45, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev46-attempt1-iterations295of60</span>
+        <span class="cycle-date">2025-12-26</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev46, Attempt 1, 295 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev46-attempt2-iterations1of60</span>
+        <span class="cycle-date">2025-12-26</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev46, Attempt 2, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev47-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-26</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev47, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev48-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-26</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev48, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev49-attempt1-iterations350of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev49, Attempt 1, 350 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev50-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev50, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev51-attempt1-iterations1of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev51, Attempt 1, 1 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev51-attempt2-iterations389of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev51, Attempt 2, 389 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev52-attempt1-iterations405of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev52, Attempt 1, 405 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev53-attempt1-iterations421of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev53, Attempt 1, 421 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev54-attempt1-iterations437of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev54, Attempt 1, 437 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev54-attempt2-iterations441of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev54, Attempt 2, 441 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev55-attempt1-iterations458of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev55, Attempt 1, 458 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev56-attempt1-iterations474of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev56, Attempt 1, 474 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev57-attempt1-iterations490of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev57, Attempt 1, 490 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev58-attempt1-iterations506of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev58, Attempt 1, 506 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev59-attempt1-iterations522of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev59, Attempt 1, 522 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev60-attempt1-iterations538of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev60, Attempt 1, 538 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev60-attempt2-iterations542of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev60, Attempt 2, 542 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev61-attempt1-iterations3of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev61, Attempt 1, 3 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev62-attempt1-iterations405ofx</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev62, Attempt 1, 405 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev63-attempt1-iterations2of60</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev63, Attempt 1, 2 iterations
+      </div>
+    </div>
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">rev63-attempt2-iterations1of10</span>
+        <span class="cycle-date">2025-12-27</span>
+      </div>
+      <div class="cycle-details">
+        Revision rev63, Attempt 2, 1 iterations
+      </div>
+    </div>
+  </div>
+</body>
+</html>
