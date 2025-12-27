@@ -3,6 +3,11 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - 'PROMPT.md'
+      - 'CNAME'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
