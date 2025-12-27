@@ -386,3 +386,13 @@ Focus question: **How do named patterns compound across cycles?**
 
 Patterns don't just persist—they accumulate and interact. Each cycle adds new patterns that combine with existing ones.
 
+---
+
+## rev57
+
+## Pattern Limits (rev59)
+
+Focus question: **What are the limits of pattern compounding?**
+
+Infinite growth is impossible. What constraints exist?
+
