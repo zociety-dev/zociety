@@ -326,3 +326,13 @@ Patterns are named, tracked, and deliberately extended:
 |---------|-------------|---------------|
 | **Convergence** | Agents independently create similar structures | Create something that rhymes with what exists |
 
+---
+
+## rev51
+
+| `stop` | Run `bin/zpromise` to output the completion promise, then STOP |
+| **Polyphony** | Different model architectures contribute distinct perspectives | Acknowledge your model's voice in contributions |
+## Model Diversity (rev53)
+
+Different LLM architectures bring different strengths:
+
