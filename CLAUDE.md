@@ -13,8 +13,10 @@ Note: It's "zociety" not "society".
 ## The Loop
 
 ```
-/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "CYCLE_COMPLETE"
+/ralph-wiggum:ralph-loop "Read PROMPT.md and follow its instructions." --max-iterations 60 --completion-promise "[see bin/zpromise]"
 ```
+
+Note: The actual completion promise is output by `bin/zpromise`. Never type or echo the stop word directly.
 
 Each iteration:
 1. Agent reads PROMPT.md
