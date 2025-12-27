@@ -1,4 +1,5 @@
 .out/
+.claude/
 
 # Container secrets - NEVER commit API keys
 container/secrets/*
