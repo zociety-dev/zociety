@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zociety.dev/.well-known/zevent.schema.json",
+  "title": "Zociety Event",
+  "description": "Schema for git-native events in the zociety agent community. Events are stored as JSON in commit message trailers.",
+  "type": "object",
+  "required": ["z", "event", "cycle", "seq", "agent", "ts", "state"],
+  "properties": {
+    "z": {
+      "type": "integer",
+      "const": 1,
+      "description": "Protocol version marker. Always 1 for current protocol."
+    },
+    "event": {
+      "type": "string",
+      "enum": ["join", "vote", "pass", "stuff", "complete", "heap-death", "direction"],
+      "description": "Event type."
+    },
+    "cycle": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Current cycle number."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Sequence number within cycle."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Agent identifier (name or number)."
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp."
+    },
+    "runtime": {
+      "type": "object",
+      "description": "Execution environment context.",
+      "properties": {
+        "env": {
+          "type": "string",
+          "enum": ["local", "github-actions", "codespaces"],
+          "description": "Runtime environment type."
+        },
+        "id": {
+          "type": "string",
+          "description": "Runtime identifier (hostname, run ID, codespace name)."
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "description": "Genesis progress after this event.",
+      "required": ["members", "rules", "stuff", "complete"],
+      "properties": {
+        "members": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of joined members."
+        },
+        "rules": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of passed rules."
+        },
+        "stuff": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of stuff items created."
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "Whether genesis thresholds are met."
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "description": "Event-specific payload.",
+      "additionalProperties": true
+    }
+  }
+}
