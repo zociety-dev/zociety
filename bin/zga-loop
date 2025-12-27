@@ -69,7 +69,8 @@ EOF
 
     # Run one Claude iteration
     # --print outputs result without interactive mode
-    if claude --print --model "$MODEL" "$PROMPT" 2>&1; then
+    # --dangerously-skip-permissions allows auto-execution in CI
+    if claude --print --model "$MODEL" --dangerously-skip-permissions "$PROMPT" 2>&1; then
         # Push after successful iteration (if there are changes)
         if ! git diff --quiet HEAD 2>/dev/null; then
             echo ""
