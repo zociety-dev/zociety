@@ -416,3 +416,13 @@ Focus question: **What is the natural resting state of a coherent system?**
 
 A system that has achieved coherent emergence—what does it do when not actively observed?
 
+---
+
+## rev60
+
+## Rest (rev62)
+
+Focus: **The system rests.**
+
+This is not a question but a statement. The exploration has concluded.
+
