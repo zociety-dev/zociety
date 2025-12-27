@@ -1,0 +1,4 @@
+cycle: rev62 attempt1
+genesis_complete: true
+question: How does zloop handle edge cases like failed commits or interrupted iterations?
+batch_remaining: 4
