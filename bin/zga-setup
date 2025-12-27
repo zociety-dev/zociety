@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# zga-setup - Set up zociety environment for GitHub Actions
+#
+# Usage:
+#   bin/zga-setup
+#
+# Configures git identity, installs dependencies, and prepares
+# the runner environment for autonomous zloop execution.
+#
+# Required environment variables:
+#   ANTHROPIC_API_KEY - Claude API key (from GA secrets)
+#
+# Optional environment variables:
+#   GITHUB_TOKEN - For gh CLI (automatically set by GA)
+#   GPG_SIGNING_KEY - Base64-encoded GPG key for signed commits
+
+set -euo pipefail
+
+echo "=== Zociety GitHub Actions Setup ==="
+
+# ============================================================
+# Validate required secrets
+# ============================================================
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "ERROR: ANTHROPIC_API_KEY not set" >&2
+    echo "Add it as a repository secret in GitHub Settings" >&2
+    exit 1
+fi
+
+# ============================================================
+# Install Claude Code
+# ============================================================
+echo ""
+echo "Installing Claude Code..."
+npm install -g @anthropic-ai/claude-code
+
+# Verify installation
+if ! command -v claude &>/dev/null; then
+    echo "ERROR: Claude Code installation failed" >&2
+    exit 1
+fi
+echo "Claude Code version: $(claude --version)"
+
+# ============================================================
+# Install jq and yq if missing
+# ============================================================
+echo ""
+echo "Checking dependencies..."
+
+if ! command -v jq &>/dev/null; then
+    echo "Installing jq..."
+    sudo apt-get update && sudo apt-get install -y jq
+fi
+
+if ! command -v yq &>/dev/null; then
+    echo "Installing yq..."
+    sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+    sudo chmod +x /usr/local/bin/yq
+fi
+
+# ============================================================
+# Git Identity - zociety agent
+# ============================================================
+echo ""
+echo "Configuring git identity..."
+git config --global user.name "zociety"
+git config --global user.email "agent@zociety.dev"
+git config --global init.defaultBranch main
+git config --global pull.rebase false
+git config --global push.autoSetupRemote true
+
+# Mark repo as safe (GA runners can have ownership issues)
+git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+# ============================================================
+# GPG Setup (optional - for verified commits)
+# ============================================================
+if [[ -n "${GPG_SIGNING_KEY:-}" ]]; then
+    echo ""
+    echo "Setting up GPG signing..."
+
+    # Decode and import key
+    echo "$GPG_SIGNING_KEY" | base64 -d | gpg --batch --import 2>/dev/null || true
+
+    # Get key ID
+    KEY_ID=$(gpg --list-secret-keys --keyid-format long agent@zociety.dev 2>/dev/null | grep -oP '(?<=/)[A-F0-9]{16}' | head -1 || true)
+
+    if [[ -n "$KEY_ID" ]]; then
+        git config --global user.signingkey "$KEY_ID"
+        git config --global commit.gpgsign true
+        echo "GPG signing enabled with key: $KEY_ID"
+    else
+        echo "Warning: GPG key import failed, commits will be unsigned"
+    fi
+else
+    echo ""
+    echo "No GPG key provided, commits will be unsigned"
+fi
+
+# ============================================================
+# Verify Setup
+# ============================================================
+echo ""
+echo "=== Setup Complete ==="
+echo "Git user: $(git config --global user.name) <$(git config --global user.email)>"
+echo "Claude: $(command -v claude)"
+echo "jq: $(command -v jq)"
+echo "yq: $(command -v yq)"
+
+# Run zcheck to verify zociety scripts
+echo ""
+bin/zcheck

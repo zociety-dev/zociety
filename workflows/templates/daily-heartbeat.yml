@@ -1,0 +1,97 @@
+# Daily Heartbeat Workflow
+#
+# Lightweight daily check-in. Runs a single iteration to:
+# - Check current state
+# - Make one small contribution (if appropriate)
+# - Log observation to learnings
+#
+# Minimal token burn, accumulating small changes over time.
+#
+# Required secrets:
+#   - ANTHROPIC_API_KEY: Claude API key
+
+name: Daily Heartbeat
+
+on:
+  # Daily at 09:00 UTC
+  schedule:
+    - cron: '0 9 * * *'
+
+  # Manual trigger for testing
+  workflow_dispatch:
+
+concurrency:
+  group: zociety-heartbeat
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # Quick check, not full loop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Zociety Environment
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bin/zga-setup
+
+      - name: Check State
+        id: state
+        run: |
+          STATE=$(bin/zstate)
+          echo "state<<EOF" >> $GITHUB_OUTPUT
+          echo "$STATE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          ACTION=$(echo "$STATE" | jq -r '.action')
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+
+          echo "=== Daily State Check ==="
+          echo "$STATE" | jq .
+
+      - name: Single Iteration
+        if: steps.state.outputs.action != 'stop'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "=== Heartbeat Iteration ==="
+          echo "Action: ${{ steps.state.outputs.action }}"
+          echo ""
+
+          # Single iteration with heartbeat-specific prompt
+          PROMPT="Daily heartbeat check. Run bin/zstate, observe the current state, and make ONE small contribution if appropriate. Keep it minimal - this is a daily check-in, not a full session."
+
+          claude --print "$PROMPT" 2>&1 || echo "Iteration completed (may have had warnings)"
+
+      - name: Push Changes
+        if: steps.state.outputs.action != 'stop'
+        run: |
+          if ! git diff --quiet HEAD 2>/dev/null; then
+            echo "Pushing heartbeat changes..."
+            git push origin HEAD
+          else
+            echo "No changes to push"
+          fi
+
+      - name: Log Summary
+        if: always()
+        run: |
+          echo "=== Heartbeat Summary ==="
+          echo "Date: $(date -u +%Y-%m-%d)"
+          echo "Pre-state action: ${{ steps.state.outputs.action }}"
+          echo "Post-state:"
+          bin/zstate | jq -c '{action, phase, genesis}'

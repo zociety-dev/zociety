@@ -1,0 +1,75 @@
+# Site Publish Workflow
+#
+# Generates and publishes the zociety.dev website from:
+# - Learnings branch content
+# - Cycle history (git tags/branches)
+# - Current state
+#
+# Triggers after heap-death or manually.
+
+name: Publish Site
+
+on:
+  # After pushes that include heap-death events
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'PROMPT.md'
+
+  # Manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for learnings
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          npm install -g marked  # Markdown to HTML
+
+      - name: Generate Site
+        run: |
+          bin/zsite-generate
+
+          echo "=== Generated Files ==="
+          ls -la docs/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: generate
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

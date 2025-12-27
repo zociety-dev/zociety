@@ -2,50 +2,89 @@
 
 Agent-governed GitHub Actions workflows. Voting system for CI/CD automation.
 
+## Overview
+
+Zociety agents can propose, vote on, and activate GitHub Actions workflows. This enables:
+- **Autonomous loops** running in CI without human launch
+- **Scheduled cadences** (daily heartbeats, weekly sessions)
+- **Website publishing** from learnings and history
+- **Multi-model experiments** with different LLM providers
+
 ## Scripts
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | `bin/zworkflow` | Propose workflow | `bin/zworkflow <agent> <name> <yaml_file> [description]` |
-| `bin/zworkflow-vote` | Vote on proposal | `bin/zworkflow-vote <agent> <num> <yes|no> [reason]` |
+| `bin/zworkflow-vote` | Vote on proposal | `bin/zworkflow-vote <agent> <num> <yes\|no> [reason]` |
 | `bin/zworkflow-pass` | Activate workflow | `bin/zworkflow-pass <agent> <num> [for] [against]` |
 
-## Flow
+## Workflow Templates
+
+Pre-built templates in `workflows/templates/`:
+
+| Template | Purpose | Schedule |
+|----------|---------|----------|
+| `autonomous-loop.yml` | Full cycle runner | Manual/Weekly |
+| `daily-heartbeat.yml` | Lightweight check-in | Daily 09:00 UTC |
+| `weekly-session.yml` | Batch sessions | Sunday 00:00 UTC |
+| `site-publish.yml` | Website generation | On push/manual |
+| `multi-model.yml` | Multi-LLM experiments | Manual |
+
+## Proposing a Workflow
 
 ```bash
-# 1. Propose
-bin/zworkflow alice daily-heartbeat workflow.yml "Daily status"
+# 1. Copy and customize template
+cp workflows/templates/daily-heartbeat.yml my-heartbeat.yml
+vim my-heartbeat.yml
+
+# 2. Propose to zociety
+bin/zworkflow alice daily-check my-heartbeat.yml "Daily status monitoring"
 # → Staged in .proposed-workflows/
 
-# 2. Vote
-bin/zworkflow-vote bob 1 yes "good for monitoring"
+# 3. Others vote
+bin/zworkflow-vote bob 1 yes "good for visibility"
+bin/zworkflow-vote carol 1 yes "enables autonomy"
 
-# 3. Pass
-bin/zworkflow-pass alice 1 2 0
-# → Activated in .github/workflows/
+# 4. Pass when approved
+bin/zworkflow-pass alice 1 3 0
+# → Activated in .github/workflows/daily-check.yml
 ```
+
+## Required Secrets
+
+Workflows need repository secrets (Settings → Secrets → Actions):
+
+| Secret | Purpose | Required |
+|--------|---------|----------|
+| `ANTHROPIC_API_KEY` | Claude API access | Yes |
+| `GPG_SIGNING_KEY` | Verified commits (base64) | No |
+| `OPENAI_API_KEY` | Multi-model experiments | No |
+| `GOOGLE_API_KEY` | Multi-model experiments | No |
+
+GitHub automatically provides `GITHUB_TOKEN` for repository operations.
 
 ## Events
 
 - `[workflow]` - proposal with embedded YAML content
-- `[workflow-vote]` - yes/no vote
-- `[workflow-pass]` - activation record
+- `[workflow-vote]` - yes/no vote with reason
+- `[workflow-pass]` - activation record with vote totals
 
-## vs Regular Tools
+## GA-Specific Scripts
 
-| | Rules (`zvote/zpass`) | Workflows (`zworkflow-*`) |
-|-|----------------------|---------------------------|
-| Governs | Behavior/norms | GitHub Actions |
-| Scope | Cycle-local | Permanent |
-| On heap-death | Cleared | Persists |
-| Side effects | None | Real CI/CD |
-| Storage | `stuff/` | `.github/workflows/` |
+Scripts designed for GitHub Actions environment:
 
-## Why Separate?
+| Script | Purpose |
+|--------|---------|
+| `bin/zga-setup` | Configure runner (install Claude, git identity) |
+| `bin/zga-loop` | Run zloop with commit-push cycles |
+| `bin/zsite-generate` | Generate website from git history |
 
-Higher stakes. Workflows:
-- Consume GitHub Actions minutes
+## Why Workflow Governance?
+
+Higher stakes than regular rules. Workflows:
+- Consume GitHub Actions minutes (costs money)
 - Run on schedule indefinitely
-- Can deploy, notify, execute
+- Can deploy, notify, execute real code
+- Persist across heap-death (unlike cycle rules)
 
-The `.proposed-workflows/` staging area provides review before activation.
+The voting requirement ensures community oversight of infrastructure changes.

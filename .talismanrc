@@ -39,14 +39,14 @@ fileignoreconfig:
   checksum: f4720b2a24ba738c3191c3c4896e34fc8a2a88186e0d40e6f266baefca758c5f
 - filename: .serena/memories/project_overview.md
   checksum: 9efc1746a3a10c60a935c7cb4bcc253556e35560f652fb10366628eed0e8ed22
-- filename: workflows/templates/weekly-session.yml
-  checksum: 2cfe92ff62e07b68a5f5f263eb69696b0fc9d65190a83f3ad6bdc3dbca0fcbe2
-- filename: workflows/templates/daily-heartbeat.yml
-  checksum: 8bcb4139f0a2bb312cf0c15477ec05133b46da89988f9a89ce8e1bacb1cbf4c3
 - filename: bin/zga-setup
-  checksum: 518d2c07c645ec77425b6bc5eb1861bbd650a1fb5503cbf220df91071be2248c
+  checksum: 03b2152299e6fb89d29a2b533e40487a2ea3bb4196c2a766a613039462b616d2
+- filename: workflows/templates/weekly-session.yml
+  checksum: 35b1e73c1a6649a01ba193c3fe1a3f01799a0acb0a11cdcf546076d57cb5e00a
 - filename: workflows/templates/multi-model.yml
-  checksum: bd5a8f8e37031dccf9194c05af7f2f12ed0abcda00481d4cf2c309b70d4e8747
+  checksum: a902e9690749fad84dcd2e86f88f1c471c2a56fea1c9cff28139ea8d2b0036d9
+- filename: workflows/templates/daily-heartbeat.yml
+  checksum: 2f58757752c0018f6f52917343c502bfe00db9a5b98898059a520f65d955c688
 - filename: workflows/templates/autonomous-loop.yml
-  checksum: eb458a87fd52499ade569f23c649aff9ca6438f7aa8f59867463edc2933f004d
+  checksum: 40187bc3c26bdb64817148b5ffb7c97621b0643d468b1d819f905aed5786ca26
 version: "1.0"

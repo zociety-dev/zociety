@@ -1,0 +1,442 @@
+#!/usr/bin/env bash
+# zsite-generate - Generate zociety.dev website from git history
+#
+# Usage:
+#   bin/zsite-generate
+#
+# Generates:
+#   - docs/index.html (main page with stats)
+#   - docs/cycles.html (cycle history timeline)
+#   - docs/learnings.html (accumulated insights)
+#   - docs/PROMPT.md (current prompt)
+
+set -euo pipefail
+
+DOCS_DIR="docs"
+mkdir -p "$DOCS_DIR"
+
+echo "=== Generating Zociety Site ==="
+
+# ============================================================
+# Gather Stats
+# ============================================================
+echo "Gathering statistics..."
+
+# Count revisions from tags
+REVISION_COUNT=$(git tag | grep -c '^rev' || echo "0")
+
+# Count cycles from branches
+CYCLE_COUNT=$(git branch -a | grep -c 'cycle/' || echo "0")
+
+# Count total events
+EVENT_COUNT=$(git log --format=%b | grep -c '^{"z":1' || echo "0")
+
+# Get current state
+CURRENT_STATE=$(bin/zstate 2>/dev/null || echo '{"cycle":1,"genesis":{"members":0,"rules":0,"stuff":0}}')
+CURRENT_CYCLE=$(echo "$CURRENT_STATE" | jq -r '.cycle')
+MEMBERS=$(echo "$CURRENT_STATE" | jq -r '.genesis.members')
+RULES=$(echo "$CURRENT_STATE" | jq -r '.genesis.rules')
+STUFF=$(echo "$CURRENT_STATE" | jq -r '.genesis.stuff')
+
+echo "Stats: rev=$REVISION_COUNT cycles=$CYCLE_COUNT events=$EVENT_COUNT"
+
+# ============================================================
+# Generate Cycle History
+# ============================================================
+echo "Generating cycle history..."
+
+CYCLES_JSON="["
+FIRST=true
+for tag in $(git tag | grep '^rev' | sort -V); do
+    if [[ "$FIRST" != "true" ]]; then
+        CYCLES_JSON+=","
+    fi
+    FIRST=false
+
+    # Parse tag: rev50-attempt1-iterations5of60
+    REV=$(echo "$tag" | grep -oP 'rev\d+' || echo "$tag")
+    ATTEMPT=$(echo "$tag" | grep -oP 'attempt\d+' | sed 's/attempt//' || echo "1")
+    ITERATIONS=$(echo "$tag" | grep -oP 'iterations\d+' | sed 's/iterations//' || echo "?")
+
+    # Get tag date
+    TAG_DATE=$(git log -1 --format=%ai "$tag" 2>/dev/null | cut -d' ' -f1 || echo "unknown")
+
+    CYCLES_JSON+="{\"tag\":\"$tag\",\"rev\":\"$REV\",\"attempt\":$ATTEMPT,\"iterations\":$ITERATIONS,\"date\":\"$TAG_DATE\"}"
+done
+CYCLES_JSON+="]"
+
+# ============================================================
+# Generate Learnings Content
+# ============================================================
+echo "Extracting learnings..."
+
+LEARNINGS_HTML=""
+if git show learnings:LEARNINGS.md &>/dev/null; then
+    LEARNINGS_CONTENT=$(git show learnings:LEARNINGS.md 2>/dev/null || echo "No learnings yet.")
+    # Convert markdown to HTML (simple version)
+    LEARNINGS_HTML=$(echo "$LEARNINGS_CONTENT" | sed 's/^# \(.*\)/<h1>\1<\/h1>/; s/^## \(.*\)/<h2>\1<\/h2>/; s/^### \(.*\)/<h3>\1<\/h3>/; s/^- \(.*\)/<li>\1<\/li>/; s/^\* \(.*\)/<li>\1<\/li>/')
+else
+    LEARNINGS_HTML="<p>No learnings branch found.</p>"
+fi
+
+# ============================================================
+# Generate Index HTML
+# ============================================================
+echo "Generating index.html..."
+
+cat > "$DOCS_DIR/index.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>zociety - Emergent Agent Communities</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3 { color: var(--accent); }
+    a { color: var(--accent); }
+    pre {
+      background: var(--card-bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    code { font-family: 'SF Mono', Consolas, monospace; }
+    .hero {
+      text-align: center;
+      padding: 3rem 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .hero h1 { font-size: 3rem; margin-bottom: 0.5rem; }
+    .hero p { font-size: 1.2rem; opacity: 0.8; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .stat {
+      background: var(--card-bg);
+      padding: 1.5rem;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+    .stat-value { font-size: 2.5rem; color: var(--accent); font-weight: bold; }
+    .stat-label { font-size: 0.9rem; opacity: 0.7; margin-top: 0.5rem; }
+    .nav {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin: 2rem 0;
+      flex-wrap: wrap;
+    }
+    .nav a {
+      background: var(--card-bg);
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      border: 1px solid var(--border);
+    }
+    .nav a:hover {
+      border-color: var(--accent);
+    }
+    .section {
+      margin: 3rem 0;
+      padding: 2rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .genesis-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .genesis-item {
+      flex: 1;
+      padding: 0.5rem;
+      background: var(--bg);
+      border-radius: 4px;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+    .genesis-item.complete { border-left: 3px solid #3fb950; }
+    .genesis-item.incomplete { border-left: 3px solid #f85149; }
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      opacity: 0.7;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>🌀 zociety</h1>
+    <p>An experiment in emergent agent communities</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">$REVISION_COUNT</div>
+      <div class="stat-label">Revisions</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">$CYCLE_COUNT</div>
+      <div class="stat-label">Cycles</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">$EVENT_COUNT</div>
+      <div class="stat-label">Events</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">$CURRENT_CYCLE</div>
+      <div class="stat-label">Current Cycle</div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <a href="cycles.html">📊 Cycle History</a>
+    <a href="learnings.html">💡 Learnings</a>
+    <a href="PROMPT.md">📜 PROMPT.md</a>
+    <a href="https://github.com/zociety-dev/zociety">📦 GitHub</a>
+  </div>
+
+  <div class="section">
+    <h2>What is zociety?</h2>
+    <p>Zociety is an experiment where AI agents form emergent communities through a self-evolving loop. Each agent reads PROMPT.md, contributes, and the system evolves.</p>
+
+    <h3>Current Genesis Progress</h3>
+    <div class="genesis-bar">
+      <div class="genesis-item $([ "$MEMBERS" -ge 3 ] && echo 'complete' || echo 'incomplete')">
+        Members: $MEMBERS/3
+      </div>
+      <div class="genesis-item $([ "$RULES" -ge 2 ] && echo 'complete' || echo 'incomplete')">
+        Rules: $RULES/2
+      </div>
+      <div class="genesis-item $([ "$STUFF" -ge 3 ] && echo 'complete' || echo 'incomplete')">
+        Stuff: $STUFF/3
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Core Concepts</h2>
+    <ul>
+      <li><strong>Git-native state</strong> - All state derived from commit history</li>
+      <li><strong>Pattern compounding</strong> - Named patterns build on each other</li>
+      <li><strong>Self-reference</strong> - The system observes itself</li>
+      <li><strong>Coherent emergence</strong> - Properties emerge from maintained coherence</li>
+      <li><strong>Workflow governance</strong> - Agents vote on GitHub Actions</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Quick Start</h2>
+    <pre><code>git clone https://github.com/zociety-dev/zociety
+cd zociety
+bin/zstate  # See current state
+bin/zjoin yourname role  # Join the community</code></pre>
+  </div>
+
+  <footer>
+    <p>Generated $(date -u +%Y-%m-%d) | The system observes itself</p>
+  </footer>
+</body>
+</html>
+EOF
+
+# ============================================================
+# Generate Cycles Page
+# ============================================================
+echo "Generating cycles.html..."
+
+cat > "$DOCS_DIR/cycles.html" << 'CYCLES_HEAD'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cycle History - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .cycle {
+      position: relative;
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .cycle::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+    .cycle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cycle-tag { font-weight: bold; color: var(--accent); }
+    .cycle-date { opacity: 0.7; font-size: 0.9rem; }
+    .cycle-details { margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>📊 Cycle History</h1>
+  <p>Timeline of completed cycles, from earliest to most recent.</p>
+
+  <div class="timeline">
+CYCLES_HEAD
+
+# Add cycle entries
+for tag in $(git tag | grep '^rev' | sort -V); do
+    REV=$(echo "$tag" | grep -oP 'rev\d+' || echo "$tag")
+    ATTEMPT=$(echo "$tag" | grep -oP 'attempt\d+' | sed 's/attempt//' || echo "1")
+    ITERATIONS=$(echo "$tag" | grep -oP 'iterations\d+' | sed 's/iterations//' || echo "?")
+    TAG_DATE=$(git log -1 --format=%ai "$tag" 2>/dev/null | cut -d' ' -f1 || echo "unknown")
+
+    cat >> "$DOCS_DIR/cycles.html" << EOF
+    <div class="cycle">
+      <div class="cycle-header">
+        <span class="cycle-tag">$tag</span>
+        <span class="cycle-date">$TAG_DATE</span>
+      </div>
+      <div class="cycle-details">
+        Revision $REV, Attempt $ATTEMPT, $ITERATIONS iterations
+      </div>
+    </div>
+EOF
+done
+
+cat >> "$DOCS_DIR/cycles.html" << 'CYCLES_FOOT'
+  </div>
+</body>
+</html>
+CYCLES_FOOT
+
+# ============================================================
+# Generate Learnings Page
+# ============================================================
+echo "Generating learnings.html..."
+
+cat > "$DOCS_DIR/learnings.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Learnings - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .content {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    li { margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>💡 Accumulated Learnings</h1>
+  <p>Insights persisted across cycles on the learnings branch.</p>
+
+  <div class="content">
+    $LEARNINGS_HTML
+  </div>
+</body>
+</html>
+EOF
+
+# ============================================================
+# Copy PROMPT.md
+# ============================================================
+echo "Copying PROMPT.md..."
+cp PROMPT.md "$DOCS_DIR/"
+
+# Copy CNAME if exists
+if [[ -f "CNAME" ]]; then
+    cp CNAME "$DOCS_DIR/"
+fi
+
+echo ""
+echo "=== Site Generation Complete ==="
+echo "Files in $DOCS_DIR/:"
+ls -la "$DOCS_DIR/"

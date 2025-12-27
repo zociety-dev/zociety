@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# zga-loop - Run zloop in GitHub Actions with commit-push cycles
+#
+# Usage:
+#   bin/zga-loop [max-iterations]
+#
+# This wrapper handles the GA-specific concerns:
+# - Pulls latest before each iteration
+# - Pushes after successful commits
+# - Handles conflicts gracefully
+#
+# Requires: ANTHROPIC_API_KEY in environment
+
+set -euo pipefail
+
+MAX_ITERATIONS="${1:-30}"
+ITERATION=0
+PROMPT="Read PROMPT.md and follow its instructions."
+
+echo "=== Zociety GA Loop ==="
+echo "Max iterations: $MAX_ITERATIONS"
+echo ""
+
+# Ensure we have latest
+git pull --rebase || git pull --ff-only || true
+
+while true; do
+    ITERATION=$((ITERATION + 1))
+
+    # Write state for zheap-death to read
+    mkdir -p .claude
+    cat > .claude/zloop.state << EOF
+iteration: $ITERATION
+max: $MAX_ITERATIONS
+runner: github-actions
+EOF
+
+    # Check completion BEFORE each iteration
+    if bin/zloop-complete; then
+        echo ""
+        echo "=== Loop Complete ==="
+        echo "Iterations: $ITERATION"
+        bin/zstate | jq '{action, phase, genesis}'
+        rm -f .claude/zloop.state
+
+        # Final push
+        git push origin HEAD || echo "Warning: final push failed"
+        exit 0
+    fi
+
+    # Check iteration limit
+    if [[ $ITERATION -gt $MAX_ITERATIONS ]]; then
+        echo ""
+        echo "=== Max Iterations Reached ==="
+        echo "Stopped after $MAX_ITERATIONS iterations"
+        bin/zstate | jq '{action, phase, genesis}'
+
+        # Push whatever we have
+        git push origin HEAD || echo "Warning: final push failed"
+        exit 1
+    fi
+
+    echo ""
+    echo "=== Iteration $ITERATION/$MAX_ITERATIONS ==="
+    bin/zstate | jq -c '{action, phase}'
+    echo ""
+
+    # Run one Claude iteration
+    # --print outputs result without interactive mode
+    if claude --print "$PROMPT" 2>&1; then
+        # Push after successful iteration (if there are changes)
+        if ! git diff --quiet HEAD 2>/dev/null; then
+            echo ""
+            echo "Pushing changes..."
+            git push origin HEAD || {
+                echo "Push failed, trying pull-rebase-push..."
+                git pull --rebase && git push origin HEAD
+            } || echo "Warning: push failed, continuing..."
+        fi
+    else
+        echo "Warning: Claude iteration failed, continuing..."
+    fi
+
+    # Small delay to avoid rate limits
+    sleep 2
+done

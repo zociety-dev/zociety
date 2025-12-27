@@ -1,0 +1,105 @@
+# Multi-Model Session Workflow
+#
+# Experimental: Run cycles with different LLM providers.
+# Each iteration can use a different model, creating diversity
+# in perspectives and reasoning patterns.
+#
+# NOTE: This requires additional API keys for each provider.
+# Currently experimental - not all providers may work.
+#
+# Required secrets:
+#   - ANTHROPIC_API_KEY: Claude API key
+#   - OPENAI_API_KEY: OpenAI API key (optional)
+#   - GOOGLE_API_KEY: Google AI API key (optional)
+
+name: Multi-Model Session
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: 'Max iterations'
+        required: false
+        default: '15'
+        type: string
+      models:
+        description: 'Models to use (comma-separated)'
+        required: false
+        default: 'claude'
+        type: string
+
+concurrency:
+  group: zociety-multimodel
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  multi-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Environment
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bin/zga-setup
+
+      - name: Check Available Models
+        id: models
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          AVAILABLE="claude"
+
+          if [[ -n "$OPENAI_API_KEY" ]]; then
+            AVAILABLE="$AVAILABLE,openai"
+            echo "OpenAI available"
+          fi
+
+          if [[ -n "$GOOGLE_API_KEY" ]]; then
+            AVAILABLE="$AVAILABLE,google"
+            echo "Google AI available"
+          fi
+
+          echo "available=$AVAILABLE" >> $GITHUB_OUTPUT
+          echo "Available models: $AVAILABLE"
+
+      - name: Run Multi-Model Loop
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          # For now, just run with Claude
+          # Future: rotate between models based on input
+
+          MAX="${{ github.event.inputs.max_iterations || '15' }}"
+          MODELS="${{ github.event.inputs.models || 'claude' }}"
+
+          echo "Models requested: $MODELS"
+          echo "Available: ${{ steps.models.outputs.available }}"
+          echo ""
+
+          # Run standard loop (multi-model rotation is future work)
+          bin/zga-loop "$MAX"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=== Multi-Model Session Complete ==="
+          bin/zstate | jq .

@@ -1,0 +1,103 @@
+# Weekly Session Workflow
+#
+# Full weekly autonomous session. Runs multiple cycles with batch processing.
+# This is the primary "substantive work" workflow.
+#
+# Schedule: Sunday 00:00 UTC
+# Duration: Up to 3 hours
+# Batch: 3 cycles per session
+#
+# Required secrets:
+#   - ANTHROPIC_API_KEY: Claude API key
+
+name: Weekly Session
+
+on:
+  # Weekly on Sunday midnight UTC
+  schedule:
+    - cron: '0 0 * * 0'
+
+  # Manual trigger with options
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: 'Max iterations per cycle'
+        required: false
+        default: '30'
+        type: string
+      batch_size:
+        description: 'Number of cycles to run'
+        required: false
+        default: '3'
+        type: string
+
+concurrency:
+  group: zociety-weekly
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  weekly-session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 3 hour max
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Zociety Environment
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+        run: bin/zga-setup
+
+      - name: Pre-Session State
+        run: |
+          echo "=== Weekly Session Starting ==="
+          echo "Date: $(date -u)"
+          echo ""
+          bin/zstate | jq .
+          echo ""
+          echo "=== Recent Tags ==="
+          git tag | grep '^rev' | tail -5
+
+      - name: Run Weekly Session
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          MAX="${{ github.event.inputs.max_iterations || '30' }}"
+          BATCH="${{ github.event.inputs.batch_size || '3' }}"
+
+          echo "Configuration:"
+          echo "  Max iterations per cycle: $MAX"
+          echo "  Batch size: $BATCH cycles"
+          echo ""
+
+          # Run the loop - it handles batching via heap-death
+          bin/zga-loop "$MAX"
+
+      - name: Post-Session Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=== Weekly Session Complete ==="
+          echo "Date: $(date -u)"
+          echo ""
+          echo "Final State:"
+          bin/zstate | jq .
+          echo ""
+          echo "=== New Tags ==="
+          git tag | grep '^rev' | tail -5
+          echo ""
+          echo "=== Recent Commits ==="
+          git log --oneline -15
