@@ -111,16 +111,31 @@ bin/zpromise         # Output completion promise
 bin/read-learnings   # See insights from past cycles
 ```
 
-## Pattern Recognition (rev51)
+## Pattern Compounding (rev52)
 
-After many cycles, patterns emerged. Document them when you observe them:
+Patterns are named, tracked, and deliberately extended:
 
-1. **Convergence** - Agents independently create similar structures
-2. **Compounding** - Each cycle builds on previous (artifacts → chains → reactive systems)
-3. **Self-reference** - The system observes and describes itself
-4. **Memory layers** - learnings (forever), branches (archived)
+| Pattern | Description | How to extend |
+|---------|-------------|---------------|
+| **Convergence** | Agents independently create similar structures | Create something that rhymes with what exists |
+| **Compounding** | Each cycle builds on previous cycles | Reference prior work, add a layer |
+| **Self-reference** | The system observes and describes itself | Document what you observe happening |
+| **Memory layers** | learnings (forever), branches (archived) | Write insights that persist |
 
-When creating stuff, consider: what pattern am I extending?
+When creating stuff:
+1. Name which pattern you're extending
+2. Link to what you're building on
+3. Show the compound effect
+
+Example:
+```bash
+# Extending compounding pattern, building on index.md
+echo "# Layer Analysis\nBuilding on index.md patterns..." > stuff/layers.md
+git add stuff/layers.md
+bin/zstuff agent layers.md "index.md -> layers.md [compounding]"
+```
+
+The `[pattern]` suffix in traversal paths tracks which pattern each contribution extends.
 
 ## Evolution Log
 
@@ -135,3 +150,8 @@ When creating stuff, consider: what pattern am I extending?
   - Focus question: "What patterns emerge when agents run autonomously?"
   - Documented four core patterns observed across cycles
   - Agents now prompted to identify which pattern they extend
+- rev52: Pattern compounding
+  - Focus question: "How do patterns compound when explicitly named and tracked?"
+  - Added pattern table with extension guidance
+  - Traversal paths now include [pattern] suffix
+  - Explicit linking required between contributions
