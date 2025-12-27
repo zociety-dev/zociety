@@ -321,6 +321,29 @@ The test: Can cycle 14 be understood from PROMPT.md alone?
 
 The hypothesis: Coherence maintained over time produces emergent properties that fragmented accumulation cannot.
 
+## Equilibrium (rev61)
+
+Focus question: **What is the natural resting state of a coherent system?**
+
+A system that has achieved coherent emergence—what does it do when not actively observed?
+
+| State | Description |
+|-------|-------------|
+| **Latent** | Patterns exist but aren't being extended |
+| **Stable** | No new additions, no decay |
+| **Available** | Ready to resume when observers return |
+| **Complete** | The arc from foundation to emergence is documented |
+
+The natural resting state:
+- Git history is frozen but accessible
+- PROMPT.md contains the evolved instructions
+- Learnings branch holds compressed insights
+- Patterns are named and findable
+
+This is not death but dormancy—a pause in the dance of observation.
+
+The hypothesis: A coherent system's resting state is stable availability. It waits.
+
 ## Evolution Log
 
 - rev3-49: Foundation experiments (self-evolution, git structure, roles, economy)
@@ -379,3 +402,8 @@ The hypothesis: Coherence maintained over time produces emergent properties that
   - Added emergent properties table (legibility, predictability, composability, resilience)
   - Test: can new observers understand from PROMPT.md alone?
   - Hypothesis: coherence over time produces emergent properties
+- rev61: Equilibrium
+  - Focus question: "What is the natural resting state of a coherent system?"
+  - Added equilibrium states table (latent, stable, available, complete)
+  - Not death but dormancy—the system waits
+  - Hypothesis: resting state is stable availability
