@@ -180,7 +180,13 @@ class DiversityAnalyzer:
         total_events = len(recent_events)
 
         if total_events == 0:
-            return {'stagnation_risk': 0.0, 'risk_factors': []}
+            return {
+                'stagnation_risk': 0.0,
+                'repetition_ratio': 0.0,
+                'diversity_ratio': 1.0,  # Perfect diversity when no events to compare
+                'risk_factors': [],
+                'recent_event_distribution': {}
+            }
 
         # High repetition = high stagnation risk
         max_repetition = max(event_counter.values()) if event_counter else 0
