@@ -79,6 +79,24 @@ ensure_image() {
     fi
 }
 
+# Determine if we need interactive mode
+needs_interactive() {
+    local cmd="$1"
+    case "$cmd" in
+        claude|bash|login|sh)
+            return 0  # true - needs interactive
+            ;;
+        *)
+            # Check if it's a script that runs claude internally
+            # For these, we want interactive terminal for output but the script handles claude
+            if [[ "$cmd" == bin/zloop* ]]; then
+                return 0  # zloop needs terminal for progress output
+            fi
+            return 1  # false - doesn't need interactive
+            ;;
+    esac
+}
+
 run_container() {
     ensure_image
     check_prereqs
@@ -106,7 +124,15 @@ run_container() {
         volume_args+=(--volume "$CLAUDE_PLUGINS_DIR:/home/agent/.claude-plugins:ro")
     fi
 
-    podman run --rm -it \
+    # Determine interactive mode
+    local interactive_args=()
+    if needs_interactive "${cmd[0]}"; then
+        interactive_args=(-it)
+    else
+        interactive_args=(-t)  # just allocate TTY for color output
+    fi
+
+    podman run --rm "${interactive_args[@]}" \
         --name "$CONTAINER_NAME" \
         --read-only \
         --tmpfs /tmp:size=200M,mode=1777 \
@@ -147,7 +173,7 @@ FIRST TIME SETUP (Claude Max):
     bin/zociety login
 
 RUNNING THE AGENT LOOP:
-    bin/zloop 60       # Run loop with max 60 iterations
+    bin/zociety bin/zloop 60   # Run loop with max 60 iterations
 
 PLUGINS:
     Set CLAUDE_PLUGINS_DIR to mount plugins into container:
