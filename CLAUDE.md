@@ -15,7 +15,11 @@ Note: It's "zociety" not "society".
 ### Native zloop (recommended)
 
 ```bash
+# Direct execution
 bin/zloop 60
+
+# Containerized execution
+bin/zociety bin/zloop 60
 ```
 
 Zociety's own loop with dynamic completion checking:
@@ -23,11 +27,21 @@ Zociety's own loop with dynamic completion checking:
 - No static promise strings - uses exit codes
 - Checks `bin/zstate` action field each iteration
 - Stops when action is `stop` or `promise`
+- Runs without MCP servers (uses `--strict-mcp-config` for isolation)
+- Each iteration has a 5-minute timeout (configurable via `ZLOOP_TIMEOUT`)
 
 | Script | Purpose |
 |--------|---------|
 | `bin/zloop [n]` | Run autonomous loop, max n iterations |
 | `bin/zloop-complete` | Check if loop should stop (exit 0 = yes) |
+
+### zloop Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZLOOP_TIMEOUT` | 300 | Timeout per iteration in seconds |
+| `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
+| `ZLOOP_VERBOSE` | 0 | Pass --verbose to claude (1 = on) |
 
 ## Git-Native Event Sourcing (rev50+)
 
