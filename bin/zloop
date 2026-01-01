@@ -82,7 +82,6 @@ EOF
     --dangerously-skip-permissions
     --strict-mcp-config
     --no-session-persistence
-    --tools default
   )
 
   if [[ "$VERBOSE" == "1" ]]; then
@@ -95,9 +94,10 @@ EOF
 
   # Run one Claude iteration
   # The || true prevents loop exit on non-zero claude return codes
+  # Note: </dev/null closes stdin to prevent claude from expecting interactive input
   if command -v timeout &>/dev/null; then
     debug "Using timeout wrapper (${TIMEOUT_SECS}s)"
-    timeout "$TIMEOUT_SECS" claude "${CLAUDE_ARGS[@]}" 2>&1 || {
+    timeout "$TIMEOUT_SECS" claude "${CLAUDE_ARGS[@]}" </dev/null 2>&1 || {
       exit_code=$?
       if [[ $exit_code -eq 124 ]]; then
         echo "[zloop] Iteration timed out after ${TIMEOUT_SECS}s" >&2
@@ -106,7 +106,7 @@ EOF
       fi
     }
   else
-    claude "${CLAUDE_ARGS[@]}" 2>&1 || {
+    claude "${CLAUDE_ARGS[@]}" </dev/null 2>&1 || {
       debug "Claude exited with code $?"
     }
   fi

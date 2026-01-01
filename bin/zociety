@@ -79,20 +79,22 @@ ensure_image() {
     fi
 }
 
-# Determine if we need interactive mode
+# Determine if we need interactive mode (-i flag)
+# Note: -t (TTY) is always used for colored output
+# -i enables signal forwarding (ctrl-C) and is needed for long-running scripts
 needs_interactive() {
     local cmd="$1"
     case "$cmd" in
         claude|bash|login|sh)
-            return 0  # true - needs interactive
+            return 0  # true - needs interactive stdin
             ;;
         *)
-            # Check if it's a script that runs claude internally
-            # For these, we want interactive terminal for output but the script handles claude
+            # Scripts that run claude internally need -i for ctrl-C to work
+            # The scripts themselves use </dev/null to prevent stdin issues
             if [[ "$cmd" == bin/zloop* ]]; then
-                return 0  # zloop needs terminal for progress output
+                return 0  # zloop needs -i for signal handling
             fi
-            return 1  # false - doesn't need interactive
+            return 1  # false - just needs TTY for output
             ;;
     esac
 }
