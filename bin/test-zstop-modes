@@ -1,0 +1,702 @@
+#!/bin/bash
+# test-zstop-modes: Dry-run harness for the bin/zloop stop modes
+#
+# Usage:
+#   bin/test-zstop-modes [--keep]
+#   bin/test-zstop-modes -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway directory behind (path printed) for inspection
+#
+# Builds a throwaway git repo under mktemp with a copy of this repo's bin/, a
+# fake `claude` on PATH that prints one line and exits 0, and synthetic
+# [heap-death]/[direction] events (via bin/zevent), cycle/* branches with
+# stuff/ trees, and .claude/zloop.state / .claude/STOP as each case needs.
+# Every case asserts the exit code of bin/zloop-complete (or bin/zloop) and
+# the STOP:/CONTINUE: verdict line the dispatcher forwards to stderr.
+# See docs/SPEC-zstop-modes.md "Tests".
+
+set -e
+
+SRC_BIN="$(cd "$(dirname "$0")" && pwd)"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --keep)
+      KEEP=1
+      ;;
+    *)
+      echo "test-zstop-modes: unknown argument '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zstop-test.XXXXXX")
+OUT="$TMP/out"
+ERR="$TMP/err"
+FAKE_LOG="$TMP/claude-ran.log"
+FAKEBIN="$TMP/fakebin"
+export FAKE_CLAUDE_LOG="$FAKE_LOG"
+
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then
+    echo "Kept: $TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+PASSED=0
+FAILED=0
+RC=0
+
+#############################################
+# Fixtures
+#############################################
+
+# Fake claude: one line on stdout, exit 0. Records each run in FAKE_CLAUDE_LOG.
+# With FAKE_CLAUDE_HEAP_DEATH=1 it also records a [heap-death] event in the
+# cwd repo (bin/zloop runs claude in the repo root), so a loop case can watch
+# the budget fill up. With FAKE_CLAUDE_PROMISE=1 it records a [promise] event
+# instead, so action becomes "stop" after its run.
+mkdir -p "$FAKEBIN" "$TMP/nohooks"
+cat > "$FAKEBIN/claude" <<'EOF'
+#!/bin/bash
+set -e
+echo "fake claude ran"
+echo "$(date +%s) $*" >> "$FAKE_CLAUDE_LOG"
+if [[ "${FAKE_CLAUDE_HEAP_DEATH:-0}" == "1" ]]; then
+  bin/zevent heap-death fake "synthetic heap-death" '{"batch_remaining":2}' \
+    >> "$FAKE_CLAUDE_LOG.err" 2>&1
+fi
+if [[ "${FAKE_CLAUDE_PROMISE:-0}" == "1" ]]; then
+  bin/zevent promise fake "cycle complete" '{"terminal":true}' \
+    >> "$FAKE_CLAUDE_LOG.err" 2>&1
+fi
+exit 0
+EOF
+chmod +x "$FAKEBIN/claude"
+export PATH="$FAKEBIN:$PATH"
+
+# fresh_repo <name>: new throwaway repo with bin/ copied in, one genesis
+# commit on main, cwd moved into it. Predicates resolve bin/zstate relative
+# to cwd and the dispatcher resolves bin/zstop-* relative to its own dir, so
+# a real copy under the repo root satisfies both. .claude/ is gitignored as in
+# the real repo: bin/zevent stages with `git add -A`, so without this the
+# [heap-death] commits would carry .claude/zloop.state and zheap-death's plain
+# `rm -f` of the untracked state file would not be what the fixture exercises.
+fresh_repo() {
+  REPO="$TMP/repo-$1"
+  mkdir -p "$REPO/bin" "$REPO/.claude"
+  cp -R "$SRC_BIN/." "$REPO/bin/"
+  cd "$REPO"
+  git init -q .
+  git symbolic-ref HEAD refs/heads/main
+  git config user.name tester
+  git config user.email tester@example.com
+  git config commit.gpgsign false
+  # Hooks from the user's init.templateDir (e.g. pre-commit) have no config
+  # in the fixture and only add noise; point at an empty hooks dir instead.
+  git config core.hooksPath "$TMP/nohooks"
+  echo "# fixture prompt" > PROMPT.md
+  printf '.claude/\n' > .gitignore
+  git add .gitignore PROMPT.md
+  git commit -q -m "genesis fixture"
+  rm -f "$FAKE_LOG" "$FAKE_LOG.err"
+  unset FAKE_CLAUDE_HEAP_DEATH FAKE_CLAUDE_PROMISE
+}
+
+# heap_death <data_json>: record a [heap-death] event via bin/zevent, quietly
+heap_death() {
+  bin/zevent heap-death tester "synthetic heap-death" "$1" >/dev/null 2>&1
+}
+
+# write_state <start_sha> <mode_list>: what bin/zloop writes each iteration
+write_state() {
+  mkdir -p .claude
+  cat > .claude/zloop.state <<EOF
+iteration: 1
+max: 3
+start: $1
+mode: $2
+EOF
+}
+
+# cycle_branch <rev-attempt> [stuff files...]: clear stuff/ (as bin/zheap-death
+# does at every cycle boundary), commit the given files under it (none = empty
+# tree) and point cycle/<rev-attempt> at the commit. File content is "# <name>"
+# plus $CYCLE_NOTE, so the same file list gives an identical tree unless
+# CYCLE_NOTE differs: `CYCLE_NOTE=v2 cycle_branch rev1-attempt2 index.md`.
+# With CYCLE_REMOTE=1 the ref is refs/remotes/origin/cycle/<rev-attempt>
+# instead (a remote-tracking ref needs no configured remote).
+cycle_branch() {
+  local name="$1"
+  shift
+  git rm -r -q --ignore-unmatch stuff
+  rm -rf stuff
+  mkdir -p stuff
+  for f in "$@"; do
+    echo "# $f ${CYCLE_NOTE:-}" > "stuff/$f"
+    git add "stuff/$f"
+  done
+  git commit -q --allow-empty -m "fixture cycle $name"
+  if [[ "${CYCLE_REMOTE:-0}" == "1" ]]; then
+    git update-ref "refs/remotes/origin/cycle/$name" HEAD
+  else
+    git branch "cycle/$name"
+  fi
+}
+
+#############################################
+# Assertions
+#############################################
+
+# run <cmd...>: capture rc, stdout to $OUT, stderr to $ERR
+run() {
+  RC=0
+  "$@" >"$OUT" 2>"$ERR" || RC=$?
+}
+
+pass() {
+  echo "  ✓ $1"
+  PASSED=$((PASSED + 1))
+}
+
+fail() {
+  echo "  ✗ $1"
+  FAILED=$((FAILED + 1))
+}
+
+assert_rc() {
+  if [[ "$RC" -eq "$1" ]]; then
+    pass "exit $RC"
+  else
+    fail "exit $RC (want $1)"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+# assert_err <ere>: stderr has a line matching; print the first match
+assert_err() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$ERR"); then
+    pass "stderr: $line"
+  else
+    fail "stderr lacks /$1/"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+assert_no_err() {
+  if grep -E -q -- "$1" "$ERR"; then
+    fail "stderr unexpectedly matches /$1/"
+  else
+    pass "stderr has no /$1/"
+  fi
+}
+
+assert_stdout_lines() {
+  local n
+  n=$(wc -l < "$OUT" | tr -d ' ')
+  if [[ "$n" -eq "$1" ]]; then
+    pass "stdout lines: $n"
+  else
+    fail "stdout lines: $n (want $1)"
+    sed 's/^/    stdout: /' "$OUT"
+  fi
+}
+
+assert_absent() {
+  if [[ -e "$1" ]]; then
+    fail "$1 still exists"
+  else
+    pass "$1 absent"
+  fi
+}
+
+# assert_eq <label> <got> <want>
+assert_eq() {
+  if [[ "$2" == "$3" ]]; then
+    pass "$1: $2"
+  else
+    fail "$1: $2 (want $3)"
+  fi
+}
+
+assert_claude_runs() {
+  local n=0
+  [[ -f "$FAKE_LOG" ]] && n=$(wc -l < "$FAKE_LOG" | tr -d ' ')
+  if [[ "$n" -eq "$1" ]]; then
+    pass "fake claude ran $n time(s)"
+  else
+    fail "fake claude ran $n time(s) (want $1)"
+  fi
+}
+
+#############################################
+# Cases
+#############################################
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety Stop Mode Dry-Run Harness    ║"
+echo "╚════════════════════════════════════════╝"
+echo "Throwaway: $TMP"
+echo ""
+
+echo "=== Case 1: action stop (promise event -> action=stop) ==="
+fresh_repo action-stop
+bin/zevent promise tester "cycle complete" '{"terminal":true}' >/dev/null 2>&1
+run bin/zloop-complete action
+assert_rc 0
+assert_err '^STOP: action action=stop$'
+echo ""
+
+echo "=== Case 2: action stop (heap-death batch_remaining=0 -> action=promise) ==="
+fresh_repo action-promise
+heap_death '{"batch_remaining":0}'
+run bin/zloop-complete action
+assert_rc 0
+assert_err '^STOP: action action=promise$'
+echo ""
+
+echo "=== Case 3: action continue (no events -> action=join) ==="
+fresh_repo action-continue
+run bin/zloop-complete action
+assert_rc 1
+assert_err '^CONTINUE: action action=join$'
+echo ""
+
+echo "=== Case 4: budget stop (3 heap-deaths since start, default ZSTOP_BUDGET=3) ==="
+fresh_repo budget-stop
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":3}'
+heap_death '{"batch_remaining":2}'
+heap_death '{"batch_remaining":1}'
+write_state "$START" budget
+run bin/zloop-complete budget
+assert_rc 0
+assert_err "^STOP: budget heap-deaths=3/3 since ${START:0:7}$"
+echo ""
+
+echo "=== Case 5: budget continue (1 of ZSTOP_BUDGET=3) ==="
+fresh_repo budget-continue
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":2}'
+write_state "$START" budget
+run env ZSTOP_BUDGET=3 bin/zloop-complete budget
+assert_rc 1
+assert_err '^CONTINUE: budget heap-deaths=1/3 action=contribute$'
+echo ""
+
+echo "=== Case 6: budget stop on action=promise below budget ==="
+fresh_repo budget-promise
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":0}'
+write_state "$START" budget
+run bin/zloop-complete budget
+assert_rc 0
+assert_err '^STOP: budget action=promise heap-deaths=1/3$'
+echo ""
+
+echo "=== Case 7: budget error (no zloop.state -> exit 2) ==="
+fresh_repo budget-nostate
+rm -f .claude/zloop.state
+run bin/zloop-complete budget
+assert_rc 2
+assert_err '^zstop-budget: .*zloop.state not found'
+assert_err '^zloop-complete: predicate zstop-budget failed \(exit 2\)$'
+echo ""
+
+echo "=== Case 8: budget error (state without start key -> exit 2) ==="
+fresh_repo budget-nostart
+printf 'iteration: 1\nmax: 3\n' > .claude/zloop.state
+run bin/zloop-complete budget
+assert_rc 2
+assert_err '^zstop-budget: no start: key'
+echo ""
+
+echo "=== Case 9: converge stop (identical stuff trees across PATIENCE=2 cycles) ==="
+fresh_repo converge-stop
+cycle_branch rev1-attempt1 a.md
+cycle_branch rev1-attempt2 a.md
+cycle_branch rev1-attempt3 a.md
+run bin/zloop-complete converge
+assert_rc 0
+assert_err '^STOP: converge trivial=2/2 min_stuff=1 rev1-attempt2:trivial\(added=1\) rev1-attempt3:trivial\(added=1\)$'
+echo ""
+
+echo "=== Case 10: converge stop (trees differ but added < ZSTOP_MIN_STUFF) ==="
+fresh_repo converge-minstuff
+cycle_branch rev1-attempt1 a.md
+cycle_branch rev1-attempt2 b.md
+cycle_branch rev1-attempt3 c.md
+run env ZSTOP_MIN_STUFF=2 bin/zloop-complete converge
+assert_rc 0
+assert_err '^STOP: converge trivial=2/2 min_stuff=2 rev1-attempt2:trivial\(added=1\) rev1-attempt3:trivial\(added=1\)$'
+echo ""
+
+echo "=== Case 11: converge continue (stuff keeps growing) ==="
+fresh_repo converge-growing
+cycle_branch rev1-attempt1 a.md
+cycle_branch rev1-attempt2 b.md
+cycle_branch rev1-attempt3 c.md d.md
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge trivial=0/2 min_stuff=1 rev1-attempt2:added=1 rev1-attempt3:added=2$'
+echo ""
+
+echo "=== Case 12: converge continue (trivial run broken by a real cycle) ==="
+fresh_repo converge-reset
+cycle_branch rev1-attempt1 a.md
+cycle_branch rev1-attempt2
+cycle_branch rev1-attempt3 b.md
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge trivial=0/2 .*rev1-attempt2:trivial\(added=0\) rev1-attempt3:added=1$'
+echo ""
+
+echo "=== Case 13: converge continue (fewer branches than PATIENCE+1) ==="
+fresh_repo converge-few
+cycle_branch rev1-attempt1 a.md
+cycle_branch rev1-attempt2
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge cycles=2 need=3$'
+echo ""
+
+echo "=== Case 14: feedback stop (done:true on heap-death, [direction] follows) ==="
+fresh_repo feedback-stop
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":2,"done":true,"question":"settled?"}'
+HD=$(git rev-parse HEAD)
+bin/zevent direction tester "next cycle" '{"question":"settled?"}' >/dev/null 2>&1
+write_state "$START" feedback
+run bin/zloop-complete feedback
+assert_rc 0
+assert_err "^STOP: feedback done=true in ${HD:0:7}$"
+echo ""
+
+echo "=== Case 15: feedback continue (done:false) ==="
+fresh_repo feedback-continue
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":2,"done":false}'
+HD=$(git rev-parse HEAD)
+bin/zevent direction tester "next cycle" '{"question":"more?"}' >/dev/null 2>&1
+write_state "$START" feedback
+run bin/zloop-complete feedback
+assert_rc 1
+assert_err "^CONTINUE: feedback done=false in ${HD:0:7}$"
+echo ""
+
+echo "=== Case 16: feedback continue (no heap-death yet) ==="
+fresh_repo feedback-none
+START=$(git rev-parse HEAD)
+write_state "$START" feedback
+run bin/zloop-complete feedback
+assert_rc 1
+assert_err "^CONTINUE: feedback no heap-death since ${START:0:7}$"
+echo ""
+
+echo "=== Case 16b: feedback continue (done:true heap-death from an earlier run, before start) ==="
+fresh_repo feedback-stale
+heap_death '{"batch_remaining":0,"done":true}'
+START=$(git rev-parse HEAD)
+write_state "$START" feedback
+run bin/zloop-complete feedback
+assert_rc 1
+assert_err "^CONTINUE: feedback no heap-death since ${START:0:7}$"
+heap_death '{"batch_remaining":2,"done":false}'
+HD=$(git rev-parse HEAD)
+run bin/zloop-complete feedback
+assert_rc 1
+assert_err "^CONTINUE: feedback done=false in ${HD:0:7}$"
+echo ""
+
+echo "=== Case 16c: feedback error (no zloop.state -> exit 2) ==="
+fresh_repo feedback-nostate
+heap_death '{"batch_remaining":0,"done":true}'
+rm -f .claude/zloop.state
+run bin/zloop-complete feedback
+assert_rc 2
+assert_err '^zstop-feedback: .*zloop.state not found'
+assert_err '^zloop-complete: predicate zstop-feedback failed \(exit 2\)$'
+echo ""
+
+echo "=== Case 17: file stop (.claude/STOP present, removed, who/when printed) ==="
+fresh_repo file-stop
+touch .claude/STOP
+run bin/zloop-complete file
+assert_rc 0
+assert_err '^STOP: file \.claude/STOP touched by [^ ]+ at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{4} \(removed\)$'
+assert_absent .claude/STOP
+echo ""
+
+echo "=== Case 18: file continue (no marker) ==="
+fresh_repo file-continue
+run bin/zloop-complete file
+assert_rc 1
+assert_err '^CONTINUE: file \.claude/STOP absent$'
+echo ""
+
+echo "=== Case 19: combo budget,file (budget continues, file stops) ==="
+fresh_repo combo
+write_state "$(git rev-parse HEAD)" budget,file
+touch .claude/STOP
+run bin/zloop-complete budget,file
+assert_rc 0
+assert_err '^CONTINUE: budget heap-deaths=0/3 action=join$'
+assert_err '^STOP: file \.claude/STOP touched by'
+assert_absent .claude/STOP
+echo ""
+
+echo "=== Case 20: combo budget,file (neither fires) ==="
+fresh_repo combo-continue
+write_state "$(git rev-parse HEAD)" budget,file
+run bin/zloop-complete budget,file
+assert_rc 1
+assert_err '^CONTINUE: budget heap-deaths=0/3'
+assert_err '^CONTINUE: file \.claude/STOP absent$'
+echo ""
+
+echo "=== Case 21: dispatcher rejects an unresolvable name ==="
+fresh_repo dispatch-nope
+run bin/zloop-complete nope
+assert_rc 2
+assert_err "^zloop-complete: unknown stop mode 'nope'"
+assert_stdout_lines 0
+echo ""
+
+echo "=== Case 22: dispatcher rejects a path-shaped name ==="
+fresh_repo dispatch-traversal
+run bin/zloop-complete '../zstate'
+assert_rc 2
+assert_err "^zloop-complete: invalid stop mode name"
+echo ""
+
+echo "=== Case 23: bin/zloop --stop nope --max 2 aborts before any iteration ==="
+fresh_repo loop-nope
+run bin/zloop --stop nope --max 2
+assert_rc 2
+assert_err "^zloop: unknown stop mode 'nope'"
+assert_claude_runs 0
+assert_stdout_lines 0
+assert_absent .claude/zloop.state
+echo ""
+
+# fake_zevent_ok: the fake claude's bin/zevent calls reported no errors
+fake_zevent_ok() {
+  if [[ -s "$FAKE_LOG.err" ]] && grep -q -i 'error\|fatal' "$FAKE_LOG.err"; then
+    fail "fake claude's zevent reported errors"
+    sed 's/^/    zevent: /' "$FAKE_LOG.err"
+  else
+    pass "fake claude's zevent calls clean"
+  fi
+}
+
+echo "=== Case 24: bin/zloop --stop budget --max 3 stops on the default budget (3) before max ==="
+fresh_repo loop-budget
+export FAKE_CLAUDE_HEAP_DEATH=1
+run env -u ZSTOP_BUDGET bin/zloop --stop budget --max 3
+unset FAKE_CLAUDE_HEAP_DEATH
+assert_rc 0
+assert_err '^=== Loop Complete ===$'
+assert_err '^Iterations: 3$'
+assert_err '^CONTINUE: budget heap-deaths=0/3 action=join$'
+assert_err '^CONTINUE: budget heap-deaths=2/3 '
+assert_err '^STOP: budget heap-deaths=3/3 since '
+assert_no_err '^=== Max Iterations Reached ===$'
+assert_claude_runs 3
+assert_stdout_lines 3
+assert_err '^Stop modes: budget$'
+assert_absent .claude/zloop.state
+fake_zevent_ok
+echo ""
+
+echo "=== Case 24b: bin/zloop --stop budget --max 3 with ZSTOP_BUDGET=1 stops after one iteration ==="
+fresh_repo loop-budget-one
+export FAKE_CLAUDE_HEAP_DEATH=1
+run env ZSTOP_BUDGET=1 bin/zloop --stop budget --max 3
+unset FAKE_CLAUDE_HEAP_DEATH
+assert_rc 0
+assert_err '^=== Loop Complete ===$'
+assert_err '^Iterations: 1$'
+assert_err '^CONTINUE: budget heap-deaths=0/1 action=join$'
+assert_err '^STOP: budget heap-deaths=1/1 since '
+assert_no_err '^=== Max Iterations Reached ===$'
+assert_claude_runs 1
+assert_stdout_lines 1
+fake_zevent_ok
+echo ""
+
+echo "=== Case 24c: default mode, --max 1, claude finishes on its only iteration -> Loop Complete (main's behaviour) ==="
+fresh_repo loop-max-last
+export FAKE_CLAUDE_PROMISE=1
+run bin/zloop --max 1
+unset FAKE_CLAUDE_PROMISE
+assert_rc 0
+assert_err '^=== Loop Complete ===$'
+assert_err '^Iterations: 1$'
+assert_err '^CONTINUE: action action=join$'
+assert_err '^STOP: action action=stop$'
+assert_no_err '^=== Max Iterations Reached ===$'
+assert_claude_runs 1
+assert_stdout_lines 1
+fake_zevent_ok
+echo ""
+
+echo "=== Case 24d: default mode, --max 1, nothing finishes -> Max Iterations Reached (cap still unconditional) ==="
+fresh_repo loop-max-cap
+run bin/zloop --max 1
+assert_rc 1
+assert_err '^=== Max Iterations Reached ===$'
+assert_err '^Stopped after 1 iterations$'
+assert_no_err '^=== Loop Complete ===$'
+assert_claude_runs 1
+assert_stdout_lines 1
+assert_absent .claude/zloop.state
+echo ""
+
+echo "=== Case 25: bin/zloop --stop file stops on iteration 1 without running claude ==="
+fresh_repo loop-file
+touch .claude/STOP
+run bin/zloop --stop file --max 3
+assert_rc 0
+assert_err '^=== Loop Complete ===$'
+assert_err '^Iterations: 0$'
+assert_err '^STOP: file \.claude/STOP touched by'
+assert_claude_runs 0
+assert_stdout_lines 0
+assert_absent .claude/STOP
+echo ""
+
+echo "=== Case 26: converge counts files recreated under a prior cycle's name ==="
+fresh_repo converge-recreated
+cycle_branch rev1-attempt1 index.md notes.md
+CYCLE_NOTE=v2 cycle_branch rev1-attempt2 index.md notes.md extra.md
+CYCLE_NOTE=v3 cycle_branch rev1-attempt3 index.md notes.md extra.md
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge trivial=0/2 min_stuff=1 rev1-attempt2:added=3 rev1-attempt3:added=3$'
+run env ZSTOP_MIN_STUFF=3 bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge trivial=0/2 min_stuff=3 rev1-attempt2:added=3 rev1-attempt3:added=3$'
+echo ""
+
+echo "=== Case 26b: converge counts remote-only cycle/* refs (1 local + 3 origin) ==="
+fresh_repo converge-remote
+cycle_branch rev1-attempt1 a.md
+CYCLE_REMOTE=1 cycle_branch rev1-attempt2 a.md
+CYCLE_REMOTE=1 cycle_branch rev1-attempt3 a.md
+CYCLE_REMOTE=1 cycle_branch rev1-attempt4 a.md
+run bin/zloop-complete converge
+assert_rc 0
+assert_err '^STOP: converge trivial=2/2 min_stuff=1 rev1-attempt3:trivial\(added=1\) rev1-attempt4:trivial\(added=1\)$'
+echo ""
+
+echo "=== Case 26c: converge prefers the local ref when a cycle exists on both sides ==="
+fresh_repo converge-prefer-local
+cycle_branch rev1-attempt1 a.md
+CYCLE_REMOTE=1 cycle_branch rev1-attempt2 a.md
+CYCLE_REMOTE=1 cycle_branch rev1-attempt3 a.md
+cycle_branch rev1-attempt3 a.md b.md
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge trivial=0/2 min_stuff=1 rev1-attempt2:trivial\(added=1\) rev1-attempt3:added=2$'
+echo ""
+
+echo "=== Case 26d: converge orders the union by version (rev1-attempt10 after rev1-attempt9) ==="
+fresh_repo converge-version-order
+CYCLE_REMOTE=1 cycle_branch rev1-attempt8 a.md
+cycle_branch rev1-attempt9 a.md b.md
+CYCLE_REMOTE=1 cycle_branch rev1-attempt10 a.md b.md
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge trivial=1/2 min_stuff=1 rev1-attempt9:added=2 rev1-attempt10:trivial\(added=2\)$'
+echo ""
+
+echo "=== Case 27: file error (marker path is a directory -> exit 2, verdict-free) ==="
+fresh_repo file-directory
+mkdir -p .claude/STOP
+run bin/zloop-complete file
+assert_rc 2
+assert_err '^zstop-file: \.claude/STOP exists but is not a regular file$'
+assert_err '^zloop-complete: predicate zstop-file failed \(exit 2\)$'
+assert_no_err '^(STOP|CONTINUE): file'
+echo ""
+
+echo "=== Case 28: zheap-death defaults batch_size from the budget in budget mode (ZSTOP_BUDGET unset) ==="
+fresh_repo heap-death-budget
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":2}'
+heap_death '{"batch_remaining":1}'
+write_state "$START" budget
+run env -u ZSTOP_BUDGET bin/zheap-death tester "third question"
+assert_rc 0
+assert_err "^batch_size defaulted to 1 \(budget=3, 2 heap-deaths since ${START:0:7}\)$"
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "heap-death batch_remaining" "$(git log -1 --format=%b "$HD" | jq -c '.data.batch_remaining')" 0
+assert_eq "heap-death stop_mode" "$(git log -1 --format=%b "$HD" | jq -r '.data.stop_mode')" budget
+assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 0
+assert_eq "action after heap-death" "$(bin/zstate | jq -r .action)" promise
+assert_absent .claude/zloop.state
+assert_eq "tracked files under .claude/" "$(git ls-files .claude | wc -l | tr -d ' ')" 0
+echo ""
+
+echo "=== Case 29: zheap-death keeps batch_size 3 outside budget mode ==="
+fresh_repo heap-death-action
+START=$(git rev-parse HEAD)
+heap_death '{"batch_remaining":2}'
+heap_death '{"batch_remaining":1}'
+write_state "$START" action,file
+run env -u ZSTOP_BUDGET bin/zheap-death tester "third question"
+assert_rc 0
+assert_no_err '^batch_size defaulted'
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "heap-death batch_remaining" "$(git log -1 --format=%b "$HD" | jq -c '.data.batch_remaining')" 2
+assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 1
+echo ""
+
+echo "=== Case 30: zheap-death refuses to run off main (no commit, no tag, no branch) ==="
+fresh_repo heap-death-branch
+git checkout -q -b feat/scratch
+BEFORE=$(git rev-parse HEAD)
+run bin/zheap-death tester "leaked question"
+assert_rc 1
+assert_err "^zheap-death: refusing to run on 'feat/scratch' \(not main\); set ZHEAP_DEATH_ANY_BRANCH=1 to override$"
+assert_eq "HEAD unchanged" "$(git rev-parse HEAD)" "$BEFORE"
+assert_eq "tags" "$(git tag | wc -l | tr -d ' ')" 0
+assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 0
+echo ""
+
+echo "=== Case 30b: ZHEAP_DEATH_ANY_BRANCH=1 lets zheap-death run off main ==="
+fresh_repo heap-death-anybranch
+git checkout -q -b feat/scratch
+run env ZHEAP_DEATH_ANY_BRANCH=1 bin/zheap-death tester "deliberate question"
+assert_rc 0
+assert_no_err '^zheap-death: refusing'
+assert_eq "[heap-death] commits" "$(git rev-list --count --grep='^\[heap-death\]' HEAD)" 1
+assert_eq "current branch" "$(git branch --show-current)" feat/scratch
+echo ""
+
+#############################################
+# Summary
+#############################################
+
+echo "=== Results: $PASSED passed, $FAILED failed ==="
+if [[ $FAILED -gt 0 ]]; then
+  exit 1
+fi
+echo "All stop mode cases passed."
