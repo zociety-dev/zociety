@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""nfprov.py -- vendored subset of delano/nerd-fonts' provenance tool.
+"""nfprov.py -- zociety's `mark-added` front end for the nerd-fonts provenance tool.
 
 Implements only the `mark-added` subcommand described in
 delano/nerd-fonts#15, so zociety can demo provenance marking over its own
-git history without depending on the upstream fork being checked out here.
-`mark`, `inspect`, and the Claude Code plugin hooks are assumed to live
-upstream and are out of scope for this vendored copy.
+git history. Everything about the *encoding* is delegated to the verbatim
+vendored copy of upstream's reference tool in bin/nfprov-upstream.py (with
+bin/nfprov-mapping.json), so the output is byte-compatible with what the
+fork's P+ fonts render and what `nfprov-upstream.py inspect` reports.
 
     nfprov.py mark-added --base BLOB_OR_FILE [--mode=vs|pua] FILE
     nfprov.py --selftest
@@ -18,26 +19,44 @@ rewritten sentence unmarked. Marking is idempotent and whitespace is never
 marked. Only .md, .mdx, .txt, .rst are eligible; other files pass through
 unchanged.
 
-Encoding note: the upstream P+ fonts define the actual GSUB ligatures that
-render these markers. This vendored copy uses placeholder codepoints
-(documented below) chosen to match the *shape* of the two modes described
-in the issue -- swap them for the real values once the upstream encoding
-is confirmed:
-  - vs:  append VARIATION SELECTOR-1 (U+FE00) after each marked character
-         (HarfBuzz-style per-character marking).
-  - pua: wrap the marked span in PUA sentinels U+E000 (start) / U+E001
-         (end) (CoreText-style span marking).
+Encoding (upstream src/glyphs/provenance/README.md, mapping.json v1):
+  - vs:  every non-whitespace grapheme cluster in a marked span is followed
+         by U+E0101 (VARIATION SELECTOR-18, the "ai" selector). One selector
+         per cluster, placed after combining marks / emoji sequences.
+  - pua: single-code-point bases listed in mapping.json's `pua` table
+         (roughly U+0021..U+00FF) are *replaced* by U+100000 + codepoint,
+         a plane-16 PUA character the fonts carry as an AI-styled glyph.
+         Bases outside the table keep the VS encoding. There are no span
+         sentinels in either mode.
 """
 import argparse
 import difflib
+import importlib.util
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 PROSE_SUFFIXES = {".md", ".mdx", ".txt", ".rst"}
+UPSTREAM_PATH = Path(__file__).resolve().with_name("nfprov-upstream.py")
 
-VS_MARK = "︀"
-PUA_START = ""
-PUA_END = ""
+
+@lru_cache(maxsize=1)
+def upstream():
+    """Import bin/nfprov-upstream.py as a module (it has no importable name)."""
+    spec = importlib.util.spec_from_file_location("nfprov_upstream", UPSTREAM_PATH)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {UPSTREAM_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True  # keep bin/ free of __pycache__
+    spec.loader.exec_module(module)
+    return module
+
+
+@lru_cache(maxsize=1)
+def tables():
+    """(selectors, pua2base, base2pua) from the vendored mapping.json."""
+    _, selectors, pua2base, base2pua = upstream().load_mapping()
+    return selectors, pua2base, base2pua
 
 
 def is_prose(filename: str) -> bool:
@@ -61,17 +80,16 @@ def common_suffix_len(a: str, b: str, prefix_len: int) -> int:
 
 
 def mark_span(text: str, mode: str) -> str:
-    """Mark a span of text, trimming whitespace off both ends first."""
-    stripped = text.strip(" \t")
-    if not stripped:
+    """Encode a span as AI-authored via upstream's do_mark.
+
+    do_mark already skips whitespace, leaves existing selectors / PUA
+    characters alone, and applies the per-mode encoding, so no trimming or
+    sentinel handling is needed here.
+    """
+    if not text:
         return text
-    lead = text[: len(text) - len(text.lstrip(" \t"))]
-    trail = text[len(text.rstrip(" \t")):] if text.rstrip(" \t") else ""
-    if mode == "pua":
-        marked = f"{PUA_START}{stripped}{PUA_END}"
-    else:
-        marked = "".join(ch + VS_MARK for ch in stripped)
-    return lead + marked + trail
+    selectors, pua2base, base2pua = tables()
+    return upstream().do_mark(text, "ai", mode, selectors, pua2base, base2pua)
 
 
 def mark_line_diff(old: str, new: str, mode: str) -> str:
@@ -88,6 +106,11 @@ def mark_line_diff(old: str, new: str, mode: str) -> str:
     return head + mark_span(middle, mode) + tail
 
 
+def _split_body(line: str) -> tuple[str, str]:
+    body = line.splitlines()[0] if line.splitlines() else line
+    return body, line[len(body):]
+
+
 def mark_added(base_text: str, current_text: str, mode: str) -> str:
     base_lines = base_text.splitlines(keepends=True)
     cur_lines = current_text.splitlines(keepends=True)
@@ -99,8 +122,7 @@ def mark_added(base_text: str, current_text: str, mode: str) -> str:
             out.extend(cur_lines[j1:j2])
         elif tag == "insert":
             for line in cur_lines[j1:j2]:
-                body = line.splitlines()[0] if line.splitlines() else line
-                newline = line[len(body):]
+                body, newline = _split_body(line)
                 out.append(mark_span(body, mode) + newline)
         elif tag == "delete":
             continue
@@ -109,111 +131,179 @@ def mark_added(base_text: str, current_text: str, mode: str) -> str:
             new_block = cur_lines[j1:j2]
             paired = min(len(old_block), len(new_block))
             for k in range(paired):
-                old_line = old_block[k]
-                new_line = new_block[k]
-                old_body = old_line.splitlines()[0] if old_line.splitlines() else old_line
-                new_body = new_line.splitlines()[0] if new_line.splitlines() else new_line
-                newline = new_line[len(new_body):]
+                old_body, _ = _split_body(old_block[k])
+                new_body, newline = _split_body(new_block[k])
                 out.append(mark_line_diff(old_body, new_body, mode) + newline)
             for extra in new_block[paired:]:
-                body = extra.splitlines()[0] if extra.splitlines() else extra
-                newline = extra[len(body):]
+                body, newline = _split_body(extra)
                 out.append(mark_span(body, mode) + newline)
     return "".join(out)
 
 
-def cmd_mark_added(args: argparse.Namespace) -> int:
-    target = Path(args.file)
-    current_text = target.read_text()
+def process(filename: str, base_text: str, current_text: str, mode: str) -> str:
+    """mark-added for one file; non-prose files pass through untouched."""
+    if not is_prose(filename):
+        return current_text
+    return mark_added(base_text, current_text, mode)
 
-    if not is_prose(args.file):
-        sys.stdout.write(current_text)
-        return 0
+
+def cmd_mark_added(args: argparse.Namespace) -> int:
+    up = upstream()
+    current_text = up.read_input(args.file)
 
     if args.base in ("", "-", None):
         base_text = ""
     else:
         base_path = Path(args.base)
-        base_text = base_path.read_text() if base_path.exists() else args.base
+        base_text = up.read_input(args.base) if base_path.exists() else args.base
 
-    sys.stdout.write(mark_added(base_text, current_text, args.mode))
+    up.write_output(process(args.file, base_text, current_text, args.mode), None)
     return 0
 
 
 def strip_marks(text: str) -> str:
-    return (
-        text.replace(VS_MARK, "")
-        .replace(PUA_START, "")
-        .replace(PUA_END, "")
-    )
+    selectors, pua2base, _ = tables()
+    return upstream().do_strip(text, selectors, pua2base)
 
 
-def count_marked_chars(text: str, mode: str) -> int:
-    if mode == "pua":
-        n = 0
-        depth = 0
-        for ch in text:
-            if ch == PUA_START:
-                depth = 1
-                continue
-            if ch == PUA_END:
-                depth = 0
-                continue
-            if depth:
-                n += 1
-        return n
-    return text.count(VS_MARK)
+def inspect_counts(text: str) -> dict[str, int]:
+    """Parse upstream `inspect` output into {key: count}."""
+    selectors, pua2base, _ = tables()
+    report = upstream().do_inspect(text, selectors, pua2base)
+    counts = {}
+    for line in report.splitlines():
+        key, _, value = line.partition(": ")
+        if value.isdigit():
+            counts[key] = int(value)
+    return counts
+
+
+def count_marked_chars(text: str) -> int:
+    """AI-marked characters in either encoding, as upstream inspect sees them."""
+    counts = inspect_counts(text)
+    return counts["ai_vs"] + counts["ai_pua"]
 
 
 def selftest() -> int:
-    cases = []
+    selectors, pua2base, base2pua = tables()
+    ai = chr(selectors["ai"])
+    failures: list[str] = []
 
-    # 1. Whole-file add
-    cases.append(("whole-file add", "", "hello world\n"))
-    # 2. Single-word change
-    cases.append(("single-word change", "the cat sat\n", "the dog sat\n"))
-    # 3. Two changes on one line
-    cases.append(("two changes on one line", "alpha beta gamma\n", "ALPHA beta GAMMA\n"))
-    # 4. Unchanged file
-    cases.append(("unchanged file", "no changes here\n", "no changes here\n"))
+    def check(condition: bool, message: str) -> None:
+        if not condition:
+            failures.append(message)
 
-    failures = []
-    for name, base, current in cases:
-        for mode in ("vs", "pua"):
+    def pua(s: str) -> str:
+        return "".join(chr(base2pua[ord(c)]) if not c.isspace() else c for c in s)
+
+    check(ai == "\U000E0101", "ai selector must be U+E0101 (VARIATION SELECTOR-18)")
+    check(base2pua[ord("a")] == 0x100061, "PUA_AI(cp) must be 0x100000 + cp")
+
+    # (name, base, current, vs_expected, pua_expected, ai_count, human_count)
+    cases = [
+        (
+            "whole-file add",
+            "",
+            "hello world\n",
+            "h" + ai + "e" + ai + "l" + ai + "l" + ai + "o" + ai + " "
+            + "w" + ai + "o" + ai + "r" + ai + "l" + ai + "d" + ai + "\n",
+            pua("hello") + " " + pua("world") + "\n",
+            10, 0,
+        ),
+        (
+            "single-word change",
+            "the cat sat\n",
+            "the dog sat\n",
+            "the d" + ai + "o" + ai + "g" + ai + " sat\n",
+            "the " + pua("dog") + " sat\n",
+            3, 6,
+        ),
+        (
+            # Common prefix/suffix are both empty, so the whole line
+            # (including the unchanged middle word) is marked -- by design.
+            "two changes on one line",
+            "alpha beta gamma\n",
+            "ALPHA beta GAMMA\n",
+            "".join(c + ai if not c.isspace() else c for c in "ALPHA beta GAMMA\n"),
+            pua("ALPHA") + " " + pua("beta") + " " + pua("GAMMA") + "\n",
+            14, 0,
+        ),
+        (
+            "unchanged file",
+            "no changes here\n",
+            "no changes here\n",
+            "no changes here\n",
+            "no changes here\n",
+            0, 13,
+        ),
+        (
+            "edit inside a multi-line file",
+            "# Title\n\nfirst para\nsecond para\n",
+            "# Title\n\nfirst para edited\nsecond para\n",
+            "# Title\n\nfirst para e" + ai + "d" + ai + "i" + ai + "t" + ai
+            + "e" + ai + "d" + ai + "\nsecond para\n",
+            "# Title\n\nfirst para " + pua("edited") + "\nsecond para\n",
+            6, 25,
+        ),
+    ]
+
+    for name, base, current, vs_expected, pua_expected, n_ai, n_human in cases:
+        for mode, expected in (("vs", vs_expected), ("pua", pua_expected)):
             marked = mark_added(base, current, mode)
-            if strip_marks(marked) != current:
-                failures.append(f"{name} ({mode}): stripped output != current")
-                continue
-            marked_count = count_marked_chars(marked, mode)
-            if name == "unchanged file":
-                if marked_count != 0:
-                    failures.append(f"{name} ({mode}): expected no marks, got {marked_count}")
-            else:
-                if marked_count == 0:
-                    failures.append(f"{name} ({mode}): expected marks, got none")
-            # Idempotence: re-running mark-added with the marked output as
-            # both base and current (i.e. nothing changed since the last
-            # marking pass) must not add further marks.
-            remarked = mark_added(marked, marked, mode)
-            if remarked != marked:
-                failures.append(f"{name} ({mode}): not idempotent")
+            check(marked == expected, f"{name} ({mode}): got {marked!r}")
+            check(strip_marks(marked) == current, f"{name} ({mode}): strip != current")
+            check(
+                "\U0000E000" not in marked and "\U0000E001" not in marked
+                and "︀" not in marked,
+                f"{name} ({mode}): legacy placeholder codepoints present",
+            )
+            counts = inspect_counts(marked)
+            key = "ai_vs" if mode == "vs" else "ai_pua"
+            other = "ai_pua" if mode == "vs" else "ai_vs"
+            check(counts[key] == n_ai, f"{name} ({mode}): inspect {key}={counts[key]} != {n_ai}")
+            check(counts[other] == 0, f"{name} ({mode}): inspect {other} should be 0")
+            check(
+                counts["assumed_human"] == n_human,
+                f"{name} ({mode}): inspect assumed_human={counts['assumed_human']} != {n_human}",
+            )
+            report = upstream().do_inspect(marked, selectors, pua2base)
+            check(
+                "unrecognised_selectors: -" in report and "unrecognised_pua: -" in report,
+                f"{name} ({mode}): inspect saw unrecognised codepoints",
+            )
+            # Idempotence, two ways: nothing changed since the last pass, and
+            # re-marking the marked output against the original base.
+            check(mark_added(marked, marked, mode) == marked, f"{name} ({mode}): not idempotent")
+            check(mark_added(base, marked, mode) == marked, f"{name} ({mode}): re-mark vs base")
 
-    # 5. Non-prose file is returned unchanged regardless of mode
-    if not is_prose("script.sh"):
-        code_before = "echo hi\n"
-        code_after = "echo hello\n"
-        # simulate cmd_mark_added's passthrough behaviour directly
-        if code_after != code_after:
-            failures.append("non-prose file: passthrough broken")
-    else:
-        failures.append("non-prose file: .sh incorrectly classified as prose")
+    # Whitespace is never marked, in either mode.
+    for mode in ("vs", "pua"):
+        marked = mark_added("", "a\tb  c\r\n", mode)
+        check(
+            marked.count("\t") == 1 and marked.count("  ") == 1 and marked.endswith("\r\n"),
+            f"whitespace ({mode}): whitespace altered: {marked!r}",
+        )
+        check(inspect_counts(marked)["whitespace"] == 5, f"whitespace ({mode}): count")
+
+    # pua mode: bases outside the mapping table fall back to VS encoding.
+    hybrid = mark_added("", "a日\n", "pua")
+    check(hybrid == chr(base2pua[ord("a")]) + "日" + ai + "\n", f"pua fallback: {hybrid!r}")
+    check(count_marked_chars(hybrid) == 2, "pua fallback: inspect count")
+
+    # Non-prose files pass through unchanged regardless of mode.
+    for mode in ("vs", "pua"):
+        check(
+            process("script.sh", "echo hi\n", "echo hello\n", mode) == "echo hello\n",
+            f"non-prose ({mode}): passthrough broken",
+        )
+    check(process("notes.MD", "", "x\n", "vs") == "x" + ai + "\n", "prose suffix case-insensitive")
 
     if failures:
         for f in failures:
             print(f"FAIL: {f}", file=sys.stderr)
         return 1
 
-    print(f"ok: {len(cases) * 2 + 1} selftest cases passed")
+    print(f"ok: nfprov selftest passed ({len(cases)} diff cases x 2 modes + edge cases)")
     return 0
 
 

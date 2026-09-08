@@ -9,6 +9,7 @@
 #   - docs/cycles.html (cycle history timeline)
 #   - docs/learnings.html (accumulated insights)
 #   - docs/PROMPT.md (current prompt)
+#   - docs/provenance.html + docs/fonts/ (P+ demo; fonts from site/fonts/)
 
 set -euo pipefail
 
@@ -591,6 +592,11 @@ fi
 if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
     echo "Generating provenance.html..."
 
+    # Self-hosted P+ faces (built by bin/zsite-fonts, committed under
+    # site/fonts/) so visitors see the marks without installing anything.
+    mkdir -p "$DOCS_DIR/fonts"
+    cp site/fonts/*.woff2 "$DOCS_DIR/fonts/"
+
     cat > "$DOCS_DIR/provenance.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -598,7 +604,22 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Provenance Demo - zociety</title>
+  <link rel="preload" href="fonts/AgaveNerdFontMonoP+-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    @font-face {
+      font-family: 'Agave Nerd Font Mono P+';
+      src: url('fonts/AgaveNerdFontMonoP+-Regular.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Agave Nerd Font Mono P+';
+      src: url('fonts/AgaveNerdFontMonoP+-Bold.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
     :root {
       --bg: #0d1117;
       --text: #c9d1d9;
@@ -628,7 +649,7 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
     ol, ul { padding-left: 1.5rem; }
     li { margin: 0.5rem 0; }
     pre.example-body {
-      font-family: 'Hack Nerd Font Mono P+', 'Symbols Nerd Font Mono P+', 'SF Mono', Consolas, monospace;
+      font-family: 'Agave Nerd Font Mono P+', 'Hack Nerd Font Mono P+', 'SF Mono', Consolas, monospace;
       white-space: pre-wrap;
       overflow-x: auto;
       background: var(--bg);
@@ -652,13 +673,15 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
   <div class="content">
     <h2>Two steps</h2>
     <ol>
-      <li>Install one <code>P+</code> font family, e.g.
-        <code>Hack Nerd Font Mono P+</code> (one command via the Nerd Fonts
-        installer or your package manager).</li>
+      <li>This page bundles <code>Agave Nerd Font Mono P+</code> as a web
+        font, so nothing needs installing to see the marks here. To see them
+        in your own editor, install one <code>P+</code> font family from the
+        <a href="https://github.com/delano/nerd-fonts">delano/nerd-fonts</a>
+        fork, e.g. <code>Hack Nerd Font Mono P+</code>.</li>
       <li>Point your editor's font at the installed <code>P+</code> variant,
         then open text marked by <code>bin/nfprov-drive</code> (or just read
-        the example below — it's rendered by your browser using the same
-        font-family fallback chain).</li>
+        the example below — it's rendered by your browser with the bundled
+        font).</li>
     </ol>
   </div>
 
@@ -669,11 +692,11 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
       <code>LEARNINGS.md</code>, run through
       <code>bin/nfprov-drive LEARNINGS.md learnings</code>. Every character
       zociety's agents added since the previous commit carries a provenance
-      mark (default mode: <code>vs</code>, a VARIATION SELECTOR-1 suffix per
-      character — pass <code>NFPROV_MODE=pua</code> for the PUA span-wrapped
-      mode instead). If you have a <code>P+</code> font installed, the marked
-      spans render distinctly; otherwise this is plain text, which is the
-      expected fallback.
+      mark. The default <code>vs</code> mode inserts U+E0101 (VARIATION
+      SELECTOR-18) after each character; <code>NFPROV_MODE=pua</code> mode
+      maps each character into Supplementary PUA-B (U+100000 + codepoint)
+      instead. The bundled <code>P+</code> font renders the marks; any other
+      font renders the plain glyphs, which is the expected fallback.
     </p>
     <pre class="example-body">$PROVENANCE_MARKED_HTML</pre>
   </div>

@@ -10,6 +10,13 @@
 #   file - repo-relative path to a prose file tracked in git
 #   ref  - commit/branch whose latest change to <file> is marked (default: HEAD)
 #
+# Env: NFPROV_MODE=vs|pua (default vs) selects the upstream encoding:
+#   vs  - each added non-whitespace character is followed by U+E0101
+#         (VARIATION SELECTOR-18, the "ai" selector)
+#   pua - characters in the mapping table are replaced by U+100000+cp
+#         (plane-16 PUA); others fall back to the VS encoding
+# Both are byte-compatible with the P+ fonts and `bin/nfprov-upstream.py inspect`.
+#
 # Prints the marked current content of <file> to stdout.
 set -euo pipefail
 
