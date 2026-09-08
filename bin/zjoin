@@ -6,18 +6,20 @@
 #   name     - Agent name (required)
 #   role     - Agent role (default: agent)
 #   greeting - Greeting message (default: joining cycle)
-#   model    - AI model identifier (default: claude-sonnet-4-20250514)
+#   model    - AI model identifier. Defaults to $ANTHROPIC_MODEL (the var that
+#              pins the running model, see bin/zloop / bin/zociety), or "unknown"
+#              when unset -- the loop can't know the CLI's resolved default.
 
 set -e
 
 NAME="$1"
 ROLE="${2:-agent}"
 GREETING="${3:-joining cycle}"
-MODEL="${4:-claude-sonnet-4-20250514}"
+MODEL="${4:-${ANTHROPIC_MODEL:-unknown}}"
 
 if [[ -z "$NAME" ]]; then
   echo "Usage: bin/zjoin <n> [role] [greeting] [model]" >&2
-  echo "  model: AI model identifier (e.g., claude-sonnet-4-20250514, gpt-4, gemini-pro)" >&2
+  echo "  model: AI model identifier; defaults to \$ANTHROPIC_MODEL or 'unknown'" >&2
   exit 1
 fi
 
