@@ -65,4 +65,6 @@ fileignoreconfig:
   checksum: 2939c749147910a019edc85009fba6f496d71bb2372bd00adb0e45cdc3ab03ac
 - filename: docs/provenance.html
   checksum: c46deecce24ad881d2d7ab794299db1090e44917c1588d0f7268a7d347769639
+- filename: stuff/index.md
+  checksum: 1909b676cfe75c92df6f0fb53a522591ed33010305448b9c5897e033188759b9
 version: "1.0"
