@@ -115,7 +115,8 @@ fi
 # Mint on the host with: bin/zociety setup-token
 # ============================================================
 if [[ -f "/run/secrets/claude_oauth_token" ]]; then
-    CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/secrets/claude_oauth_token)"
+    # Strip any whitespace (the file is written with a trailing newline).
+    CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '[:space:]' < /run/secrets/claude_oauth_token)"
     export CLAUDE_CODE_OAUTH_TOKEN
 fi
 

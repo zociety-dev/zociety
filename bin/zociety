@@ -112,19 +112,26 @@ setup_token() {
 
     mkdir -p "$(dirname "$OAUTH_TOKEN_FILE")"
 
-    log_info "Minting long-lived OAuth token via host Claude Code..."
-    log_info "A browser OAuth flow will open; approve it to continue."
+    log_info "Running host 'claude setup-token'."
+    log_info "Approve the browser flow, then copy the token it prints (starts with sk-ant-oat)."
+    echo
 
-    local token
-    if ! token="$(claude setup-token)"; then
+    # Run interactively; do NOT capture stdout. setup-token renders a full-screen
+    # TUI, so a command substitution grabs the whole rendered screen (escape codes
+    # + welcome text + the token glued to trailing prose), not a clean token. Let
+    # the UI draw to the terminal and have the user paste the token back.
+    if ! claude setup-token; then
         log_error "claude setup-token failed."
         exit 1
     fi
 
-    # setup-token prints the token to stdout; strip any surrounding whitespace.
+    echo
+    local token
+    read -rsp "Paste the token here: " token
+    echo
     token="$(printf '%s' "$token" | tr -d '[:space:]')"
-    if [[ -z "$token" ]]; then
-        log_error "No token captured from 'claude setup-token'."
+    if [[ "$token" != sk-ant-oat* ]]; then
+        log_error "That does not look like an OAuth token (expected sk-ant-oat...)."
         exit 1
     fi
 
