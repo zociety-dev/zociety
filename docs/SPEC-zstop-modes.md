@@ -15,6 +15,11 @@ run `bin/zstop-<name>`; exit 0 as soon as one exits 0; exit 1 if none did;
 exit 2 (abort loop, message on stderr) if a name does not resolve or a
 predicate exits 2.
 
+`bin/zloop` must distinguish the dispatcher's three exit codes. The current
+`if bin/zloop-complete; then` treats every non-zero code as "continue", so
+exit 2 is silently swallowed. Capture the status explicitly: 0 -> stop
+(exit 0), 2 -> abort (log to stderr, exit 2), anything else -> continue.
+
 Predicate contract:
 - exit 0 stop, 1 continue, 2 error
 - stdout: one line `STOP: <mode> <reason>` or `CONTINUE: <mode> <reason>`;
@@ -28,6 +33,12 @@ Predicate contract:
 start: <sha at loop start>
 mode: <resolved mode list>
 ```
+`bin/zloop` rewrites this file every iteration (it currently emits only
+`iteration`/`max`). Capture `START_SHA` and the resolved mode list into shell
+variables once before the loop, then emit all four keys inside the existing
+per-iteration `cat` block — writing `start`/`mode` only once would be clobbered
+on iteration 2, and `zheap-death` deletes the file entirely when it archives.
+
 `bin/zociety` must forward `ZSTOP_*` alongside `ZLOOP_*`.
 
 Safety caps are not modes. `--max N` and `ZLOOP_TIMEOUT` stay unconditional,
@@ -59,9 +70,16 @@ continue.
 ### 4. `feedback` (agent-reported, Copycat style)
 Stop when the most recent `[heap-death]` event data contains `"done": true`.
 Requires `zheap-death --done` flag which sets that field. The agent decides;
-the loop honours it. Document in PROMPT.md-adjacent guidance only if zstate's
-output changes; prefer exposing `done` in `bin/zstate` output so the agent
-sees it.
+the loop honours it.
+
+Read the heap-death event directly, not via `bin/zstate`. When a heap-death
+leaves `remaining > 0`, `zheap-death` commits `[heap-death]` and then a
+`[direction]` event, and `zstate` keys off the *latest* event — so it would
+report `direction` and never see `done`. Find the commit explicitly:
+```
+sha=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+done=$(git log -1 --format=%b "$sha" | jq '.data.done // false')
+```
 
 ### 5. `file` (manual override)
 Stop if `.claude/STOP` exists. Remove the file on stop and print who/when from
@@ -82,7 +100,7 @@ Record the regime so runs are comparable:
 
 | File | Change |
 |---|---|
-| `bin/zloop` | `--stop`/`ZLOOP_STOP`, write `start`/`mode` to state, pass mode to dispatcher |
+| `bin/zloop` | `--stop`/`ZLOOP_STOP`, write `start`/`mode` to state every iteration, pass mode to dispatcher, honour dispatcher exit 2 (abort) |
 | `bin/zloop-complete` | becomes dispatcher |
 | `bin/zstop-action` | new, old zloop-complete body |
 | `bin/zstop-budget` | new |
@@ -90,7 +108,7 @@ Record the regime so runs are comparable:
 | `bin/zstop-feedback` | new |
 | `bin/zstop-file` | new |
 | `bin/zheap-death` | `--done`, default batch from budget, record regime |
-| `bin/zstate` | expose `done` from last heap-death |
+| `bin/zstate` | no change needed; `feedback` reads the `[heap-death]` commit directly (zstate reflects only the latest event) |
 | `bin/zociety` | forward `ZSTOP_*` |
 | `bin/zga-loop` | call dispatcher the same way, or leave on `action` and say so |
 | `bin/zcheck` | list new scripts |
