@@ -9,7 +9,8 @@
 #   - docs/cycles.html (cycle history timeline)
 #   - docs/learnings.html (accumulated insights)
 #   - docs/PROMPT.md (current prompt)
-#   - docs/provenance.html + docs/fonts/ (P+ demo; fonts from site/fonts/)
+#   - docs/provenance.html + docs/CLAUDE.marked.md + docs/fonts/
+#     (P+ provenance demo via bin/nfprov-blame.py; fonts from site/fonts/)
 
 set -euo pipefail
 
@@ -86,22 +87,40 @@ fi
 # ============================================================
 # Generate Provenance Demo (delano/nerd-fonts#15)
 # ============================================================
-# Additive: skipped entirely (no page, no nav link) if nfprov.py or its
-# python3 interpreter is unavailable on the generating machine, or if
-# there is no markable content. Every other page keeps generating either way.
+# Additive: skipped entirely (no page, no nav link) if python3 or
+# bin/nfprov-blame.py is unavailable on the generating machine, or if the
+# blame output does not satisfy the JSON contract below. Every other page
+# keeps generating either way.
+#
+# Contract (bin/nfprov-blame.py --format json CLAUDE.md):
+#   {file, ref, commits, first_date, last_date,
+#    chars:{total,ai,human}, agents:[{name,kind:"ai"|"human",chars,commits}],
+#    spans:[...], marked:"<marked text>", html:"<span class=prov ...>…</span>"}
+#   All human commits collapse into one agent named "human"; each span (and
+#   its <span data-author=…>) carries the git author name for the tooltip.
+#
+# Override: NFPROV_BLAME_JSON_FILE=<path> reads the JSON from a file instead
+# of running the tool (fixtures, CI images without the full toolchain).
 echo "Checking provenance demo prerequisites..."
 
-PROVENANCE_MARKED_HTML=""
+PROVENANCE_BLAME_JSON=""
 PROVENANCE_NAV_LINK=""
-if command -v python3 >/dev/null 2>&1 && [[ -f bin/nfprov.py && -f bin/nfprov-drive ]]; then
-    MARKED=""
-    if git rev-parse --verify learnings >/dev/null 2>&1; then
-        MARKED=$(bin/nfprov-drive LEARNINGS.md learnings 2>/dev/null || true)
+if [[ -n "${NFPROV_BLAME_JSON_FILE:-}" ]]; then
+    if [[ -f "$NFPROV_BLAME_JSON_FILE" ]]; then
+        PROVENANCE_BLAME_JSON=$(cat "$NFPROV_BLAME_JSON_FILE")
     fi
-    if [[ -n "$MARKED" ]]; then
-        PROVENANCE_MARKED_HTML=$(printf '%s' "$MARKED" | python3 -c 'import sys, html; sys.stdout.write(html.escape(sys.stdin.read()))')
-        PROVENANCE_NAV_LINK='<a href="provenance.html">🔤 Provenance Demo</a>'
-    fi
+elif command -v python3 >/dev/null 2>&1 && [[ -f bin/nfprov-blame.py ]]; then
+    # PYTHONIOENCODING pins stdout to UTF-8 so U+E0101 survives a C locale.
+    PROVENANCE_BLAME_JSON=$(PYTHONIOENCODING=utf-8 python3 bin/nfprov-blame.py --format json CLAUDE.md 2>/dev/null || true)
+fi
+if [[ -n "$PROVENANCE_BLAME_JSON" ]] && ! printf '%s' "$PROVENANCE_BLAME_JSON" \
+        | jq -e '(.html|type=="string") and (.marked|type=="string")
+                 and (.agents|type=="array" and length>0) and (.chars.total>0)' >/dev/null 2>&1; then
+    echo "Provenance blame JSON does not match the contract; skipping demo" >&2
+    PROVENANCE_BLAME_JSON=""
+fi
+if [[ -n "$PROVENANCE_BLAME_JSON" ]]; then
+    PROVENANCE_NAV_LINK='<a href="provenance.html">🔤 Provenance Demo</a>'
 fi
 
 # ============================================================
@@ -589,7 +608,7 @@ fi
 # ============================================================
 # Generate Provenance Demo Page
 # ============================================================
-if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
+if [[ -n "$PROVENANCE_BLAME_JSON" ]]; then
     echo "Generating provenance.html..."
 
     # Self-hosted P+ faces (built by bin/zsite-fonts, committed under
@@ -597,9 +616,57 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
     mkdir -p "$DOCS_DIR/fonts"
     cp site/fonts/*.woff2 "$DOCS_DIR/fonts/"
 
-    cat > "$DOCS_DIR/provenance.html" << EOF
+    # All reads go through jq; jq emits UTF-8 regardless of locale, and bash
+    # variables carry the bytes untouched, so U+E0101 survives into the page.
+    prov_jq() { printf '%s' "$PROVENANCE_BLAME_JSON" | jq -r "$@"; }
+
+    PROV_FILE=$(prov_jq '.file // "CLAUDE.md"')
+    PROV_REF=$(prov_jq '.ref // "HEAD"')
+    PROV_COMMITS=$(prov_jq '.commits // 0')
+    PROV_FIRST=$(prov_jq '.first_date // "?"')
+    PROV_LAST=$(prov_jq '.last_date // "?"')
+    PROV_TOTAL=$(prov_jq '.chars.total')
+    PROV_AI_PCT=$(prov_jq '(.chars.ai / .chars.total * 100) | round')
+    PROV_AGENT_COUNT=$(prov_jq '[.agents[] | select(.kind == "ai")] | length')
+    PROV_MARKED_NAME="$(basename "${PROV_FILE%.md}").marked.md"
+
+    # The marked text is a real file: open it in VS Code with a P+ font.
+    prov_jq -j '.marked' > "$DOCS_DIR/$PROV_MARKED_NAME"
+
+    # Eight distinct hues at low alpha on the dark background, assigned to
+    # agents in array order (already sorted by chars desc). Data-driven CSS:
+    # one --agent-color custom property per agent, consumed by the colour
+    # mode tint, the stacked bar and the legend swatches.
+    PROV_PALETTE='["#58a6ff","#d2a8ff","#ffa657","#7ee787","#ff7b72","#79c0ff","#f778ba","#e3b341"]'
+    # shellcheck disable=SC2016  # $pal / $t are jq variables, not shell
+    PROV_AGENT_CSS=$(prov_jq --argjson pal "$PROV_PALETTE" '
+        [.agents[] | select(.kind == "ai")] | to_entries[] | select(.key < 8)
+        | "    [data-agent=\"\(.value.name | gsub("[\"\\\\]"; ""))\"] { --agent-color: \($pal[.key]); }"')
+
+    # Stacked bar: top 6 authors by chars + "others". Human segment is
+    # outlined, agent segments are filled (see .bar-seg rules).
+    # shellcheck disable=SC2016
+    PROV_BAR_HTML=$(prov_jq '
+        .chars.total as $t
+        | (.agents | sort_by(-.chars)) as $a
+        | $a[:6] + (if ($a | length) > 6
+                    then [{name: "others", kind: "others", chars: ($a[6:] | map(.chars) | add)}]
+                    else [] end)
+        | .[] | select(.chars > 0)
+        | "      <div class=\"bar-seg bar-\(.kind)\" data-agent=\"\(.name | @html)\" style=\"width:\((.chars / $t * 1000 | round) / 10)%\" title=\"\(.name | @html): \(.chars) chars\"></div>"')
+
+    PROV_LEGEND_HTML=$(prov_jq '
+        .agents[]
+        | "      <li data-agent=\"\(.name | @html)\"><span class=\"swatch swatch-\(.kind)\" aria-hidden=\"true\"></span><span class=\"who\">\(.name | @html)</span> <span class=\"kind\">\(.kind)</span> <span class=\"num\">\(.chars) chars · \(.commits) commit\(if .commits == 1 then "" else "s" end)</span></li>"')
+
+    # A five-letter sample carrying real marks, for the legend line.
+    PROV_SAMPLE=$(jq -nj '"agent" | split("") | map(. + "󠄁") | join("")')
+
+    {
+    # --- static head + CSS (quoted heredoc: no interpolation) ---
+    cat << 'PROV_HEAD'
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-mode="marks">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -626,6 +693,8 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
       --accent: #58a6ff;
       --border: #30363d;
       --card-bg: #161b22;
+      --muted: #8b949e;
+      --mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -638,6 +707,7 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
     }
     h1, h2, h3 { color: var(--accent); }
     a { color: var(--accent); }
+    code { font-family: var(--mono); font-size: 0.9em; }
     .back { margin-bottom: 2rem; }
     .content, .example {
       background: var(--card-bg);
@@ -645,30 +715,218 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
       border-radius: 8px;
       border: 1px solid var(--border);
       margin-bottom: 1.5rem;
+      min-width: 0;
     }
     ol, ul { padding-left: 1.5rem; }
     li { margin: 0.5rem 0; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+
+    /* stats strip */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .stat {
+      background: var(--card-bg);
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    .stat-value { font-size: 2.25rem; color: var(--accent); font-weight: bold; line-height: 1.1; }
+    .stat-value.small { font-size: 1.05rem; padding: 0.55rem 0; }
+    .stat-label { font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem; }
+
+    /* per-author bar + legend */
+    .bar {
+      display: flex;
+      height: 18px;
+      gap: 2px;
+      margin: 0.5rem 0 0.75rem;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar-seg { min-width: 2px; background: var(--agent-color, var(--muted)); border-radius: 2px; }
+    .bar-human { background: transparent; border: 1px solid var(--text); box-sizing: border-box; }
+    .bar-others { background: var(--muted); opacity: 0.5; }
+    .authors {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 0.15rem 1rem;
+      font-size: 0.9rem;
+    }
+    .authors li { margin: 0.15rem 0; }
+    .swatch {
+      display: inline-block;
+      width: 0.8em;
+      height: 0.8em;
+      margin-right: 0.45em;
+      border-radius: 2px;
+      vertical-align: -0.05em;
+      background: var(--agent-color, var(--muted));
+    }
+    .swatch-human { background: transparent; border: 1px solid var(--text); }
+    .who { font-weight: 600; }
+    .kind { color: var(--muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; }
+    .num { color: var(--muted); }
+
+    /* controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1rem 0 0.5rem;
+    }
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .seg-btn, .action {
+      font: inherit;
+      font-size: 0.9rem;
+      color: var(--text);
+      background: transparent;
+      border: 0;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+    }
+    .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+    .seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--bg); font-weight: 600; }
+    .action { border: 1px solid var(--border); border-radius: 6px; }
+    .action:hover, .seg-btn:hover:not([aria-pressed="true"]) { background: rgba(88, 166, 255, 0.12); }
+    .seg-btn:focus-visible, .action:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .caption { min-height: 1.4em; }
+
+    /* the document */
     pre.example-body {
-      font-family: 'Agave Nerd Font Mono P+', 'Hack Nerd Font Mono P+', 'SF Mono', Consolas, monospace;
+      font-family: 'Agave Nerd Font Mono P+', 'Hack Nerd Font Mono P+', var(--mono);
       white-space: pre-wrap;
-      overflow-x: auto;
+      overflow-wrap: anywhere;
       background: var(--bg);
       padding: 1rem;
+      margin: 0;
       border-radius: 6px;
       border: 1px solid var(--border);
+      line-height: 1.5;
     }
+    html[data-provenance="off"] pre.example-body { font-family: var(--mono); }
+    .prov { border-radius: 2px; }
+    .prov:hover { outline: 1px solid var(--border); }
+    html[data-mode="colour"] .prov-ai {
+      background: color-mix(in srgb, var(--agent-color, var(--muted)) 24%, transparent);
+    }
+    .sample { font-family: 'Agave Nerd Font Mono P+', var(--mono); }
+
+    /* hover attribution */
+    .tip {
+      position: absolute;
+      z-index: 10;
+      max-width: 320px;
+      padding: 0.5rem 0.75rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      font-size: 0.85rem;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+    .tip[hidden] { display: none; }
+    .tip .who { display: inline-block; margin-right: 0.4em; }
+    .tip .sub { color: var(--muted); display: block; }
     .limits li { opacity: 0.9; }
+PROV_HEAD
+
+    # --- data-driven CSS + body (unquoted heredoc: shell variables only;
+    # expanded values are never re-parsed, so `$` inside them is inert) ---
+    cat << EOF
+$PROV_AGENT_CSS
   </style>
 </head>
 <body>
   <div class="back"><a href="index.html">← Back to zociety</a></div>
-  <h1>🔤 Provenance Demo</h1>
+  <h1>🔤 Provenance</h1>
   <p>
-    Five-minute demo for
-    <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>:
-    agent-written text made visibly distinct from human-written text, in an
-    editor you already use, once a <code>P+</code> font is installed.
+    Two authors, one document. <code>$PROV_FILE</code> is the file that tells
+    Claude Code how to behave in this repository, and most of it was written
+    by the agents it instructs: $PROV_COMMITS commits by a human and by named
+    agents. Below, every character is attributed to the commit that introduced
+    it, so the marks show exactly which characters the human wrote. The mark
+    lives <em>in the text itself, not the markup</em>: U+E0101 (VARIATION
+    SELECTOR-18) follows each agent-written glyph, and a <code>P+</code> font
+    from
+    <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>
+    renders it as a wavy underline. Any other font renders plain text.
   </p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">$PROV_COMMITS</div>
+      <div class="stat-label">Commits</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value small">$PROV_FIRST → $PROV_LAST</div>
+      <div class="stat-label">Written</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">$PROV_AI_PCT%</div>
+      <div class="stat-label">Characters agent-written</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">$PROV_AGENT_COUNT</div>
+      <div class="stat-label">Distinct agents</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <h2>Who wrote what</h2>
+    <p class="muted">$PROV_TOTAL non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
+    <div class="bar" role="img" aria-label="Characters by author, top 6 plus others">
+$PROV_BAR_HTML
+    </div>
+    <ul class="authors">
+$PROV_LEGEND_HTML
+    </ul>
+  </div>
+
+  <div class="example">
+    <h2>The document</h2>
+    <div class="controls">
+      <div class="seg" id="modes" role="group" aria-label="Display mode">
+        <button type="button" class="seg-btn" data-mode="marks" aria-pressed="true">Font marks</button>
+        <button type="button" class="seg-btn" data-mode="colour" aria-pressed="false">Colour by author</button>
+        <button type="button" class="seg-btn" data-mode="plain" aria-pressed="false">Plain</button>
+      </div>
+      <button type="button" class="action" id="copy">Copy marked text</button>
+      <a class="action" href="$PROV_MARKED_NAME" download>Download $PROV_MARKED_NAME</a>
+    </div>
+    <p class="muted caption" id="caption" aria-live="polite">
+      Hover any run for its commit. <span class="sample">$PROV_SAMPLE</span>
+      wavy mark under a glyph = written by an agent; plain glyph = written by a human.
+    </p>
+    <pre class="example-body" id="doc" data-commit-base="https://github.com/zociety-dev/zociety/commit/" data-ref="$PROV_REF">
+EOF
+
+    # The marked HTML goes straight from jq into the file (-j: no trailing
+    # newline, which would otherwise render as a blank last line in <pre>).
+    prov_jq -j '.html'
+
+    # --- tail + JS (quoted heredoc: `$`, backticks and \u{...} are literal) ---
+    cat << 'PROV_TAIL'
+</pre>
+    <p class="muted">
+      <strong>Plain</strong> switches only the font. The U+E0101 characters
+      stay in the DOM, which is the point: the provenance travels with the
+      text, and any <code>P+</code> font can show it again.
+      <strong>Copy marked text</strong> puts the same characters on your
+      clipboard: paste into VS Code with a <code>P+</code> font and the marks
+      come along; paste anywhere else and it reads as normal text.
+    </p>
+  </div>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
 
   <div class="content">
     <h2>Two steps</h2>
@@ -679,31 +937,21 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
         <a href="https://github.com/delano/nerd-fonts">delano/nerd-fonts</a>
         fork, e.g. <code>Hack Nerd Font Mono P+</code>.</li>
       <li>Point your editor's font at the installed <code>P+</code> variant,
-        then open text marked by <code>bin/nfprov-drive</code> (or just read
-        the example below — it's rendered by your browser with the bundled
-        font).</li>
+        then open the downloaded marked file (or paste the copied text).
+        The document above is produced by <code>bin/nfprov-blame.py</code>,
+        which walks the file's git history and marks each character by the
+        commit that introduced it.</li>
     </ol>
-  </div>
-
-  <div class="example">
-    <h2>Live example</h2>
-    <p>
-      The block below is the most recent addition to zociety's own
-      <code>LEARNINGS.md</code>, run through
-      <code>bin/nfprov-drive LEARNINGS.md learnings</code>. Every character
-      zociety's agents added since the previous commit carries a provenance
-      mark. The default <code>vs</code> mode inserts U+E0101 (VARIATION
-      SELECTOR-18) after each character; <code>NFPROV_MODE=pua</code> mode
-      maps each character into Supplementary PUA-B (U+100000 + codepoint)
-      instead. The bundled <code>P+</code> font renders the marks; any other
-      font renders the plain glyphs, which is the expected fallback.
-    </p>
-    <pre class="example-body">$PROVENANCE_MARKED_HTML</pre>
   </div>
 
   <div class="content limits">
     <h2>Known limits (inherited from upstream, not solved here)</h2>
     <ul>
+      <li>Attribution is per-commit and by commit-message convention:
+        commits prefixed <code>[event]</code> (<code>[join]</code>,
+        <code>[stuff]</code>, <code>[evolve]</code>, …) are agents, everything
+        else is human. A human commit that pastes agent text is under-marked;
+        an agent commit that includes human edits is over-marked.</li>
       <li>Zociety's provenance is coarser than the live plugin: it is
         per-commit, not per-tool-call. Two edits in the same commit by the
         same agent are marked as one span.</li>
@@ -712,11 +960,117 @@ if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
         amended a typo in it afterward without a separate commit.</li>
     </ul>
   </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var doc = document.getElementById('doc');
+      var tip = document.getElementById('tip');
+      var caption = document.getElementById('caption');
+      var base = doc.getAttribute('data-commit-base');
+      var MODES = ['marks', 'colour', 'plain'];
+      var MARK = '\u{e0101}';
+
+      // --- display mode: data-mode on <html>, CSS does the rest ---
+      function setMode(mode, persist) {
+        if (MODES.indexOf(mode) < 0) mode = 'marks';
+        root.setAttribute('data-mode', mode);
+        if (mode === 'plain') root.setAttribute('data-provenance', 'off');
+        else root.removeAttribute('data-provenance');
+        var btns = document.querySelectorAll('.seg-btn');
+        for (var i = 0; i < btns.length; i++) {
+          var on = btns[i].getAttribute('data-mode') === mode;
+          btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        if (persist) {
+          try { localStorage.setItem('prov-mode', mode); } catch (e) { /* private mode */ }
+        }
+      }
+      var saved = null;
+      try { saved = localStorage.getItem('prov-mode'); } catch (e) { /* ignore */ }
+      setMode(saved || 'marks', false);
+      document.getElementById('modes').addEventListener('click', function (ev) {
+        var b = ev.target.closest('.seg-btn');
+        if (b) setMode(b.getAttribute('data-mode'), true);
+      });
+
+      // --- copy marked text ---
+      function say(msg) { caption.textContent = msg; }
+      document.getElementById('copy').addEventListener('click', function () {
+        var text = doc.textContent;
+        var marks = text.split(MARK).length - 1;
+        var chars = Array.from(text).length - marks;
+        var done = function () { say('Copied ' + chars + ' characters, ' + marks + ' provenance marks.'); };
+        var fail = function () { say('Copy failed. Select the text and copy it manually; the marks come along.'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, fail);
+        } else {
+          try {
+            var range = document.createRange();
+            range.selectNodeContents(doc);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy') ? done() : fail();
+            sel.removeAllRanges();
+          } catch (e) { fail(); }
+        }
+      });
+
+      // --- hover attribution: one tooltip, positioned at the pointer ---
+      function el(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text) n.textContent = text;
+        return n;
+      }
+      function showTip(span, ev) {
+        var sha = span.getAttribute('data-sha') || '';
+        var kind = span.classList.contains('prov-human') ? 'human' : 'agent';
+        tip.textContent = '';
+        tip.appendChild(el('span', 'who', span.getAttribute('data-agent') || '?'));
+        tip.appendChild(el('span', 'kind', kind));
+        var author = span.getAttribute('data-author');
+        if (author && author !== span.getAttribute('data-agent')) {
+          tip.appendChild(el('span', 'sub', 'git author: ' + author));
+        }
+        var line = el('span', 'sub');
+        if (sha) {
+          var a = el('a', null, sha);
+          a.href = base + sha;
+          line.appendChild(a);
+          line.appendChild(document.createTextNode(' · '));
+        }
+        line.appendChild(document.createTextNode(span.getAttribute('data-date') || ''));
+        tip.appendChild(line);
+        var subject = span.getAttribute('data-subject');
+        if (subject) tip.appendChild(el('span', 'sub', subject));
+        tip.hidden = false;
+        var maxLeft = window.scrollX + root.clientWidth - tip.offsetWidth - 8;
+        tip.style.left = Math.max(8, Math.min(ev.clientX + window.scrollX + 12, maxLeft)) + 'px';
+        tip.style.top = (ev.clientY + window.scrollY + 16) + 'px';
+      }
+      function hideTip() { tip.hidden = true; }
+      doc.addEventListener('mouseover', function (ev) {
+        var span = ev.target.closest('.prov');
+        if (span && doc.contains(span)) showTip(span, ev);
+      });
+      doc.addEventListener('mouseout', function (ev) {
+        var span = ev.target.closest('.prov');
+        if (span && !(ev.relatedTarget && span.contains(ev.relatedTarget))) hideTip();
+      });
+      window.addEventListener('scroll', hideTip, { passive: true });
+    })();
+  </script>
 </body>
 </html>
-EOF
+PROV_TAIL
+    } > "$DOCS_DIR/provenance.html"
 else
-    echo "Skipping provenance.html (nfprov.py unavailable or no markable content)"
+    # No page, no nav link: also drop outputs left by an earlier run so a
+    # stale demo never ships from a machine that can no longer regenerate it.
+    rm -f "$DOCS_DIR/provenance.html" "$DOCS_DIR"/*.marked.md
+    echo "Skipping provenance.html (nfprov-blame.py unavailable or no usable blame)"
 fi
 
 # ============================================================
