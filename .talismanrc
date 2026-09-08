@@ -1,4 +1,6 @@
 fileignoreconfig:
+- filename: talisman_report/talisman_reports/data/report.json
+  checksum: 9932ed4213d4ad25cbd50395d128f865e93038d5255f7a73502fb1d383aaf9da
 - filename: TEST-REPORT.md
   checksum: c2f00863afac3f43ffd3d525bb8073385478bb20ee5aa6504e73b349bb6b5af7
 - filename: PROJECT-OVERVIEW.md
