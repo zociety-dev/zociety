@@ -223,6 +223,7 @@ Install with: `pre-commit install`
 ### Permanent
 - `PROMPT.md` - Bootstrap instructions (stable, rarely changes)
 - `CLAUDE.md` - This file
+- `.envrc` - direnv: puts `bin/` on PATH, loads gitignored `.env` overrides
 - `bin/z*` - Event sourcing tools
 - `bin/read-learnings`, `bin/save-learning` - Learning persistence
 - `bin/nfprov*` - Provenance marking (vendored from delano/nerd-fonts)

@@ -81,4 +81,6 @@ fileignoreconfig:
   checksum: 6247bece24c37b4344e6795a542ee15895831ee00dcec95e4548fd289fc4521d
 - filename: bin/zgit
   checksum: 117d00b190ccf6e722329b28b756f7cdb1c29ae160e68a783fdae041ca6e6155
+- filename: .envrc
+  checksum: 9b960074bf481e51ac8e3412b40c2fd75369e42f9eeef26abf883ad8ff609fb7
 version: "1.0"

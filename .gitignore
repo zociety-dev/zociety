@@ -8,3 +8,6 @@ container/secrets/*
 
 # Talisman generated report output (not source)
 talisman_report/
+
+# direnv personal overrides (see .envrc)
+.env
