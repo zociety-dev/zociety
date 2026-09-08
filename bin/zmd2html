@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# zmd2html - Minimal, dependency-free Markdown -> HTML converter.
+#
+# Usage:
+#   bin/zmd2html < input.md
+#   bin/zmd2html file.md
+#
+# Reads Markdown on stdin (or from a file argument) and writes an HTML
+# fragment (no <html>/<body> wrapper) to stdout. Deliberately small: it
+# handles exactly the Markdown the zociety stuff/ docs use — ATX headings,
+# fenced code blocks, unordered/ordered lists, pipe tables, blockquotes,
+# horizontal rules, paragraphs, and inline links / bold / inline code — so
+# the site can be regenerated from git-native state with no external
+# renderer. Anything fancier degrades gracefully to escaped text.
+#
+# It is a pure function of its input: same Markdown in, same HTML out.
+
+set -euo pipefail
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,15p' "$0"
+  exit 0
+fi
+
+awk '
+function esc(s) {
+  gsub(/&/, "\\&amp;", s)
+  gsub(/</, "\\&lt;", s)
+  gsub(/>/, "\\&gt;", s)
+  return s
+}
+# Inline markdown on an already-HTML-escaped string.
+function inline(s,   out, seg, close_b, text, url, inner) {
+  # links: [text](url)
+  out = ""
+  while (match(s, /\[[^]]+\]\([^)]+\)/)) {
+    seg = substr(s, RSTART, RLENGTH)
+    close_b = index(seg, "]")
+    text = substr(seg, 2, close_b - 2)
+    url  = substr(seg, close_b + 2, length(seg) - close_b - 2)
+    out = out substr(s, 1, RSTART - 1) "<a href=\"" url "\">" text "</a>"
+    s = substr(s, RSTART + RLENGTH)
+  }
+  s = out s
+  # bold: **text**
+  out = ""
+  while (match(s, /\*\*[^*]+\*\*/)) {
+    seg = substr(s, RSTART, RLENGTH)
+    inner = substr(seg, 3, length(seg) - 4)
+    out = out substr(s, 1, RSTART - 1) "<strong>" inner "</strong>"
+    s = substr(s, RSTART + RLENGTH)
+  }
+  s = out s
+  # inline code: `code`
+  out = ""
+  while (match(s, /`[^`]+`/)) {
+    seg = substr(s, RSTART, RLENGTH)
+    inner = substr(seg, 2, length(seg) - 2)
+    out = out substr(s, 1, RSTART - 1) "<code>" inner "</code>"
+    s = substr(s, RSTART + RLENGTH)
+  }
+  return out s
+}
+function close_para() { if (in_para) { print "</p>"; in_para = 0 } }
+function flush_li() { if (li_open) { print "<li>" inline(esc(li_buf)) "</li>"; li_open = 0; li_buf = "" } }
+function close_list() {
+  flush_li()
+  if (in_list == "ul") { print "</ul>"; in_list = "" }
+  else if (in_list == "ol") { print "</ol>"; in_list = "" }
+}
+function close_table() { if (in_table) { print "</table>"; in_table = 0; table_row = 0 } }
+function close_blocks() { close_para(); close_list(); close_table() }
+function emit_table_row(line,   n, cells, i, tag, cell) {
+  # strip leading/trailing pipe, then split on |
+  sub(/^\|/, "", line); sub(/\|[ \t]*$/, "", line)
+  n = split(line, cells, /\|/)
+  tag = (table_row == 0) ? "th" : "td"
+  printf "<tr>"
+  for (i = 1; i <= n; i++) {
+    cell = cells[i]; gsub(/^[ \t]+|[ \t]+$/, "", cell)
+    printf "<%s>%s</%s>", tag, inline(esc(cell)), tag
+  }
+  print "</tr>"
+  table_row++
+}
+BEGIN { in_code = 0; in_para = 0; in_list = ""; in_table = 0; table_row = 0 }
+{
+  line = $0
+
+  # fenced code blocks
+  if (line ~ /^[ \t]*```/) {
+    if (in_code) { print "</code></pre>"; in_code = 0 }
+    else { close_blocks(); print "<pre><code>"; in_code = 1 }
+    next
+  }
+  if (in_code) { print esc(line); next }
+
+  # blank line: end open blocks (but keep list grouping tight)
+  if (line ~ /^[ \t]*$/) { close_para(); close_list(); close_table(); next }
+
+  # horizontal rule
+  if (line ~ /^[ \t]*(---+|\*\*\*+)[ \t]*$/) { close_blocks(); print "<hr>"; next }
+
+  # headings
+  if (match(line, /^#{1,6} /)) {
+    close_blocks()
+    level = RLENGTH - 1
+    text = substr(line, RLENGTH + 1)
+    printf "<h%d>%s</h%d>\n", level, inline(esc(text)), level
+    next
+  }
+
+  # pipe table rows
+  if (line ~ /^[ \t]*\|.*\|[ \t]*$/) {
+    close_para(); close_list()
+    # separator row like |---|:--:| -> just marks header boundary, skip
+    if (line ~ /^[ \t]*\|[ \t:|-]+\|[ \t]*$/) { next }
+    if (!in_table) { print "<table>"; in_table = 1; table_row = 0 }
+    emit_table_row(line)
+    next
+  }
+  close_table()
+
+  # blockquote
+  if (match(line, /^> ?/)) {
+    close_para(); close_list()
+    print "<blockquote>" inline(esc(substr(line, RLENGTH + 1))) "</blockquote>"
+    next
+  }
+
+  # unordered list
+  if (match(line, /^[ \t]*[-*] /)) {
+    # capture item text before flush_li(), whose inline() clobbers RLENGTH
+    rest = substr(line, RLENGTH + 1)
+    close_para()
+    if (in_list != "ul") { close_list(); print "<ul>"; in_list = "ul" }
+    flush_li()
+    li_open = 1; li_buf = rest
+    next
+  }
+
+  # ordered list
+  if (match(line, /^[ \t]*[0-9]+\. /)) {
+    rest = substr(line, RLENGTH + 1)
+    close_para()
+    if (in_list != "ol") { close_list(); print "<ol>"; in_list = "ol" }
+    flush_li()
+    li_open = 1; li_buf = rest
+    next
+  }
+
+  # continuation of the current list item (wrapped / indented line)
+  if (in_list != "" && li_open) {
+    sub(/^[ \t]+/, "", line)
+    li_buf = li_buf " " line
+    next
+  }
+
+  # paragraph text (accumulate; join wrapped lines with a space)
+  close_list()
+  if (!in_para) { print "<p>"; in_para = 1 } else { printf " " }
+  printf "%s", inline(esc(line))
+}
+END {
+  if (in_code) print "</code></pre>"
+  close_blocks()
+}
+' "${1:-/dev/stdin}"
