@@ -41,8 +41,11 @@ on iteration 2, and `zheap-death` deletes the file entirely when it archives.
 
 `bin/zociety` must forward `ZSTOP_*` alongside `ZLOOP_*`.
 
-Safety caps are not modes. `--max N` and `ZLOOP_TIMEOUT` stay unconditional,
-checked before the predicate chain. Do not move them.
+Safety caps are not modes. `--max N` and `ZLOOP_TIMEOUT` stay unconditional
+and stay where they are on `main`: the predicate chain runs first, then the
+`--max` check, and `ZLOOP_TIMEOUT` wraps the claude call. Do not move them.
+A run whose cycle completes on its last permitted iteration therefore still
+exits 0 (`Loop Complete`), not 1 (`Max Iterations Reached`).
 
 ## Modes
 

@@ -1,0 +1,63 @@
+#!/bin/bash
+# zstop-file: Stop predicate - manual override via a marker file
+#
+# Usage:
+#   bin/zstop-file
+#   bin/zstop-file -h | --help
+#
+# Stop when the marker file exists. On stop the file is removed and its owner
+# and mtime are reported, so a human can halt a running loop with:
+#   touch .claude/STOP
+#
+# Environment:
+#   ZSTOP_FILE=.claude/STOP   Path of the marker file
+#
+# Exit codes (predicate contract, see docs/SPEC-zstop-modes.md):
+#   0  stop      (marker file existed; it has been removed)
+#   1  continue  (no marker file)
+#   2  error     (marker path exists but is not a regular file, or cannot be removed)
+#
+# Prints one line to stdout: "STOP: file <who> <when>" or "CONTINUE: file <reason>".
+# Works on macOS (stat -f) and Linux (stat -c); the container is Linux.
+
+set -euo pipefail
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
+STOP_FILE="${ZSTOP_FILE:-.claude/STOP}"
+
+die() {
+  echo "zstop-file: $*" >&2
+  exit 2
+}
+
+if [[ ! -e "$STOP_FILE" ]]; then
+  echo "CONTINUE: file $STOP_FILE absent"
+  exit 1
+fi
+
+# A directory (mkdir .claude/STOP) or other non-file would make rm -f fail
+# under set -e with no verdict line; the dispatcher would then read that as
+# "continue" and the marker would persist. Fail loud instead.
+[[ -f "$STOP_FILE" ]] || die "$STOP_FILE exists but is not a regular file"
+
+# BSD stat (macOS) and GNU stat (Linux) take different flags. Pick by kernel
+# name rather than probing: on GNU, `stat -f` is --file-system and would
+# succeed with unrelated output.
+case "$(uname -s)" in
+  Darwin)
+    WHO=$(stat -f '%Su' "$STOP_FILE")
+    WHEN=$(stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%S%z' "$STOP_FILE")
+    ;;
+  *)
+    WHO=$(stat -c '%U' "$STOP_FILE")
+    WHEN=$(date -d "@$(stat -c '%Y' "$STOP_FILE")" '+%Y-%m-%dT%H:%M:%S%z')
+    ;;
+esac
+
+rm -f "$STOP_FILE" || die "cannot remove $STOP_FILE"
+echo "STOP: file $STOP_FILE touched by $WHO at $WHEN (removed)"
+exit 0

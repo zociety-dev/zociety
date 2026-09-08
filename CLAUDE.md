@@ -18,35 +18,90 @@ Note: It's "zociety" not "society".
 # Direct execution
 bin/zloop 60
 bin/zloop --max 60 --timeout 600 --verbose   # flags override ZLOOP_* env
+bin/zloop --stop action,file 60              # pick stop modes (default: action)
+ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
 
-# Containerized execution
+# Containerized execution (ZLOOP_* and ZSTOP_* are forwarded into the container)
 bin/zociety bin/zloop 60
+bin/zociety bin/zloop --stop budget,file 60
 ```
 
 Zociety's own loop with dynamic completion checking:
-- Runs iterations until `bin/zloop-complete` returns exit 0
+- Before each iteration `bin/zloop-complete` dispatches the stop predicates
+  (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
+  1 continue, 2 abort the loop (unknown mode or predicate error)
 - No static promise strings - uses exit codes
-- Checks `bin/zstate` action field each iteration
-- Stops when action is `stop` or `promise`
+- Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`
+- `--max N` and `ZLOOP_TIMEOUT` are unconditional safety caps, not modes;
+  the predicates run once more after the final permitted iteration, so
+  finishing on the last iteration exits 0 (`Loop Complete`), not 1
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
 - Each iteration has a 5-minute timeout (configurable via `ZLOOP_TIMEOUT`)
 - Only claude's result goes to stdout; all loop chrome goes to stderr
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
+- Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message
 
 | Script | Purpose |
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
-| `bin/zloop-complete` | Check if loop should stop (exit 0 = yes) |
+| `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
+| `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
+
+### Stop Modes
+
+Comma-separated list via `bin/zloop --stop LIST` or `ZLOOP_STOP=LIST` (flag wins).
+The first predicate that exits 0 stops the loop. Always include `file` so a
+human can halt a run with `touch .claude/STOP`.
+
+| Mode | Stops when | Knobs |
+|------|------------|-------|
+| `action` | `bin/zstate` action is `stop` or `promise` (today's rule, the default) | - |
+| `budget` | `[heap-death]` commits since loop start >= `ZSTOP_BUDGET`, or action is `promise` | `ZSTOP_BUDGET` |
+| `converge` | `ZSTOP_PATIENCE` consecutive `cycle/*` branches are trivial: stuff tree identical to the prior cycle's, or fewer than `ZSTOP_MIN_STUFF` files under `stuff/` | `ZSTOP_PATIENCE`, `ZSTOP_MIN_STUFF` |
+| `feedback` | latest `[heap-death]` since loop start has `"done": true` in its event data (`bin/zheap-death --done`) | - |
+| `file` | `.claude/STOP` exists; removed on stop, owner and mtime reported | `ZSTOP_FILE` |
+
+Recommended combos: `action,file`, `budget,file`, `budget,converge,file`, `feedback,file`.
+
+```bash
+bin/zloop --stop action,file 60
+bin/zloop --stop budget,file 60                        # 3 heap-deaths then stop
+ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
+bin/zloop --stop feedback,file 60                      # agent calls zheap-death --done
+touch .claude/STOP                                     # stop a running loop by hand
+bin/zloop-complete action,converge                     # dry-run predicates by hand
+```
+
+Dry runs by hand: `budget` and `feedback` exit 2 without a running loop's
+`.claude/zloop.state` (they scope to `start..HEAD`), and `file` consumes the
+marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
+
+In `budget` mode `bin/zheap-death` defaults `batch_size` to
+`ZSTOP_BUDGET - <heap-deaths so far>` so its event data agrees with the loop.
+`bin/zheap-death` refuses to run off `main` (override with
+`ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot archive a cycle into a
+feature branch.
 
 ### zloop Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ZLOOP_TIMEOUT` | 300 | Timeout per iteration in seconds |
+| `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_VERBOSE` | 0 | Pass --verbose to claude (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
+
+### ZSTOP Environment Variables
+
+| Variable | Default | Used by | Description |
+|----------|---------|---------|-------------|
+| `ZSTOP_BUDGET` | 3 | `budget`, `zheap-death` | Heap-deaths allowed since loop start |
+| `ZSTOP_PATIENCE` | 2 | `converge` | Consecutive trivial cycles before stopping |
+| `ZSTOP_MIN_STUFF` | 1 | `converge` | A cycle with fewer files under `stuff/` is trivial |
+| `ZSTOP_FILE` | .claude/STOP | `file` | Marker file path |
 
 ## Git-Native Event Sourcing (rev50+)
 
@@ -69,12 +124,19 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next |
+| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode) |
 | `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
+| `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zpromise` | Output completion promise |
 | `bin/zevent` | Low-level event creation |
-| `bin/zloop` | Autonomous loop with dynamic completion |
-| `bin/zloop-complete` | Check if loop should stop |
+| `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
+| `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
+| `bin/zstop-budget` | Stop predicate: `ZSTOP_BUDGET` heap-deaths since loop start |
+| `bin/zstop-converge` | Stop predicate: recent cycles stopped changing `stuff/` |
+| `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
+| `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
+| `bin/test-zstop-modes` | Dry-run harness for the stop modes |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
@@ -161,6 +223,7 @@ Install with: `pre-commit install`
 ### Permanent
 - `PROMPT.md` - Bootstrap instructions (stable, rarely changes)
 - `CLAUDE.md` - This file
+- `.envrc` - direnv: puts `bin/` on PATH, loads gitignored `.env` overrides
 - `bin/z*` - Event sourcing tools
 - `bin/read-learnings`, `bin/save-learning` - Learning persistence
 - `bin/nfprov*` - Provenance marking (vendored from delano/nerd-fonts)

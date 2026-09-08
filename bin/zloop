@@ -7,29 +7,40 @@
 # Options:
 #   -n, --max N        Max iterations (default: 60; positional N also accepted)
 #   -t, --timeout N    Timeout per iteration in seconds (default: 300)
+#   -s, --stop LIST    Stop modes, comma-separated (default: action)
+#                      Modes: action, budget, converge, feedback, file
+#                      e.g. --stop action,file  or  --stop budget,converge,file
 #   -v, --verbose      Stream claude events as they happen (stream-json)
 #   -d, --debug        Enable debug output
 #   -h, --help         Show this help
 #
 # Environment (flags override these):
 #   ZLOOP_TIMEOUT=300       Timeout per iteration in seconds
+#   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_VERBOSE=1         Pass --verbose to claude
 #   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
+#   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
 #
 # Output discipline:
 #   stdout  claude's result only (safe to redirect to a file)
 #   stderr  loop chrome: headers, state, timing, warnings
 #
-# Runs Claude Code iterations until bin/zloop-complete returns 0.
+# Runs Claude Code iterations until bin/zloop-complete returns 0. The resolved
+# stop-mode list is passed to it as the argument; it runs bin/zstop-<mode> for
+# each name (exit 0 stop, 1 continue, 2 abort the loop). --max and the timeout
+# are unconditional safety caps, not modes; the predicates get to see the
+# result of the final permitted iteration before --max ends the run.
 # Each iteration reads PROMPT.md and follows instructions.
-# State persists in git between iterations.
+# State persists in git between iterations; .claude/zloop.state carries
+# iteration/max/start/mode for zheap-death and the predicates.
 
 set -euo pipefail
 
 PROMPT="Read PROMPT.md and follow its instructions."
 MAX_ITERATIONS=60
 TIMEOUT_SECS="${ZLOOP_TIMEOUT:-300}"
+STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 VERBOSE="${ZLOOP_VERBOSE:-0}"
 BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
@@ -82,6 +93,11 @@ while [[ $# -gt 0 ]]; do
       TIMEOUT_SECS="$2"
       shift
       ;;
+    -s|--stop)
+      [[ $# -ge 2 ]] || die "$1 requires a value"
+      STOP_MODES="$2"
+      shift
+      ;;
     --)
       shift
       break
@@ -102,6 +118,16 @@ done
 
 require_int "ZLOOP_TIMEOUT" "$TIMEOUT_SECS"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
+[[ "$STOP_MODES" =~ ^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$ ]] \
+  || die "--stop/ZLOOP_STOP expects a comma-separated list of mode names, got '$STOP_MODES'"
+for _mode in ${STOP_MODES//,/ }; do
+  [[ -x "bin/zstop-$_mode" ]] || die "unknown stop mode '$_mode' (no executable bin/zstop-$_mode)"
+done
+
+# Captured once so predicates can scope their queries to this run
+# (e.g. heap-deaths in start..HEAD). Rewritten into zloop.state every
+# iteration because zheap-death deletes the file when it archives.
+START_SHA=$(git rev-parse HEAD)
 
 # Remove the loop-state file on any exit (Ctrl-C, termination, normal finish)
 # instead of leaving a stale .claude/zloop.state behind. The running claude is
@@ -115,6 +141,8 @@ FAILURES=0
 log "=== Zociety Loop ($(date '+%H:%M:%S')) ==="
 log "Max iterations: $MAX_ITERATIONS"
 log "Timeout per iteration: ${TIMEOUT_SECS}s"
+log "Stop modes: $STOP_MODES"
+log "Start: $START_SHA"
 [[ "$VERBOSE" == "1" ]] && log "Verbose: streaming claude events"
 [[ "$DEBUG" == "1" ]] && log "Debug mode: enabled"
 log ""
@@ -122,24 +150,41 @@ log ""
 while true; do
   ITERATION=$((ITERATION + 1))
 
-  # Write state for zheap-death to read
+  # Write state for zheap-death and the stop predicates to read. All keys go
+  # every iteration: the file is rewritten here and deleted by zheap-death.
   mkdir -p .claude
   cat > .claude/zloop.state << EOF
 iteration: $ITERATION
 max: $MAX_ITERATIONS
+start: $START_SHA
+mode: $STOP_MODES
 EOF
 
-  # Check completion BEFORE each iteration
-  debug "Checking if loop should complete..."
-  if bin/zloop-complete >&2; then
-    log ""
-    log "=== Loop Complete ==="
-    log "Iterations: $((ITERATION - 1))"
-    bin/zstate | jq '{action, phase, genesis}' >&2
-    exit 0
-  fi
+  # Check completion BEFORE each iteration. The dispatcher's exit code is
+  # three-valued: 0 stop, 2 abort (bad mode name or predicate error), anything
+  # else continue. A plain `if` would swallow the abort as "continue".
+  debug "Checking if loop should complete (modes: $STOP_MODES)..."
+  stop_status=0
+  bin/zloop-complete "$STOP_MODES" >&2 || stop_status=$?
+  case "$stop_status" in
+    0)
+      log ""
+      log "=== Loop Complete ==="
+      log "Iterations: $((ITERATION - 1))"
+      bin/zstate | jq '{action, phase, genesis}' >&2
+      exit 0
+      ;;
+    2)
+      log ""
+      log "=== Loop Aborted ==="
+      log "zloop-complete exited 2 (modes: $STOP_MODES); see message above"
+      exit 2
+      ;;
+  esac
 
-  # Check iteration limit
+  # Safety cap: iteration limit. Unconditional (no mode can disable it), but
+  # checked after the predicates so a run whose last permitted iteration
+  # finished the work exits 0 "Loop Complete", not 1 "Max Iterations Reached".
   if [[ $ITERATION -gt $MAX_ITERATIONS ]]; then
     log ""
     log "=== Max Iterations Reached ==="

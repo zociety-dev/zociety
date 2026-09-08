@@ -1,0 +1,113 @@
+#!/bin/bash
+# zstop-converge: Stop predicate - stop when recent cycles stop changing stuff/
+#
+# Usage:
+#   bin/zstop-converge
+#   bin/zstop-converge -h | --help
+#
+# Predicate contract (docs/SPEC-zstop-modes.md):
+#   exit 0 = stop, 1 = continue, 2 = error
+#   stdout: one line, "STOP: converge <reason>" or "CONTINUE: converge <reason>"
+#
+# Environment:
+#   ZSTOP_PATIENCE=2    Consecutive trivial cycles required before stopping
+#   ZSTOP_MIN_STUFF=1   A cycle adding fewer files under stuff/ is trivial
+#
+# Takes the last ZSTOP_PATIENCE+1 cycle/* branches, ordered by version sort of
+# the branch name (cycle/rev{N}-attempt{N}, the same order bin/zheap-death uses
+# to derive the next tag; independent of clock or fetch order). The list is
+# the union of refs/heads/cycle/* and refs/remotes/origin/cycle/*, one entry
+# per cycle name, the local ref preferred when both exist: a partial local
+# set (clones rarely track every archived cycle) must not hide remote-only
+# cycles or leave gaps in the tail window. For each cycle after the
+# first, compare its stuff/ tree (git rev-parse <branch>:stuff; a missing
+# stuff/ counts as the empty tree) with the prior cycle's. A cycle is trivial
+# when its tree equals the prior tree or it added < ZSTOP_MIN_STUFF files.
+# "Added" is the file count of the cycle's own stuff/ tree (git ls-tree -r):
+# bin/zheap-death git rm's stuff/ at every cycle boundary, so every file in a
+# cycle's tree was added in that cycle, including ones recreated under a name
+# a prior cycle also used (stuff/index.md every cycle). A diff against the
+# prior tree would class those as modified and undercount. Stops when all
+# ZSTOP_PATIENCE compared cycles are trivial. Fewer than ZSTOP_PATIENCE+1
+# branches: continue.
+
+set -e
+
+PATIENCE="${ZSTOP_PATIENCE:-2}"
+MIN_STUFF="${ZSTOP_MIN_STUFF:-1}"
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zstop-converge: $*" >&2
+  exit 2
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+[[ "$PATIENCE" =~ ^[1-9][0-9]*$ ]] || die "ZSTOP_PATIENCE expects a positive integer, got '$PATIENCE'"
+[[ "$MIN_STUFF" =~ ^[0-9]+$ ]] || die "ZSTOP_MIN_STUFF expects a non-negative integer, got '$MIN_STUFF'"
+
+NEED=$((PATIENCE + 1))
+
+# "<cycle name>\t<ref>" per line, local refs first so awk's first-seen rule
+# keeps the local one; then version-sorted on the cycle name alone.
+TAB=$(printf '\t')
+BRANCHES=()
+while IFS="$TAB" read -r _name ref; do
+  [[ -n "$ref" ]] && BRANCHES+=("$ref")
+done < <(
+  {
+    git for-each-ref --format="%(refname:lstrip=3)${TAB}%(refname:short)" 'refs/heads/cycle/*'
+    git for-each-ref --format="%(refname:lstrip=4)${TAB}%(refname:short)" 'refs/remotes/origin/cycle/*'
+  } | awk -F "$TAB" '!seen[$1]++' | sort -t "$TAB" -k1,1V
+)
+
+if [[ ${#BRANCHES[@]} -lt $NEED ]]; then
+  echo "CONTINUE: converge cycles=${#BRANCHES[@]} need=$NEED"
+  exit 1
+fi
+
+BRANCHES=("${BRANCHES[@]: -$NEED}")
+EMPTY_TREE=$(git hash-object -t tree /dev/null)
+
+stuff_tree() {
+  git rev-parse --verify -q "$1:stuff" 2>/dev/null || echo "$EMPTY_TREE"
+}
+
+# Files in a stuff/ tree = files that cycle added (stuff/ starts empty).
+stuff_count() {
+  git ls-tree -r --name-only "$1" | wc -l | tr -d ' '
+}
+
+PREV=$(stuff_tree "${BRANCHES[0]}")
+TRIVIAL=0
+DETAIL=""
+
+for b in "${BRANCHES[@]:1}"; do
+  CUR=$(stuff_tree "$b")
+  ADDED=$(stuff_count "$CUR")
+  if [[ "$CUR" == "$PREV" || "$ADDED" -lt "$MIN_STUFF" ]]; then
+    TRIVIAL=$((TRIVIAL + 1))
+    DETAIL="$DETAIL ${b##*/}:trivial(added=$ADDED)"
+  else
+    TRIVIAL=0
+    DETAIL="$DETAIL ${b##*/}:added=$ADDED"
+  fi
+  PREV=$CUR
+done
+
+if [[ $TRIVIAL -ge $PATIENCE ]]; then
+  echo "STOP: converge trivial=$TRIVIAL/$PATIENCE min_stuff=$MIN_STUFF$DETAIL"
+  exit 0
+fi
+
+echo "CONTINUE: converge trivial=$TRIVIAL/$PATIENCE min_stuff=$MIN_STUFF$DETAIL"
+exit 1

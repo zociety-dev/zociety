@@ -1,0 +1,88 @@
+#!/bin/bash
+# zgit: Run git inside the zociety container (as zociety-dev), from the host
+#
+# Usage:
+#   bin/zgit <git args...>
+#   bin/zgit -h | --help
+#
+# On the host, every git command that touches the index, history or origin
+# goes through the container: the host's ssh key and gh are delano, who has
+# no write access to zociety-dev/zociety; inside the container git and gh
+# are zociety-dev. This wrapper picks the route:
+#
+#   inside the container   exec git directly (agents can call bin/zgit too)
+#   container running      bin/zociety exec git ... (the user's live session
+#                          holds the container name; a second podman run
+#                          would fail with "name already in use")
+#   otherwise              bin/zociety git ... (fresh podman run --rm)
+#
+# --no-pager is always passed: the container gets a TTY, so git would
+# otherwise page. stdin does NOT reach the container, so a commit message
+# must come in as an argument: -m "..." (or -F <file>), never -F -,
+# --stdin, or an editor. Those forms are refused here rather than hanging.
+#
+# Read-only git (log, diff, status, ls-remote) is fine to run on the host
+# directly; use this wrapper when speed does not matter or the command
+# writes. gh goes through bin/zociety gh ... the same way.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zgit: $*" >&2
+  exit 1
+}
+
+case "${1:-}" in
+  ""|-h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONTAINER_NAME="zociety-sandbox"
+
+# Refuse the forms that need stdin or an editor: with no stdin in the
+# container they hang, holding the container name until killed.
+prev=""
+for arg in "$@"; do
+  case "$arg" in
+    --stdin|--file=-)
+      die "'$arg' reads stdin, which does not reach the container; pass -m \"...\" or -F <file>"
+      ;;
+    -)
+      [[ "$prev" == "-F" || "$prev" == "--file" ]] \
+        && die "'$prev -' reads stdin, which does not reach the container; pass -m \"...\" or -F <file>"
+      ;;
+  esac
+  prev="$arg"
+done
+
+if [[ "$1" == "commit" ]]; then
+  has_msg=0
+  for arg in "$@"; do
+    case "$arg" in
+      -m|-m*|--message|--message=*|-F|-F*|--file|--file=*|-C|-C*|-c|-c*|\
+      --reuse-message|--reuse-message=*|--reedit-message|--reedit-message=*|\
+      --no-edit|--fixup|--fixup=*|--squash|--squash=*|--allow-empty-message)
+        has_msg=1
+        ;;
+    esac
+  done
+  [[ $has_msg -eq 1 ]] || die "commit would open an editor in the container; pass -m \"...\""
+fi
+
+# Inside the container there is nothing to wrap.
+if [[ -f /run/.containerenv || -f /.dockerenv || -n "${container:-}" ]]; then
+  exec git --no-pager "$@"
+fi
+
+if podman container exists "$CONTAINER_NAME" 2>/dev/null; then
+  exec "$SCRIPT_DIR/zociety" exec git --no-pager "$@"
+fi
+
+exec "$SCRIPT_DIR/zociety" git --no-pager "$@"

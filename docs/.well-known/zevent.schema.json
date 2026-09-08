@@ -78,7 +78,7 @@
     },
     "data": {
       "type": "object",
-      "description": "Event-specific payload.",
+      "description": "Event-specific payload. heap-death: tag, branch, question, batch_remaining, done (bool, set by zheap-death --done). heap-death and direction also carry stop_mode (string, the zloop --stop list) and zstop (object of ZSTOP_* knobs) when recorded under bin/zloop.",
       "additionalProperties": true
     }
   }

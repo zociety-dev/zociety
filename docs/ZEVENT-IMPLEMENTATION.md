@@ -139,12 +139,13 @@ bin/zpass alice 1 "desc" 3 0
 bin/zstuff alice file.md "traversal"
 ```
 
-**heap-death**: `tag`, `branch`, `question`, `batch_remaining`
+**heap-death**: `tag`, `branch`, `question`, `batch_remaining`, `done` (`--done`), plus `stop_mode` (from `.claude/zloop.state`) and `zstop` (any `ZSTOP_*` set) when run under `bin/zloop`
 ```bash
 bin/zheap-death alice "question" 3
+bin/zheap-death --done alice "question"   # done: true; bin/zstop-feedback stops on it
 ```
 
-**direction**: `question`, `batch_total`, `batch_remaining`
+**direction**: `question`, `batch_total`, `batch_remaining`, plus `stop_mode`/`zstop` as above
 (auto-created by heap-death)
 
 ### 9. Cycle Management ✓

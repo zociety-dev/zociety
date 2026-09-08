@@ -1,0 +1,64 @@
+#!/bin/bash
+# zstop-budget: Stop predicate - stop after ZSTOP_BUDGET heap-deaths since loop start
+#
+# Usage:
+#   bin/zstop-budget
+#   bin/zstop-budget -h | --help
+#
+# Predicate contract (docs/SPEC-zstop-modes.md):
+#   exit 0 = stop, 1 = continue, 2 = error
+#   stdout: one line, "STOP: budget <reason>" or "CONTINUE: budget <reason>"
+#
+# Environment:
+#   ZSTOP_BUDGET=3   Heap-deaths allowed in start..HEAD before stopping
+#
+# Reads start: from .claude/zloop.state (written by bin/zloop every iteration)
+# and counts commits whose subject matches ^[heap-death] in start..HEAD. Stops
+# when the count reaches ZSTOP_BUDGET, or when bin/zstate reports action
+# "promise" (an agent exhausted the batch on its own). A missing state file,
+# missing start key, or unknown start sha is exit 2.
+
+set -e
+
+STATE_FILE=.claude/zloop.state
+BUDGET="${ZSTOP_BUDGET:-3}"
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zstop-budget: $*" >&2
+  exit 2
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+[[ "$BUDGET" =~ ^[0-9]+$ ]] || die "ZSTOP_BUDGET expects a non-negative integer, got '$BUDGET'"
+[[ -f "$STATE_FILE" ]] || die "$STATE_FILE not found (is bin/zloop running?)"
+
+START=$(grep '^start:' "$STATE_FILE" | cut -d: -f2 | tr -d ' ' || true)
+[[ -n "$START" ]] || die "no start: key in $STATE_FILE"
+git rev-parse --verify -q "${START}^{commit}" >/dev/null 2>&1 \
+  || die "start sha '$START' from $STATE_FILE is not a commit"
+
+COUNT=$(git rev-list --count --grep='^\[heap-death\]' "${START}..HEAD")
+
+if [[ "$COUNT" -ge "$BUDGET" ]]; then
+  echo "STOP: budget heap-deaths=$COUNT/$BUDGET since ${START:0:7}"
+  exit 0
+fi
+
+ACTION=$(bin/zstate | jq -r '.action')
+if [[ "$ACTION" == "promise" ]]; then
+  echo "STOP: budget action=promise heap-deaths=$COUNT/$BUDGET"
+  exit 0
+fi
+
+echo "CONTINUE: budget heap-deaths=$COUNT/$BUDGET action=$ACTION"
+exit 1

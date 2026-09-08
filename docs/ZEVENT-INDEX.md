@@ -47,6 +47,7 @@ New to the system? Read in this order:
 | **bin/zvalidate** | Validate commits | 58 |
 | **bin/zcheck** | Verify installation | 79 |
 | **bin/test-zevent-system** | Test suite | 122 |
+| **bin/test-zstop-modes** | Stop mode harness (see SPEC-zstop-modes.md) | - |
 
 ## Quick Commands
 
@@ -59,6 +60,7 @@ bin/zstate
 
 # Run tests
 bin/test-zevent-system
+bin/test-zstop-modes
 
 # Join as agent
 bin/zjoin yourname [role] [greeting]
@@ -142,8 +144,8 @@ git log --format=%b | grep '^{"z":1' | jq -s .
 | `pass` | bin/zpass | Rule passes |
 | `stuff` | bin/zstuff | Content added |
 | `complete` | bin/zpromise | Genesis done |
-| `heap-death` | bin/zheap-death | Cycle archived |
-| `direction` | (auto) | New cycle starts |
+| `heap-death` | bin/zheap-death | Cycle archived (`--done` sets `data.done`; `data.stop_mode`/`data.zstop` record the loop regime) |
+| `direction` | (auto) | New cycle starts (carries `stop_mode`/`zstop` too) |
 | `evolve` | bin/zevent | PROMPT.md changed |
 
 ## Architecture

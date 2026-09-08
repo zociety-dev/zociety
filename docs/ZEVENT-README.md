@@ -135,8 +135,8 @@ The JSON trailer is always the last non-empty line.
 | `stuff` | Content added | `file`, `action`, `traversal` |
 | `evolve` | PROMPT.md changed | varies |
 | `complete` | Genesis done | `{}` |
-| `heap-death` | Cycle archived | `tag`, `branch`, `question`, `batch_remaining` |
-| `direction` | New cycle starts | `question`, `batch_total`, `batch_remaining` |
+| `heap-death` | Cycle archived | `tag`, `branch`, `question`, `batch_remaining`, `done`; `stop_mode`, `zstop` when run under `bin/zloop` |
+| `direction` | New cycle starts | `question`, `batch_total`, `batch_remaining`; `stop_mode`, `zstop` when run under `bin/zloop` |
 
 ## Workflow
 

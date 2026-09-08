@@ -1,0 +1,66 @@
+#!/bin/bash
+# zstop-feedback: Stop predicate - stop when the last heap-death said done
+#
+# Usage:
+#   bin/zstop-feedback
+#   bin/zstop-feedback -h | --help
+#
+# Predicate contract (docs/SPEC-zstop-modes.md):
+#   exit 0 = stop, 1 = continue, 2 = error
+#   stdout: one line, "STOP: feedback <reason>" or "CONTINUE: feedback <reason>"
+#
+# Environment: none.
+#
+# Reads start: from .claude/zloop.state (written by bin/zloop every iteration)
+# and finds the most recent [heap-death] commit in start..HEAD directly
+# (bin/zstate keys off the latest event, which is the [direction] commit
+# zheap-death writes afterwards). Stops when that event's data has
+# "done": true, as set by bin/zheap-death --done. No heap-death since start,
+# or done absent/false: continue. Scoping to this run matters: a done:true
+# heap-death from an earlier run would otherwise stop every later run at
+# iteration 1, and no iteration could ever record a newer one to clear it.
+# A missing state file, missing start key, or unknown start sha is exit 2.
+
+set -e
+
+STATE_FILE=.claude/zloop.state
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zstop-feedback: $*" >&2
+  exit 2
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+[[ -f "$STATE_FILE" ]] || die "$STATE_FILE not found (is bin/zloop running?)"
+
+START=$(grep '^start:' "$STATE_FILE" | cut -d: -f2 | tr -d ' ' || true)
+[[ -n "$START" ]] || die "no start: key in $STATE_FILE"
+git rev-parse --verify -q "${START}^{commit}" >/dev/null 2>&1 \
+  || die "start sha '$START' from $STATE_FILE is not a commit"
+
+SHA=$(git log --format=%H --grep='^\[heap-death\]' -n 1 "${START}..HEAD")
+
+if [[ -z "$SHA" ]]; then
+  echo "CONTINUE: feedback no heap-death since ${START:0:7}"
+  exit 1
+fi
+
+DONE=$(git log -1 --format=%b "$SHA" | jq -r '.data.done // false' 2>/dev/null || true)
+
+if [[ "$DONE" == "true" ]]; then
+  echo "STOP: feedback done=true in ${SHA:0:7}"
+  exit 0
+fi
+
+echo "CONTINUE: feedback done=${DONE:-false} in ${SHA:0:7}"
+exit 1

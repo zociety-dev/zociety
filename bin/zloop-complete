@@ -1,27 +1,57 @@
 #!/usr/bin/env bash
-# zloop-complete - Check if the zociety loop should stop
-# Exit 0 = stop (complete)
-# Exit 1 = continue (not complete)
+# zloop-complete - Dispatch stop predicates; decide if the zociety loop should stop
 #
 # Usage:
-#   bin/zloop-complete
+#   bin/zloop-complete [mode[,mode...]]
+#   ZLOOP_STOP=mode[,mode...] bin/zloop-complete
+#   bin/zloop-complete -h | --help
 #
-# Used by bin/zloop for dynamic completion checking.
+# Mode list resolution: the argument wins, then $ZLOOP_STOP, then "action".
+# bin/zloop passes its resolved list as the argument; the env form is for
+# running the check by hand (bin/zdump calls it bare and gets "action").
+#
+# For each name in the list, runs bin/zstop-<name> (resolved relative to this
+# script's directory) and forwards its one-line stdout verdict to stderr.
+#
+# Exit codes:
+#   0  stop      first predicate that exits 0 wins; later ones are not run
+#   1  continue  every predicate exited non-zero (and none exited 2)
+#   2  abort     a name does not resolve to an executable, or a predicate exited 2
+#
+# Modes: action, budget, converge, feedback, file (see docs/SPEC-zstop-modes.md
+# and each bin/zstop-<mode> --help).
 
 set -euo pipefail
 
-STATE=$(bin/zstate)
-ACTION=$(echo "$STATE" | jq -r '.action')
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
 
-case "$ACTION" in
-  stop|promise)
-    # Cycle is complete, loop should stop
-    echo "COMPLETE: action=$ACTION"
-    exit 0
-    ;;
-  *)
-    # Work remains, loop should continue
-    echo "CONTINUE: action=$ACTION"
-    exit 1
-    ;;
-esac
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MODES="${1:-${ZLOOP_STOP:-action}}"
+
+abort() {
+  echo "zloop-complete: $*" >&2
+  exit 2
+}
+
+[[ -n "$MODES" ]] || abort "empty stop mode list"
+
+IFS=',' read -r -a mode_list <<< "$MODES"
+
+for mode in "${mode_list[@]}"; do
+  [[ "$mode" =~ ^[a-z][a-z0-9_-]*$ ]] || abort "invalid stop mode name '$mode'"
+  pred="$SCRIPT_DIR/zstop-$mode"
+  [[ -x "$pred" ]] || abort "unknown stop mode '$mode' ($pred not found or not executable)"
+
+  status=0
+  "$pred" >&2 || status=$?
+  case "$status" in
+    0) exit 0 ;;
+    2) abort "predicate zstop-$mode failed (exit 2)" ;;
+    *) ;;  # continue to the next predicate
+  esac
+done
+
+exit 1
