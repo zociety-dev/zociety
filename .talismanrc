@@ -62,11 +62,15 @@ fileignoreconfig:
 - filename: docs/.well-known/zevent.schema.json
   checksum: 4e037adc7aeefb5302b320bac858128e51fb2c000223e518fed39da8080a257a
 - filename: bin/zsite-generate
-  checksum: 2939c749147910a019edc85009fba6f496d71bb2372bd00adb0e45cdc3ab03ac
+  checksum: 6111d2989e898a1659a60247a86c92cbd4771bfe8db327a5195a59d754861b3a
 - filename: docs/provenance.html
-  checksum: c46deecce24ad881d2d7ab794299db1090e44917c1588d0f7268a7d347769639
+  checksum: f57ccddae79db1ca71001a5d577ff35678b9495c8bd82191740a38870cd4e470
 - filename: stuff/index.md
   checksum: 1909b676cfe75c92df6f0fb53a522591ed33010305448b9c5897e033188759b9
 - filename: docs/stuff.html
   checksum: e996a73aa420fc4b0f5cd2209e42a699b4437f726793d385e7a3cfc28fca9a8e
+- filename: bin/nfprov-upstream.py
+  checksum: fb50a47494d335ccd01a40b2a555c74076f5d455740e75dd4932ad36293be7a9
+- filename: bin/nfprov-blame.py
+  checksum: 6d2a2aca3c4336b4aa1bc5bef21b826b80c8605dd7ee3515222e4c4e550eaded
 version: "1.0"
