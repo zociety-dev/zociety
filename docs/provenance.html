@@ -184,19 +184,21 @@
   <p>
     Two authors, one document. <code>CLAUDE.md</code> is the file that tells
     Claude Code how to behave in this repository, and most of it was written
-    by the agents it instructs: 17 commits by a human and by named
+    by the agents it instructs: 19 commits by a human and by named
     agents. Below, every character is attributed to the commit that introduced
     it, so the marks show exactly which characters the human wrote. The mark
     lives <em>in the text itself, not the markup</em>: U+E0101 (VARIATION
     SELECTOR-18) follows each agent-written glyph, and a <code>P+</code> font
     from
     <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>
-    renders it as a wavy underline. Any other font renders plain text.
+    renders it as a wavy underline under the 188 printable Latin-1
+    characters (U+0021 to U+00FF, soft hyphen excluded). Any other font, and
+    any character outside that set, renders as plain text.
   </p>
 
   <div class="stats">
     <div class="stat">
-      <div class="stat-value">17</div>
+      <div class="stat-value">19</div>
       <div class="stat-label">Commits</div>
     </div>
     <div class="stat">
@@ -204,7 +206,7 @@
       <div class="stat-label">Written</div>
     </div>
     <div class="stat">
-      <div class="stat-value">42%</div>
+      <div class="stat-value">39%</div>
       <div class="stat-label">Characters agent-written</div>
     </div>
     <div class="stat">
@@ -215,17 +217,17 @@
 
   <div class="content">
     <h2>Who wrote what</h2>
-    <p class="muted">9005 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
+    <p class="muted">9604 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
     <div class="bar" role="img" aria-label="Characters by author, top 6 plus others">
-      <div class="bar-seg bar-human" data-agent="human" style="width:57.9%" title="human: 5217 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="evolve" style="width:15.7%" title="evolve: 1413 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="Claude Opus 4.5" style="width:9.3%" title="Claude Opus 4.5: 840 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="fix" style="width:7.5%" title="fix: 672 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="observer" style="width:5.5%" title="observer: 498 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="opus" style="width:4.1%" title="opus: 365 chars"></div>
+      <div class="bar-seg bar-human" data-agent="human" style="width:60.6%" title="human: 5816 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="evolve" style="width:14.7%" title="evolve: 1413 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="Claude Opus 4.5" style="width:8.7%" title="Claude Opus 4.5: 840 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="fix" style="width:7%" title="fix: 672 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="observer" style="width:5.2%" title="observer: 498 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="opus" style="width:3.8%" title="opus: 365 chars"></div>
     </div>
     <ul class="authors">
-      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">5217 chars · 10 commits</span></li>
+      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">5816 chars · 12 commits</span></li>
       <li data-agent="evolve"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">evolve</span> <span class="kind">ai</span> <span class="num">1413 chars · 1 commit</span></li>
       <li data-agent="Claude Opus 4.5"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">Claude Opus 4.5</span> <span class="kind">ai</span> <span class="num">840 chars · 2 commits</span></li>
       <li data-agent="fix"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">fix</span> <span class="kind">ai</span> <span class="num">672 chars · 2 commits</span></li>
@@ -252,7 +254,7 @@
     </div>
     <p class="muted caption" id="caption" aria-live="polite">
       Hover any run for its commit. <span class="sample">a󠄁g󠄁e󠄁n󠄁t󠄁</span>
-      wavy mark under a glyph = written by an agent; plain glyph = written by a human.
+      wavy mark under a glyph = written by an agent; plain glyph = written by a human, or outside the marked set.
     </p>
     <pre class="example-body" id="doc" data-commit-base="https://github.com/zociety-dev/zociety/commit/" data-ref="HEAD">
 <span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md"># CLAUDE.md
@@ -394,6 +396,7 @@ feature branch.
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9a8f104" data-date="2026-09-08" data-subject="Add bin/test-prov-encoding to check the page&#x27;s VS to PUA transform against nfprov">| `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 </span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁`󠄁 |󠄁 P󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁 G󠄁i󠄁t󠄁H󠄁u󠄁b󠄁 A󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 A󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁 a󠄁p󠄁p󠄁r󠄁o󠄁v󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
@@ -407,8 +410,16 @@ feature branch.
 Agent-written text is marked in-band so a P+ font renders it distinctly.
 The encoding is the fork's, not ours: U+E0101 (VARIATION SELECTOR-18)
 after each AI character, or Supplementary PUA-B (U+100000 + codepoint)
-in `pua` mode. Never reimplement it. `bin/nfprov-upstream.py` and
-`bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
+in `pua` mode. Never reimplement it. </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="a8dff4d" data-date="2026-09-08" data-subject="Document the P+ marked set and the WebKit fallback in CLAUDE.md">The marked set is the 188 printable</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="a8dff4d" data-date="2026-09-08" data-subject="Document the P+ marked set and the WebKit fallback in CLAUDE.md">Latin-1 characters U+0021-U+00FF (soft hyphen excluded); VS17 is human,
+VS18 is ai, VS19 is unknown, and plane 16 addresses the ai variants only.
+Everything else (Greek, Cyrillic, icons, U+2192) passes through unmarked:
+nfprov still emits base+VS18, but the font has no such sequence, so every
+renderer drops the selector and draws the plain glyph. No tofu, no mark.
+Width (Mono, Propo, proportional) is a separate P+ face, not a selector.
+WebKit (Safari, Orion) ignores the VS sequences entirely; the page falls
+back to PUA-B display there (#13). `bin/nfprov-upstream.py` and
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">`bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
 by copying, and keep the source SHA in the header. Attribution is by
 commit convention: `[event]` commits are agents (name from the zevent
 envelope), everything else is the human. Over-marking is the accepted

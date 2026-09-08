@@ -137,6 +137,7 @@ A󠄁l󠄁l󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 i󠄁s󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e�
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
+| `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁`󠄁 |󠄁 P󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁 G󠄁i󠄁t󠄁H󠄁u󠄁b󠄁 A󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 A󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁 a󠄁p󠄁p󠄁r󠄁o󠄁v󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
@@ -150,7 +151,15 @@ A󠄁l󠄁l󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 i󠄁s󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e�
 Agent-written text is marked in-band so a P+ font renders it distinctly.
 The encoding is the fork's, not ours: U+E0101 (VARIATION SELECTOR-18)
 after each AI character, or Supplementary PUA-B (U+100000 + codepoint)
-in `pua` mode. Never reimplement it. `bin/nfprov-upstream.py` and
+in `pua` mode. Never reimplement it. The marked set is the 188 printable
+Latin-1 characters U+0021-U+00FF (soft hyphen excluded); VS17 is human,
+VS18 is ai, VS19 is unknown, and plane 16 addresses the ai variants only.
+Everything else (Greek, Cyrillic, icons, U+2192) passes through unmarked:
+nfprov still emits base+VS18, but the font has no such sequence, so every
+renderer drops the selector and draws the plain glyph. No tofu, no mark.
+Width (Mono, Propo, proportional) is a separate P+ face, not a selector.
+WebKit (Safari, Orion) ignores the VS sequences entirely; the page falls
+back to PUA-B display there (#13). `bin/nfprov-upstream.py` and
 `bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
 by copying, and keep the source SHA in the header. Attribution is by
 commit convention: `[event]` commits are agents (name from the zevent

@@ -859,7 +859,9 @@ $PROV_AGENT_CSS
     SELECTOR-18) follows each agent-written glyph, and a <code>P+</code> font
     from
     <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>
-    renders it as a wavy underline. Any other font renders plain text.
+    renders it as a wavy underline under the 188 printable Latin-1
+    characters (U+0021 to U+00FF, soft hyphen excluded). Any other font, and
+    any character outside that set, renders as plain text.
   </p>
 
   <div class="stats">
@@ -910,7 +912,7 @@ $PROV_LEGEND_HTML
     </div>
     <p class="muted caption" id="caption" aria-live="polite">
       Hover any run for its commit. <span class="sample">$PROV_SAMPLE</span>
-      wavy mark under a glyph = written by an agent; plain glyph = written by a human.
+      wavy mark under a glyph = written by an agent; plain glyph = written by a human, or outside the marked set.
     </p>
     <pre class="example-body" id="doc" data-commit-base="https://github.com/zociety-dev/zociety/commit/" data-ref="$PROV_REF">
 EOF
