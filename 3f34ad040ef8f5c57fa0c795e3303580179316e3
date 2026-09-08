@@ -1,0 +1,4 @@
+cycle: rev63 attempt49
+genesis_complete: true
+question: Nerd-fonts provenance demo (delano/nerd-fonts#15) is fully wired and proven: nfprov.py --selftest passes, bin/nfprov-drive marks LEARNINGS.md retroactively via git history, and bin/zsite-generate wires it additively (skips cleanly if python3/nfprov.py/nfprov-drive missing, verified end-to-end with a live zsite-generate run producing docs/provenance.html). Closing this batch rather than repeating wiring cycles on an already-proven hypothesis. Next direction: what should zociety build on top of the provenance demo, or what's the next hypothesis worth testing?
+batch_remaining: 0
