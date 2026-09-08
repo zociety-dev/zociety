@@ -2,12 +2,24 @@
 # zloop - Zociety's autonomous loop with dynamic completion checking
 #
 # Usage:
-#   bin/zloop [max-iterations]
+#   bin/zloop [options] [max-iterations]
 #
-# Environment:
-#   ZLOOP_TIMEOUT=300   Timeout per iteration in seconds (default: 300)
-#   ZLOOP_DEBUG=1       Enable debug output
-#   ZLOOP_VERBOSE=1     Pass --verbose to claude
+# Options:
+#   -n, --max N        Max iterations (default: 60; positional N also accepted)
+#   -t, --timeout N    Timeout per iteration in seconds (default: 300)
+#   -v, --verbose      Stream claude events as they happen (stream-json)
+#   -d, --debug        Enable debug output
+#   -h, --help         Show this help
+#
+# Environment (flags override these):
+#   ZLOOP_TIMEOUT=300       Timeout per iteration in seconds
+#   ZLOOP_DEBUG=1           Enable debug output
+#   ZLOOP_VERBOSE=1         Pass --verbose to claude
+#   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
+#
+# Output discipline:
+#   stdout  claude's result only (safe to redirect to a file)
+#   stderr  loop chrome: headers, state, timing, warnings
 #
 # Runs Claude Code iterations until bin/zloop-complete returns 0.
 # Each iteration reads PROMPT.md and follows instructions.
@@ -15,26 +27,97 @@
 
 set -euo pipefail
 
-MAX_ITERATIONS="${1:-60}"
-ITERATION=0
 PROMPT="Read PROMPT.md and follow its instructions."
+MAX_ITERATIONS=60
 TIMEOUT_SECS="${ZLOOP_TIMEOUT:-300}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 VERBOSE="${ZLOOP_VERBOSE:-0}"
+BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
+BACKOFF_BASE=1
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+log() { echo "$*" >&2; }
 
 debug() {
   if [[ "$DEBUG" == "1" ]]; then
-    echo "[debug] $*" >&2
+    log "[debug] $*"
   fi
 }
 
-echo "=== Zociety Loop ==="
-echo "Max iterations: $MAX_ITERATIONS"
-echo "Timeout per iteration: ${TIMEOUT_SECS}s"
-if [[ "$DEBUG" == "1" ]]; then
-  echo "Debug mode: enabled"
-fi
-echo ""
+die() {
+  log "zloop: $*"
+  log "Try 'bin/zloop --help'."
+  exit 2
+}
+
+require_int() {
+  [[ "$2" =~ ^[0-9]+$ ]] || die "$1 expects a non-negative integer, got '$2'"
+}
+
+positional_seen=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -v|--verbose)
+      VERBOSE=1
+      ;;
+    -d|--debug)
+      DEBUG=1
+      ;;
+    -n|--max|--max-iterations)
+      [[ $# -ge 2 ]] || die "$1 requires a value"
+      require_int "$1" "$2"
+      MAX_ITERATIONS="$2"
+      shift
+      ;;
+    -t|--timeout)
+      [[ $# -ge 2 ]] || die "$1 requires a value"
+      require_int "$1" "$2"
+      TIMEOUT_SECS="$2"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      die "unknown option '$1'"
+      ;;
+    *)
+      [[ $positional_seen -eq 0 ]] || die "unexpected argument '$1'"
+      require_int "max-iterations" "$1"
+      MAX_ITERATIONS="$1"
+      positional_seen=1
+      ;;
+  esac
+  shift
+done
+[[ $# -eq 0 ]] || die "unexpected argument '$1'"
+
+require_int "ZLOOP_TIMEOUT" "$TIMEOUT_SECS"
+require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
+
+# Remove the loop-state file on any exit (Ctrl-C, termination, normal finish)
+# instead of leaving a stale .claude/zloop.state behind. The running claude is
+# in this script's foreground process group, so an interactive SIGINT already
+# reaches it; this just guarantees cleanup.
+trap 'rm -f .claude/zloop.state' EXIT
+
+ITERATION=0
+FAILURES=0
+
+log "=== Zociety Loop ($(date '+%H:%M:%S')) ==="
+log "Max iterations: $MAX_ITERATIONS"
+log "Timeout per iteration: ${TIMEOUT_SECS}s"
+[[ "$VERBOSE" == "1" ]] && log "Verbose: streaming claude events"
+[[ "$DEBUG" == "1" ]] && log "Debug mode: enabled"
+log ""
 
 while true; do
   ITERATION=$((ITERATION + 1))
@@ -48,35 +131,34 @@ EOF
 
   # Check completion BEFORE each iteration
   debug "Checking if loop should complete..."
-  if bin/zloop-complete; then
-    echo ""
-    echo "=== Loop Complete ==="
-    echo "Iterations: $ITERATION"
-    bin/zstate | jq '{action, phase, genesis}'
-    rm -f .claude/zloop.state
+  if bin/zloop-complete >&2; then
+    log ""
+    log "=== Loop Complete ==="
+    log "Iterations: $((ITERATION - 1))"
+    bin/zstate | jq '{action, phase, genesis}' >&2
     exit 0
   fi
 
   # Check iteration limit
   if [[ $ITERATION -gt $MAX_ITERATIONS ]]; then
-    echo ""
-    echo "=== Max Iterations Reached ==="
-    echo "Stopped after $MAX_ITERATIONS iterations"
-    bin/zstate | jq '{action, phase, genesis}'
+    log ""
+    log "=== Max Iterations Reached ==="
+    log "Stopped after $MAX_ITERATIONS iterations"
+    bin/zstate | jq '{action, phase, genesis}' >&2
     exit 1
   fi
 
-  echo ""
-  echo "=== Iteration $ITERATION/$MAX_ITERATIONS ==="
-  bin/zstate | jq -c '{action, phase}'
-  echo ""
+  log ""
+  log "=== Iteration $ITERATION/$MAX_ITERATIONS ($(date '+%H:%M:%S')) ==="
+  bin/zstate | jq -c '{action, phase}' >&2
+  log ""
+  iter_start=$SECONDS
 
   # Build claude command arguments for autonomous operation:
   #   --print: Output result without interactive mode
   #   --dangerously-skip-permissions: Skip tool permission prompts
   #   --strict-mcp-config: Skip all MCP servers (they may hang in containers)
   #   --no-session-persistence: Don't save sessions (avoids file conflicts)
-  #   --tools default: Use default tools only
   CLAUDE_ARGS=(
     --print
     --dangerously-skip-permissions
@@ -84,34 +166,51 @@ EOF
     --no-session-persistence
   )
 
+  # In --print's default (text) mode nothing is emitted until the whole agent
+  # turn finishes, so iterations look "stuck". VERBOSE switches to streaming
+  # JSON, which prints events (tool calls, partial text) as they happen.
   if [[ "$VERBOSE" == "1" ]]; then
-    CLAUDE_ARGS+=(--verbose)
+    CLAUDE_ARGS+=(--verbose --output-format stream-json --include-partial-messages)
   fi
 
   CLAUDE_ARGS+=("$PROMPT")
 
   debug "Running: claude ${CLAUDE_ARGS[*]}"
 
-  # Run one Claude iteration
-  # The || true prevents loop exit on non-zero claude return codes
-  # Note: </dev/null closes stdin to prevent claude from expecting interactive input
+  # Run one Claude iteration. claude's stdout stays on stdout (the work
+  # product); its stderr stays on stderr. A non-zero exit never ends the loop.
+  # </dev/null closes stdin so claude never waits for interactive input.
+  exit_code=0
   if command -v timeout &>/dev/null; then
     debug "Using timeout wrapper (${TIMEOUT_SECS}s)"
-    timeout "$TIMEOUT_SECS" claude "${CLAUDE_ARGS[@]}" </dev/null 2>&1 || {
-      exit_code=$?
-      if [[ $exit_code -eq 124 ]]; then
-        echo "[zloop] Iteration timed out after ${TIMEOUT_SECS}s" >&2
-      else
-        debug "Claude exited with code $exit_code"
-      fi
-    }
+    timeout "$TIMEOUT_SECS" claude "${CLAUDE_ARGS[@]}" </dev/null || exit_code=$?
   else
-    claude "${CLAUDE_ARGS[@]}" </dev/null 2>&1 || {
-      debug "Claude exited with code $?"
-    }
+    claude "${CLAUDE_ARGS[@]}" </dev/null || exit_code=$?
   fi
 
-  debug "Iteration $ITERATION complete, sleeping 1s..."
-  # Small delay to avoid rate limits
-  sleep 1
+  log "[zloop] Iteration $ITERATION finished in $((SECONDS - iter_start))s (exit $exit_code)"
+
+  # Fixed 1s pause on success. On consecutive non-zero exits (rate limits,
+  # transient API errors) back off exponentially instead of hammering every
+  # second: 2s, 4s, 8s ... capped at BACKOFF_MAX. A timeout (124) means claude
+  # was working, not refused, so it does not count toward backoff.
+  if [[ $exit_code -eq 0 ]]; then
+    FAILURES=0
+    delay=$BACKOFF_BASE
+  elif [[ $exit_code -eq 124 ]]; then
+    log "[zloop] Iteration timed out after ${TIMEOUT_SECS}s"
+    delay=$BACKOFF_BASE
+  else
+    FAILURES=$((FAILURES + 1))
+    if [[ $FAILURES -lt 20 ]]; then
+      delay=$((BACKOFF_BASE << FAILURES))
+    else
+      delay=$BACKOFF_MAX
+    fi
+    [[ $delay -gt $BACKOFF_MAX ]] && delay=$BACKOFF_MAX
+    log "[zloop] claude exited $exit_code ($FAILURES consecutive); backing off ${delay}s"
+  fi
+
+  debug "Iteration $ITERATION complete, sleeping ${delay}s..."
+  sleep "$delay"
 done

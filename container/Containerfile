@@ -67,8 +67,16 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 RUN curl -L https://github.com/thoughtworks/talisman/releases/latest/download/talisman_linux_amd64 -o /usr/local/bin/talisman \
     && chmod +x /usr/local/bin/talisman
 
-# Install Claude Code globally
-RUN npm install -g @anthropic-ai/claude-code
+# Install Claude Code (native binary installer, not npm).
+# Install under /opt, NOT /home/agent: that home is a mounted named volume at
+# runtime and would shadow a home-dir install. Symlink the launcher onto PATH.
+# Auto-update is disabled (read-only rootfs anyway); update via `bin/zociety --rebuild`.
+ENV DISABLE_AUTOUPDATER=1
+RUN mkdir -p /opt/claude-home \
+    && curl -fsSL https://claude.ai/install.sh | HOME=/opt/claude-home bash \
+    && ln -sf /opt/claude-home/.local/bin/claude /usr/local/bin/claude \
+    && chmod -R a+rX /opt/claude-home \
+    && /usr/local/bin/claude --version
 
 # Node image already has 'node' user with UID 1000
 # Rename home directory and set up for our use

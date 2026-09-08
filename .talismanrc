@@ -37,8 +37,6 @@ fileignoreconfig:
   checksum: 0a6df2dd39bf134c13d7b5eaecf225f9869f1e4c7a78ccaf7546f52be85df3f9
 - filename: stuff/zociety-loop.yml
   checksum: f4720b2a24ba738c3191c3c4896e34fc8a2a88186e0d40e6f266baefca758c5f
-- filename: .serena/memories/project_overview.md
-  checksum: 9efc1746a3a10c60a935c7cb4bcc253556e35560f652fb10366628eed0e8ed22
 - filename: bin/zga-setup
   checksum: 03b2152299e6fb89d29a2b533e40487a2ea3bb4196c2a766a613039462b616d2
 - filename: workflows/templates/weekly-session.yml
@@ -57,10 +55,12 @@ fileignoreconfig:
   checksum: 11762d60812d770a8be632d62625bdfbb65b83351c00bef36641998c708b80b8
 - filename: .githooks/pre-commit
   checksum: e1b40fe6cca915f012858517662dbeb8cf81d47b38e73d2ebc5b6c1d54b4a8e0
-- filename: bin/zsite-generate
-  checksum: 447d3c3f1977af41cf602e0f1e92b21f67dbfebddbf66276257ca0797a77d735
 - filename: docs/.well-known/agent-network.json
   checksum: a6689451d749854245f486436b6701166de070a95da58e75a3baf65efd558d28
 - filename: docs/.well-known/zevent.schema.json
   checksum: 4e037adc7aeefb5302b320bac858128e51fb2c000223e518fed39da8080a257a
+- filename: bin/zsite-generate
+  checksum: 2939c749147910a019edc85009fba6f496d71bb2372bd00adb0e45cdc3ab03ac
+- filename: docs/provenance.html
+  checksum: c46deecce24ad881d2d7ab794299db1090e44917c1588d0f7268a7d347769639
 version: "1.0"

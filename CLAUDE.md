@@ -17,6 +17,8 @@ Note: It's "zociety" not "society".
 ```bash
 # Direct execution
 bin/zloop 60
+bin/zloop --max 60 --timeout 600 --verbose   # flags override ZLOOP_* env
+bin/zloop --help
 
 # Containerized execution
 bin/zociety bin/zloop 60
@@ -29,10 +31,12 @@ Zociety's own loop with dynamic completion checking:
 - Stops when action is `stop` or `promise`
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
 - Each iteration has a 5-minute timeout (configurable via `ZLOOP_TIMEOUT`)
+- Only claude's result goes to stdout; all loop chrome goes to stderr
+- Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
 
 | Script | Purpose |
 |--------|---------|
-| `bin/zloop [n]` | Run autonomous loop, max n iterations |
+| `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete` | Check if loop should stop (exit 0 = yes) |
 
 ### zloop Environment Variables
@@ -42,6 +46,7 @@ Zociety's own loop with dynamic completion checking:
 | `ZLOOP_TIMEOUT` | 300 | Timeout per iteration in seconds |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_VERBOSE` | 0 | Pass --verbose to claude (1 = on) |
+| `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 
 ## Git-Native Event Sourcing (rev50+)
 

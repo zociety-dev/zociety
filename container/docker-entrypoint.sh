@@ -111,6 +111,16 @@ if [[ -f "/run/secrets/anthropic_api_key" ]]; then
 fi
 
 # ============================================================
+# Claude subscription OAuth token (Max/Pro)
+# Mint on the host with: bin/zociety setup-token
+# ============================================================
+if [[ -f "/run/secrets/claude_oauth_token" ]]; then
+    # Strip any whitespace (the file is written with a trailing newline).
+    CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '[:space:]' < /run/secrets/claude_oauth_token)"
+    export CLAUDE_CODE_OAUTH_TOKEN
+fi
+
+# ============================================================
 # GitHub Token - for gh CLI and API access
 # ============================================================
 if [[ -f "/run/secrets/github_token" ]]; then

@@ -83,6 +83,27 @@ else
 fi
 
 # ============================================================
+# Generate Provenance Demo (delano/nerd-fonts#15)
+# ============================================================
+# Additive: skipped entirely (no page, no nav link) if nfprov.py or its
+# python3 interpreter is unavailable on the generating machine, or if
+# there is no markable content. Every other page keeps generating either way.
+echo "Checking provenance demo prerequisites..."
+
+PROVENANCE_MARKED_HTML=""
+PROVENANCE_NAV_LINK=""
+if command -v python3 >/dev/null 2>&1 && [[ -f bin/nfprov.py && -f bin/nfprov-drive ]]; then
+    MARKED=""
+    if git rev-parse --verify learnings >/dev/null 2>&1; then
+        MARKED=$(bin/nfprov-drive LEARNINGS.md learnings 2>/dev/null || true)
+    fi
+    if [[ -n "$MARKED" ]]; then
+        PROVENANCE_MARKED_HTML=$(printf '%s' "$MARKED" | python3 -c 'import sys, html; sys.stdout.write(html.escape(sys.stdin.read()))')
+        PROVENANCE_NAV_LINK='<a href="provenance.html">🔤 Provenance Demo</a>'
+    fi
+fi
+
+# ============================================================
 # Generate Index HTML
 # ============================================================
 echo "Generating index.html..."
@@ -219,6 +240,7 @@ cat > "$DOCS_DIR/index.html" << EOF
   <div class="nav">
     <a href="cycles.html">📊 Cycle History</a>
     <a href="learnings.html">💡 Learnings</a>
+    $PROVENANCE_NAV_LINK
     <a href="PROMPT.md">📜 PROMPT.md</a>
     <a href="https://github.com/zociety-dev/zociety">📦 GitHub</a>
   </div>
@@ -427,6 +449,117 @@ cat > "$DOCS_DIR/learnings.html" << EOF
 </body>
 </html>
 EOF
+
+# ============================================================
+# Generate Provenance Demo Page
+# ============================================================
+if [[ -n "$PROVENANCE_MARKED_HTML" ]]; then
+    echo "Generating provenance.html..."
+
+    cat > "$DOCS_DIR/provenance.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Provenance Demo - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .content, .example {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    ol, ul { padding-left: 1.5rem; }
+    li { margin: 0.5rem 0; }
+    pre.example-body {
+      font-family: 'Hack Nerd Font Mono P+', 'Symbols Nerd Font Mono P+', 'SF Mono', Consolas, monospace;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .limits li { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>🔤 Provenance Demo</h1>
+  <p>
+    Five-minute demo for
+    <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>:
+    agent-written text made visibly distinct from human-written text, in an
+    editor you already use, once a <code>P+</code> font is installed.
+  </p>
+
+  <div class="content">
+    <h2>Two steps</h2>
+    <ol>
+      <li>Install one <code>P+</code> font family, e.g.
+        <code>Hack Nerd Font Mono P+</code> (one command via the Nerd Fonts
+        installer or your package manager).</li>
+      <li>Point your editor's font at the installed <code>P+</code> variant,
+        then open text marked by <code>bin/nfprov-drive</code> (or just read
+        the example below — it's rendered by your browser using the same
+        font-family fallback chain).</li>
+    </ol>
+  </div>
+
+  <div class="example">
+    <h2>Live example</h2>
+    <p>
+      The block below is the most recent addition to zociety's own
+      <code>LEARNINGS.md</code>, run through
+      <code>bin/nfprov-drive LEARNINGS.md learnings</code>. Every character
+      zociety's agents added since the previous commit carries a provenance
+      mark (default mode: <code>vs</code>, a VARIATION SELECTOR-1 suffix per
+      character — pass <code>NFPROV_MODE=pua</code> for the PUA span-wrapped
+      mode instead). If you have a <code>P+</code> font installed, the marked
+      spans render distinctly; otherwise this is plain text, which is the
+      expected fallback.
+    </p>
+    <pre class="example-body">$PROVENANCE_MARKED_HTML</pre>
+  </div>
+
+  <div class="content limits">
+    <h2>Known limits (inherited from upstream, not solved here)</h2>
+    <ul>
+      <li>Zociety's provenance is coarser than the live plugin: it is
+        per-commit, not per-tool-call. Two edits in the same commit by the
+        same agent are marked as one span.</li>
+      <li>Over-marking is still the accepted failure direction: a whole
+        <code>[stuff]</code> commit is agent-attributed even if a human
+        amended a typo in it afterward without a separate commit.</li>
+    </ul>
+  </div>
+</body>
+</html>
+EOF
+else
+    echo "Skipping provenance.html (nfprov.py unavailable or no markable content)"
+fi
 
 # ============================================================
 # Copy PROMPT.md
