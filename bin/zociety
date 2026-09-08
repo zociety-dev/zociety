@@ -40,6 +40,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONTAINER_DIR="$PROJECT_DIR/container"
 IMAGE_NAME="localhost/zociety:latest"
 CONTAINER_NAME="zociety-sandbox"
+OAUTH_TOKEN_FILE="$CONTAINER_DIR/secrets/claude_oauth_token"
 
 # Colors
 RED='\033[0;31m'
@@ -99,6 +100,43 @@ needs_interactive() {
     esac
 }
 
+# Mint a long-lived (~1yr) subscription OAuth token on the HOST and save it to
+# the secrets dir. Runs the host's Claude Code (not the container) because the
+# OAuth browser flow needs a real browser and the container is headless/read-only.
+# The saved token is injected as CLAUDE_CODE_OAUTH_TOKEN by run_container().
+setup_token() {
+    if ! command -v claude &> /dev/null; then
+        log_error "host 'claude' not found. Install/upgrade Claude Code on the host first."
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$OAUTH_TOKEN_FILE")"
+
+    log_info "Minting long-lived OAuth token via host Claude Code..."
+    log_info "A browser OAuth flow will open; approve it to continue."
+
+    local token
+    if ! token="$(claude setup-token)"; then
+        log_error "claude setup-token failed."
+        exit 1
+    fi
+
+    # setup-token prints the token to stdout; strip any surrounding whitespace.
+    token="$(printf '%s' "$token" | tr -d '[:space:]')"
+    if [[ -z "$token" ]]; then
+        log_error "No token captured from 'claude setup-token'."
+        exit 1
+    fi
+
+    printf '%s\n' "$token" > "$OAUTH_TOKEN_FILE"
+    chmod 600 "$OAUTH_TOKEN_FILE"
+
+    log_info "Saved token to $OAUTH_TOKEN_FILE (0600)."
+    log_info "It is injected as CLAUDE_CODE_OAUTH_TOKEN on the next 'bin/zociety' run."
+    log_warn "If the image predates CLAUDE_CODE_OAUTH_TOKEN support, rebuild it first:"
+    log_warn "  bin/zociety --rebuild"
+}
+
 run_container() {
     ensure_image
     check_prereqs
@@ -125,6 +163,10 @@ run_container() {
     if [[ -n "${CLAUDE_PLUGINS_DIR:-}" ]] && [[ -d "$CLAUDE_PLUGINS_DIR" ]]; then
         volume_args+=(--volume "$CLAUDE_PLUGINS_DIR:/home/agent/.claude-plugins:ro")
     fi
+
+    # Subscription OAuth token (mint it via: bin/zociety setup-token) is read from
+    # the mounted secrets dir by docker-entrypoint.sh and exported as
+    # CLAUDE_CODE_OAUTH_TOKEN, so both this wrapper and compose.yml pick it up.
 
     # Determine interactive mode
     local interactive_args=()
@@ -157,7 +199,10 @@ USAGE:
 
 COMMANDS:
     (none)              Start interactive Claude session
-    login               Login to Claude (Max subscription)
+    setup-token         Mint a long-lived subscription OAuth token on the HOST
+                        and save it to container/secrets/ (recommended auth)
+    login               Login to Claude inside the container (interactive; needs
+                        a browser callback - awkward in a container)
     bash                Shell inside the container
     exec [cmd]          Exec into running container (default: bash)
     -- [args]           Pass arguments to claude command
@@ -170,9 +215,11 @@ MANAGEMENT:
     --clean             Remove image and volumes (destructive)
     --help              Show this help
 
-FIRST TIME SETUP (Claude Max):
-    bin/zociety --build
-    bin/zociety login
+FIRST TIME SETUP (Claude Max/Pro subscription):
+    bin/zociety --build         # (or --rebuild to update the Claude Code client)
+    bin/zociety setup-token     # host browser flow -> saves ~1yr OAuth token
+    # The token is injected as CLAUDE_CODE_OAUTH_TOKEN on every run.
+    # Do not create container/secrets/anthropic_api_key - an API key overrides OAuth.
 
 RUNNING THE AGENT LOOP:
     bin/zociety bin/zloop 60   # Run loop with max 60 iterations
@@ -243,6 +290,10 @@ case "${1:-}" in
         fi
         log_cmd "Exec: ${cmd[*]}"
         podman exec -it "$CONTAINER_NAME" "${cmd[@]}"
+        ;;
+    setup-token)
+        setup_token
+        exit 0
         ;;
     login)
         run_container claude login
