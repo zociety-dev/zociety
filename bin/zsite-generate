@@ -960,19 +960,34 @@ EOF
   </div>
 
   <div class="content limits">
-    <h2>Known limits (inherited from upstream, not solved here)</h2>
+    <h2>Known limits</h2>
     <ul>
-      <li>Attribution is per-commit and by commit-message convention:
-        commits prefixed <code>[event]</code> (<code>[join]</code>,
-        <code>[stuff]</code>, <code>[evolve]</code>, …) are agents, everything
-        else is human. A human commit that pastes agent text is under-marked;
-        an agent commit that includes human edits is over-marked.</li>
-      <li>Zociety's provenance is coarser than the live plugin: it is
-        per-commit, not per-tool-call. Two edits in the same commit by the
-        same agent are marked as one span.</li>
-      <li>Over-marking is still the accepted failure direction: a whole
-        <code>[stuff]</code> commit is agent-attributed even if a human
-        amended a typo in it afterward without a separate commit.</li>
+      <li>Attribution is by commit convention, not by who typed. A commit
+        whose subject starts with a bracketed prefix (<code>[join]</code>,
+        <code>[stuff]</code>, <code>[heap-death]</code>) or whose body
+        carries a <code>Co-Authored-By: Claude</code> trailer is an agent;
+        everything else is the human. A human commit that pastes agent text
+        is under-marked; a human commit prefixed <code>[fix]</code>, or an
+        agent commit that carries human edits, is over-marked. Over-marking
+        is the accepted failure direction.</li>
+      <li>The unit is the commit, refined per line: a changed line keeps
+        the attribution of its unchanged prefix and suffix and the middle
+        goes to the commit, so a rewritten sentence is marked in full even
+        where letters coincide.</li>
+      <li>The <code>P+</code> fonts carry marked variants for 188
+        characters: printable Latin-1, U+0021 to U+00FF, without the soft
+        hyphen. Anything else an agent wrote (Greek, Cyrillic, icons, arrows
+        such as U+2192) is still emitted as base + U+E0101, but no font
+        has that sequence, so every renderer draws the plain glyph:
+        unmarked, never tofu. Text the face cannot shape at all falls back
+        to another font, as stock Agave does.</li>
+      <li>The selector carries provenance only: U+E0100 human, U+E0101
+        agent, U+E0102 unknown. Width (Mono, Propo, proportional) is a
+        separate <code>P+</code> face, never a selector, and the PUA-B
+        mirror exists for the agent variant only.</li>
+      <li>WebKit ignores the selector, so there the page falls back to
+        PUA-B display, and text selected and copied by hand in that display
+        carries PUA-B code points rather than U+E0101.</li>
     </ul>
   </div>
 

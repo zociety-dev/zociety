@@ -62,9 +62,9 @@ fileignoreconfig:
 - filename: docs/.well-known/zevent.schema.json
   checksum: cb9d29330d3ecda7de0c5f6dc63a3fc014fc4313f53c13f29e8aaabb5c7a547f
 - filename: bin/zsite-generate
-  checksum: b069d89847ff3a6a85316c8193d6914fb8802434903f4290415ff20aea01cfbf
+  checksum: eaacd7fd9846c48999985a7a10d87ba508ca182623e248365994681d3c204e58
 - filename: docs/provenance.html
-  checksum: 2edd262379df530633a2e2850f6929e0b74f27416743740c20df6226092cacff
+  checksum: f93814a4cfbc91caa9a682a68b3644689ff8666f1f5d902400597c472f3d7928
 - filename: stuff/index.md
   checksum: 1909b676cfe75c92df6f0fb53a522591ed33010305448b9c5897e033188759b9
 - filename: docs/stuff.html
