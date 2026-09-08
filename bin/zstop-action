@@ -1,0 +1,40 @@
+#!/bin/bash
+# zstop-action: Stop predicate - stop when bin/zstate .action is stop or promise
+#
+# Usage:
+#   bin/zstop-action
+#   bin/zstop-action -h | --help
+#
+# Exit codes (predicate contract, see docs/SPEC-zstop-modes.md):
+#   0  stop      (action is stop or promise)
+#   1  continue  (any other action)
+#   2  error
+#
+# Prints one line to stdout: "STOP: action <reason>" or "CONTINUE: action <reason>".
+# Stateless: reads git history via bin/zstate only. No ZSTOP_* knobs.
+#
+# This is the original body of bin/zloop-complete (the default "action" mode).
+# bin/zloop-complete now dispatches to bin/zstop-<mode> scripts like this one.
+
+set -euo pipefail
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
+STATE=$(bin/zstate)
+ACTION=$(echo "$STATE" | jq -r '.action')
+
+case "$ACTION" in
+  stop|promise)
+    # Cycle is complete, loop should stop
+    echo "STOP: action action=$ACTION"
+    exit 0
+    ;;
+  *)
+    # Work remains, loop should continue
+    echo "CONTINUE: action action=$ACTION"
+    exit 1
+    ;;
+esac
