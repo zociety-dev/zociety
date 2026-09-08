@@ -84,8 +84,11 @@ EOF
     --no-session-persistence
   )
 
+  # In --print's default (text) mode nothing is emitted until the whole agent
+  # turn finishes, so iterations look "stuck". VERBOSE switches to streaming
+  # JSON, which prints events (tool calls, partial text) as they happen.
   if [[ "$VERBOSE" == "1" ]]; then
-    CLAUDE_ARGS+=(--verbose)
+    CLAUDE_ARGS+=(--verbose --output-format stream-json --include-partial-messages)
   fi
 
   CLAUDE_ARGS+=("$PROMPT")
