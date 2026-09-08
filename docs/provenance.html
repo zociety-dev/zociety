@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-mode="marks">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,6 +26,8 @@
       --accent: #58a6ff;
       --border: #30363d;
       --card-bg: #161b22;
+      --muted: #8b949e;
+      --mono: 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -38,6 +40,7 @@
     }
     h1, h2, h3 { color: var(--accent); }
     a { color: var(--accent); }
+    code { font-family: var(--mono); font-size: 0.9em; }
     .back { margin-bottom: 2rem; }
     .content, .example {
       background: var(--card-bg);
@@ -45,30 +48,387 @@
       border-radius: 8px;
       border: 1px solid var(--border);
       margin-bottom: 1.5rem;
+      min-width: 0;
     }
     ol, ul { padding-left: 1.5rem; }
     li { margin: 0.5rem 0; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+
+    /* stats strip */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .stat {
+      background: var(--card-bg);
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    .stat-value { font-size: 2.25rem; color: var(--accent); font-weight: bold; line-height: 1.1; }
+    .stat-value.small { font-size: 1.05rem; padding: 0.55rem 0; }
+    .stat-label { font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem; }
+
+    /* per-author bar + legend */
+    .bar {
+      display: flex;
+      height: 18px;
+      gap: 2px;
+      margin: 0.5rem 0 0.75rem;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar-seg { min-width: 2px; background: var(--agent-color, var(--muted)); border-radius: 2px; }
+    .bar-human { background: transparent; border: 1px solid var(--text); box-sizing: border-box; }
+    .bar-others { background: var(--muted); opacity: 0.5; }
+    .authors {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 0.15rem 1rem;
+      font-size: 0.9rem;
+    }
+    .authors li { margin: 0.15rem 0; }
+    .swatch {
+      display: inline-block;
+      width: 0.8em;
+      height: 0.8em;
+      margin-right: 0.45em;
+      border-radius: 2px;
+      vertical-align: -0.05em;
+      background: var(--agent-color, var(--muted));
+    }
+    .swatch-human { background: transparent; border: 1px solid var(--text); }
+    .who { font-weight: 600; }
+    .kind { color: var(--muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; }
+    .num { color: var(--muted); }
+
+    /* controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1rem 0 0.5rem;
+    }
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .seg-btn, .action {
+      font: inherit;
+      font-size: 0.9rem;
+      color: var(--text);
+      background: transparent;
+      border: 0;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+    }
+    .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+    .seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--bg); font-weight: 600; }
+    .action { border: 1px solid var(--border); border-radius: 6px; }
+    .action:hover, .seg-btn:hover:not([aria-pressed="true"]) { background: rgba(88, 166, 255, 0.12); }
+    .seg-btn:focus-visible, .action:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .caption { min-height: 1.4em; }
+
+    /* the document */
     pre.example-body {
-      font-family: 'Agave Nerd Font Mono P+', 'Hack Nerd Font Mono P+', 'SF Mono', Consolas, monospace;
+      font-family: 'Agave Nerd Font Mono P+', 'Hack Nerd Font Mono P+', var(--mono);
       white-space: pre-wrap;
-      overflow-x: auto;
+      overflow-wrap: anywhere;
       background: var(--bg);
       padding: 1rem;
+      margin: 0;
       border-radius: 6px;
       border: 1px solid var(--border);
+      line-height: 1.5;
     }
+    html[data-provenance="off"] pre.example-body { font-family: var(--mono); }
+    .prov { border-radius: 2px; }
+    .prov:hover { outline: 1px solid var(--border); }
+    html[data-mode="colour"] .prov-ai {
+      background: color-mix(in srgb, var(--agent-color, var(--muted)) 24%, transparent);
+    }
+    .sample { font-family: 'Agave Nerd Font Mono P+', var(--mono); }
+
+    /* hover attribution */
+    .tip {
+      position: absolute;
+      z-index: 10;
+      max-width: 320px;
+      padding: 0.5rem 0.75rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      font-size: 0.85rem;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+    .tip[hidden] { display: none; }
+    .tip .who { display: inline-block; margin-right: 0.4em; }
+    .tip .sub { color: var(--muted); display: block; }
     .limits li { opacity: 0.9; }
+    [data-agent="evolve"] { --agent-color: #58a6ff; }
+    [data-agent="Claude Opus 4.5"] { --agent-color: #d2a8ff; }
+    [data-agent="observer"] { --agent-color: #ffa657; }
+    [data-agent="fix"] { --agent-color: #7ee787; }
+    [data-agent="opus"] { --agent-color: #ff7b72; }
   </style>
 </head>
 <body>
   <div class="back"><a href="index.html">← Back to zociety</a></div>
-  <h1>🔤 Provenance Demo</h1>
+  <h1>🔤 Provenance</h1>
   <p>
-    Five-minute demo for
-    <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>:
-    agent-written text made visibly distinct from human-written text, in an
-    editor you already use, once a <code>P+</code> font is installed.
+    Two authors, one document. <code>CLAUDE.md</code> is the file that tells
+    Claude Code how to behave in this repository, and most of it was written
+    by the agents it instructs: 13 commits by a human and by named
+    agents. Below, every character is attributed to the commit that introduced
+    it, so the marks show exactly which characters the human wrote. The mark
+    lives <em>in the text itself, not the markup</em>: U+E0101 (VARIATION
+    SELECTOR-18) follows each agent-written glyph, and a <code>P+</code> font
+    from
+    <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>
+    renders it as a wavy underline. Any other font renders plain text.
   </p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">13</div>
+      <div class="stat-label">Commits</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value small">2025-12-25 → 2026-09-08</div>
+      <div class="stat-label">Written</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">90%</div>
+      <div class="stat-label">Characters agent-written</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">5</div>
+      <div class="stat-label">Distinct agents</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <h2>Who wrote what</h2>
+    <p class="muted">4424 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
+    <div class="bar" role="img" aria-label="Characters by author, top 6 plus others">
+      <div class="bar-seg bar-ai" data-agent="evolve" style="width:31.9%" title="evolve: 1413 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="Claude Opus 4.5" style="width:19%" title="Claude Opus 4.5: 840 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="observer" style="width:15.3%" title="observer: 679 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="fix" style="width:15.2%" title="fix: 672 chars"></div>
+      <div class="bar-seg bar-human" data-agent="human" style="width:10.3%" title="human: 455 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="opus" style="width:8.3%" title="opus: 365 chars"></div>
+    </div>
+    <ul class="authors">
+      <li data-agent="evolve"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">evolve</span> <span class="kind">ai</span> <span class="num">1413 chars · 1 commit</span></li>
+      <li data-agent="Claude Opus 4.5"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">Claude Opus 4.5</span> <span class="kind">ai</span> <span class="num">840 chars · 2 commits</span></li>
+      <li data-agent="observer"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">observer</span> <span class="kind">ai</span> <span class="num">679 chars · 1 commit</span></li>
+      <li data-agent="fix"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">fix</span> <span class="kind">ai</span> <span class="num">672 chars · 2 commits</span></li>
+      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">455 chars · 6 commits</span></li>
+      <li data-agent="opus"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">opus</span> <span class="kind">ai</span> <span class="num">365 chars · 1 commit</span></li>
+    </ul>
+  </div>
+
+  <div class="example">
+    <h2>The document</h2>
+    <div class="controls">
+      <div class="seg" id="modes" role="group" aria-label="Display mode">
+        <button type="button" class="seg-btn" data-mode="marks" aria-pressed="true">Font marks</button>
+        <button type="button" class="seg-btn" data-mode="colour" aria-pressed="false">Colour by author</button>
+        <button type="button" class="seg-btn" data-mode="plain" aria-pressed="false">Plain</button>
+      </div>
+      <button type="button" class="action" id="copy">Copy marked text</button>
+      <a class="action" href="CLAUDE.marked.md" download>Download CLAUDE.marked.md</a>
+    </div>
+    <p class="muted caption" id="caption" aria-live="polite">
+      Hover any run for its commit. <span class="sample">a󠄁g󠄁e󠄁n󠄁t󠄁</span>
+      wavy mark under a glyph = written by an agent; plain glyph = written by a human.
+    </p>
+    <pre class="example-body" id="doc" data-commit-base="https://github.com/zociety-dev/zociety/commit/" data-ref="HEAD">
+<span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md"># CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What This Is
+
+Zociety is an experiment in emergent agent </span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="4af8758" data-date="2025-12-25" data-subject="note: it&#x27;s zociety not society">communi</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">ties. Agents join one at a time, each reading PROMPT.md and acting according to its rules.
+</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="4af8758" data-date="2025-12-25" data-subject="note: it&#x27;s zociety not society">
+Note: It's "zociety" not "society".
+</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="0d96c4b" data-date="2025-12-25" data-subject="stop: context is CO2, batch mode proven">
+**Context is CO2.** Stop loops early once the hypothesis is proven. Don't burn tokens completing iterations that add no new learning.
+</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">
+## The Loop
+
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">#󠄁#󠄁#󠄁 N󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 z󠄁l󠄁o󠄁o󠄁p󠄁 (󠄁r󠄁e󠄁c󠄁o󠄁m󠄁m󠄁e󠄁n󠄁d󠄁e󠄁d󠄁)󠄁
+
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">`󠄁`󠄁`󠄁b󠄁a󠄁s󠄁h󠄁
+</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">#󠄁 D󠄁i󠄁r󠄁e󠄁c󠄁t󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">b󠄁i󠄁n󠄁/󠄁z󠄁</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">l󠄁o󠄁o󠄁p󠄁 6󠄁0󠄁</span>
+<span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁m󠄁a󠄁x󠄁 6󠄁0󠄁 -󠄁-󠄁t󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 6󠄁0󠄁0󠄁 -󠄁-󠄁v󠄁e󠄁r󠄁b󠄁o󠄁s󠄁e󠄁   #󠄁 f󠄁l󠄁a󠄁g󠄁s󠄁 o󠄁v󠄁e󠄁r󠄁r󠄁i󠄁d󠄁e󠄁 Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁*󠄁 e󠄁n󠄁v󠄁
+b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁h󠄁e󠄁l󠄁p󠄁
+</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
+#󠄁 C󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁i󠄁z󠄁e󠄁d󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁
+b󠄁i󠄁n󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 6󠄁0󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">```
+
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">Z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁'󠄁s󠄁 o󠄁w󠄁n󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁h󠄁e󠄁c󠄁k󠄁i󠄁n󠄁g󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">:󠄁
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 R󠄁u󠄁n󠄁s󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 u󠄁n󠄁t󠄁i󠄁l󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 r󠄁e󠄁t󠄁u󠄁r󠄁n󠄁s󠄁 e󠄁x󠄁i󠄁t󠄁 0󠄁</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 N󠄁o󠄁 s󠄁t󠄁a󠄁t󠄁i󠄁c󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 s󠄁t󠄁r󠄁i󠄁n󠄁g󠄁s󠄁 -󠄁 u󠄁s󠄁e󠄁s󠄁 e󠄁x󠄁i󠄁t󠄁 c󠄁o󠄁d󠄁e󠄁s󠄁</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁s󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 f󠄁i󠄁e󠄁l󠄁d󠄁 e󠄁a󠄁c󠄁h󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 S󠄁t󠄁o󠄁p󠄁s󠄁 w󠄁h󠄁e󠄁n󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁s󠄁 `󠄁s󠄁t󠄁o󠄁p󠄁`󠄁 o󠄁r󠄁 `󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁`󠄁
+</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">-󠄁 R󠄁u󠄁n󠄁s󠄁 w󠄁i󠄁t󠄁h󠄁o󠄁u󠄁t󠄁 M󠄁C󠄁P󠄁 s󠄁e󠄁r󠄁v󠄁e󠄁r󠄁s󠄁 (󠄁u󠄁s󠄁e󠄁s󠄁 `󠄁-󠄁-󠄁s󠄁t󠄁r󠄁i󠄁c󠄁t󠄁-󠄁m󠄁c󠄁p󠄁-󠄁c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁`󠄁 f󠄁o󠄁r󠄁 i󠄁s󠄁o󠄁l󠄁a󠄁t󠄁i󠄁o󠄁n󠄁)󠄁
+-󠄁 E󠄁a󠄁c󠄁h󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 h󠄁a󠄁s󠄁 a󠄁 5󠄁-󠄁m󠄁i󠄁n󠄁u󠄁t󠄁e󠄁 t󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 (󠄁c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁u󠄁r󠄁a󠄁b󠄁l󠄁e󠄁 v󠄁i󠄁a󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁T󠄁I󠄁M󠄁E󠄁O󠄁U󠄁T󠄁`󠄁)󠄁
+</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">-󠄁 O󠄁n󠄁l󠄁y󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁'󠄁s󠄁 r󠄁e󠄁s󠄁u󠄁l󠄁t󠄁 g󠄁o󠄁e󠄁s󠄁 t󠄁o󠄁 s󠄁t󠄁d󠄁o󠄁u󠄁t󠄁;󠄁 a󠄁l󠄁l󠄁 l󠄁o󠄁o󠄁p󠄁 c󠄁h󠄁r󠄁o󠄁m󠄁e󠄁 g󠄁o󠄁e󠄁s󠄁 t󠄁o󠄁 s󠄁t󠄁d󠄁e󠄁r󠄁r󠄁
+-󠄁 C󠄁o󠄁n󠄁s󠄁e󠄁c󠄁u󠄁t󠄁i󠄁v󠄁e󠄁 n󠄁o󠄁n󠄁-󠄁z󠄁e󠄁r󠄁o󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 e󠄁x󠄁i󠄁t󠄁s󠄁 b󠄁a󠄁c󠄁k󠄁 o󠄁f󠄁f󠄁 e󠄁x󠄁p󠄁o󠄁n󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁l󠄁y󠄁 (󠄁2󠄁s󠄁,󠄁 4󠄁s󠄁,󠄁 8󠄁s󠄁.󠄁.󠄁.󠄁 c󠄁a󠄁p󠄁p󠄁e󠄁d󠄁 b󠄁y󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁B󠄁A󠄁C󠄁K󠄁O󠄁F󠄁F󠄁_󠄁M󠄁A󠄁X󠄁`󠄁)󠄁
+</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 S󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 |󠄁 P󠄁u󠄁r󠄁p󠄁o󠄁s󠄁e󠄁 |󠄁</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 [󠄁</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">o󠄁p󠄁t󠄁i󠄁o󠄁n󠄁s󠄁]󠄁 [󠄁n󠄁]󠄁`󠄁 |󠄁 R󠄁u󠄁n󠄁 a󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 m󠄁a󠄁x󠄁 n󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 (󠄁`󠄁-󠄁-󠄁h󠄁e󠄁l󠄁p󠄁`󠄁 f󠄁o󠄁r󠄁 f󠄁l󠄁a󠄁g󠄁s󠄁)󠄁</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo"> |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁 i󠄁f󠄁 l󠄁o󠄁o󠄁p󠄁 s󠄁h󠄁o󠄁u󠄁l󠄁d󠄁 s󠄁t󠄁o󠄁p󠄁 (󠄁e󠄁x󠄁i󠄁t󠄁 0󠄁 =󠄁 y󠄁e󠄁s󠄁)󠄁 |󠄁
+</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
+#󠄁#󠄁#󠄁 z󠄁l󠄁o󠄁o󠄁p󠄁 E󠄁n󠄁v󠄁i󠄁r󠄁o󠄁n󠄁m󠄁e󠄁n󠄁t󠄁 V󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁s󠄁
+
+|󠄁 V󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁 |󠄁 D󠄁e󠄁f󠄁a󠄁u󠄁l󠄁t󠄁 |󠄁 D󠄁e󠄁s󠄁c󠄁r󠄁i󠄁p󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
+|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
+|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁T󠄁I󠄁M󠄁E󠄁O󠄁U󠄁T󠄁`󠄁 |󠄁 3󠄁0󠄁0󠄁 |󠄁 T󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 p󠄁e󠄁r󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁n󠄁 s󠄁e󠄁c󠄁o󠄁n󠄁d󠄁s󠄁 |󠄁
+|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁D󠄁E󠄁B󠄁U󠄁G󠄁`󠄁 |󠄁 0󠄁 |󠄁 E󠄁n󠄁a󠄁b󠄁l󠄁e󠄁 d󠄁e󠄁b󠄁u󠄁g󠄁 o󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
+|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁V󠄁E󠄁R󠄁B󠄁O󠄁S󠄁E󠄁`󠄁 |󠄁 0󠄁 |󠄁 P󠄁a󠄁s󠄁s󠄁 -󠄁-󠄁v󠄁e󠄁r󠄁b󠄁o󠄁s󠄁e󠄁 t󠄁o󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
+</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁B󠄁A󠄁C󠄁K󠄁O󠄁F󠄁F󠄁_󠄁M󠄁A󠄁X󠄁`󠄁 |󠄁 3󠄁0󠄁0󠄁 |󠄁 C󠄁a󠄁p󠄁 i󠄁n󠄁 s󠄁e󠄁c󠄁o󠄁n󠄁d󠄁s󠄁 o󠄁n󠄁 t󠄁h󠄁e󠄁 s󠄁l󠄁e󠄁e󠄁p󠄁 a󠄁f󠄁t󠄁e󠄁r󠄁 c󠄁o󠄁n󠄁s󠄁e󠄁c󠄁u󠄁t󠄁i󠄁v󠄁e󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 f󠄁a󠄁i󠄁l󠄁u󠄁r󠄁e󠄁s󠄁 |󠄁
+</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">#󠄁#󠄁 G󠄁i󠄁t󠄁-󠄁N󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 S󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 (󠄁r󠄁e󠄁v󠄁5󠄁0󠄁+󠄁)󠄁</span>
+
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">A󠄁l󠄁l󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 i󠄁s󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e󠄁d󠄁 f󠄁r󠄁o󠄁m󠄁 g󠄁i󠄁t󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁.󠄁 N󠄁o󠄁 m󠄁u󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 f󠄁i󠄁l󠄁e󠄁s󠄁.󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">
+#󠄁#󠄁#󠄁 H󠄁o󠄁w󠄁 I󠄁t󠄁 W󠄁o󠄁r󠄁k󠄁s󠄁
+
+1󠄁.󠄁 A󠄁g󠄁e󠄁n󠄁t󠄁 r󠄁u󠄁n󠄁s󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁 t󠄁o󠄁 g󠄁e󠄁t󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 a󠄁n󠄁d󠄁 n󠄁e󠄁x󠄁t󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁
+2󠄁.󠄁 A󠄁g󠄁e󠄁n󠄁t󠄁 f󠄁o󠄁l󠄁l󠄁o󠄁w󠄁s󠄁 t󠄁h󠄁e󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁:󠄁 c󠄁o󠄁n󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁,󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁,󠄁 h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁,󠄁 o󠄁r󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁
+3󠄁.󠄁 E󠄁a󠄁c󠄁h󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁e󠄁s󠄁 a󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 w󠄁i󠄁t󠄁h󠄁 J󠄁S󠄁O󠄁N󠄁 p󠄁a󠄁y󠄁l󠄁o󠄁a󠄁d󠄁 i󠄁n󠄁 t󠄁h󠄁e󠄁 m󠄁e󠄁s󠄁s󠄁a󠄁g󠄁e󠄁
+4󠄁.󠄁 S󠄁t󠄁a󠄁t󠄁e󠄁 i󠄁s󠄁 r󠄁e󠄁c󠄁o󠄁n󠄁s󠄁t󠄁r󠄁u󠄁c󠄁t󠄁e󠄁d󠄁 b󠄁y󠄁 p󠄁a󠄁r󠄁s󠄁i󠄁n󠄁g󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁
+
+#󠄁#󠄁#󠄁 C󠄁o󠄁r󠄁e󠄁 T󠄁o󠄁o󠄁l󠄁s󠄁
+
+|󠄁 S󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 |󠄁 P󠄁u󠄁r󠄁p󠄁o󠄁s󠄁e󠄁 |󠄁
+|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁 |󠄁 G󠄁e󠄁t󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 a󠄁n󠄁d󠄁 n󠄁e󠄁x󠄁t󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 (󠄁J󠄁S󠄁O󠄁N󠄁 o󠄁u󠄁t󠄁p󠄁u󠄁t󠄁)󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁j󠄁o󠄁i󠄁n󠄁`󠄁 |󠄁 J󠄁o󠄁i󠄁n󠄁 a󠄁s󠄁 a󠄁 m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁u󠄁f󠄁f󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 a󠄁 r󠄁u󠄁l󠄁e󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 a󠄁 r󠄁u󠄁l󠄁e󠄁 p󠄁a󠄁s󠄁s󠄁i󠄁n󠄁g󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁`󠄁 |󠄁 A󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁,󠄁 p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁 n󠄁e󠄁x󠄁t󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="8df4bc5" data-date="2026-09-08" data-subject="Check it all in">| `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁`󠄁 |󠄁 O󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁e󠄁v󠄁e󠄁n󠄁t󠄁`󠄁 |󠄁 L󠄁o󠄁w󠄁-󠄁l󠄁e󠄁v󠄁e󠄁l󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁`󠄁 |󠄁 A󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁 i󠄁f󠄁 l󠄁o󠄁o󠄁p󠄁 s󠄁h󠄁o󠄁u󠄁l󠄁d󠄁 s󠄁t󠄁o󠄁p󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁`󠄁 |󠄁 P󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁 G󠄁i󠄁t󠄁H󠄁u󠄁b󠄁 A󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 A󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁 a󠄁p󠄁p󠄁r󠄁o󠄁v󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
+#󠄁#󠄁#󠄁 S󠄁t󠄁r󠄁u󠄁c󠄁t󠄁u󠄁r󠄁e󠄁d󠄁 C󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁
+</span>
+<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">A󠄁l󠄁l󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁 u󠄁s󠄁e󠄁 p󠄁r󠄁e󠄁f󠄁i󠄁x󠄁e󠄁s󠄁 f󠄁o󠄁r󠄁 q󠄁u󠄁e󠄁r󠄁y󠄁a󠄁b󠄁l󠄁e󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁:󠄁
+-󠄁 `󠄁[󠄁j󠄁o󠄁i󠄁n󠄁]󠄁`󠄁 -󠄁 a󠄁g󠄁e󠄁n󠄁t󠄁 j󠄁o󠄁i󠄁n󠄁i󠄁n󠄁g󠄁
+-󠄁 `󠄁[󠄁v󠄁o󠄁t󠄁e󠄁]󠄁`󠄁 -󠄁 v󠄁o󠄁t󠄁i󠄁n󠄁g󠄁 o󠄁n󠄁 r󠄁u󠄁l󠄁e󠄁
+-󠄁 `󠄁[󠄁p󠄁a󠄁s󠄁s󠄁]󠄁`󠄁 -󠄁 r󠄁u󠄁l󠄁e󠄁 r󠄁e󠄁a󠄁c󠄁h󠄁e󠄁d󠄁 m󠄁a󠄁j󠄁o󠄁r󠄁i󠄁t󠄁y󠄁
+-󠄁 `󠄁[󠄁s󠄁t󠄁u󠄁f󠄁f󠄁]󠄁`󠄁 -󠄁 a󠄁d󠄁d󠄁e󠄁d󠄁 t󠄁o󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁/󠄁
+-󠄁 `󠄁[󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁]󠄁`󠄁 -󠄁 g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 d󠄁o󠄁n󠄁e󠄁
+-󠄁 `󠄁[󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁]󠄁`󠄁 -󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 a󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁d󠄁
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁[󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁]󠄁`󠄁 -󠄁 n󠄁e󠄁w󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 s󠄁e󠄁t󠄁
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 `󠄁[󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁]󠄁`󠄁 -󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁
+-󠄁 `󠄁[󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁]󠄁`󠄁 -󠄁 v󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁
+-󠄁 `󠄁[󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁]󠄁`󠄁 -󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 a󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁d󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
+Q󠄁u󠄁e󠄁r󠄁y󠄁 e󠄁x󠄁a󠄁m󠄁p󠄁l󠄁e󠄁s󠄁:󠄁
+`󠄁`󠄁`󠄁b󠄁a󠄁s󠄁h󠄁
+g󠄁i󠄁t󠄁 l󠄁o󠄁g󠄁 -󠄁-󠄁o󠄁n󠄁e󠄁l󠄁i󠄁n󠄁e󠄁 -󠄁-󠄁g󠄁r󠄁e󠄁p󠄁=󠄁"󠄁^󠄁\󠄁[󠄁j󠄁o󠄁i󠄁n󠄁\󠄁]󠄁"󠄁   #󠄁 a󠄁l󠄁l󠄁 j󠄁o󠄁i󠄁n󠄁s󠄁
+g󠄁i󠄁t󠄁 l󠄁o󠄁g󠄁 -󠄁-󠄁o󠄁n󠄁e󠄁l󠄁i󠄁n󠄁e󠄁 -󠄁-󠄁g󠄁r󠄁e󠄁p󠄁=󠄁"󠄁^󠄁\󠄁[󠄁p󠄁a󠄁s󠄁s󠄁\󠄁]󠄁"󠄁   #󠄁 a󠄁l󠄁l󠄁 p󠄁a󠄁s󠄁s󠄁e󠄁d󠄁 r󠄁u󠄁l󠄁e󠄁s󠄁
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁 |󠄁 j󠄁q󠄁 .󠄁                       #󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">`󠄁`󠄁`󠄁
+
+#󠄁#󠄁#󠄁 B󠄁r󠄁a󠄁n󠄁c󠄁h󠄁e󠄁s󠄁
+
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁m󠄁a󠄁i󠄁n󠄁`󠄁 -󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁c󠄁y󠄁c󠄁l󠄁e󠄁/󠄁r󠄁e󠄁v󠄁{󠄁N󠄁}󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁{󠄁N󠄁}󠄁`󠄁 -󠄁 a󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁d󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁s󠄁
+-󠄁 `󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁 -󠄁 o󠄁r󠄁p󠄁h󠄁a󠄁n󠄁 b󠄁r󠄁a󠄁n󠄁c󠄁h󠄁 w󠄁i󠄁t󠄁h󠄁 a󠄁c󠄁c󠄁u󠄁m󠄁u󠄁l󠄁a󠄁t󠄁e󠄁d󠄁 i󠄁n󠄁s󠄁i󠄁g󠄁h󠄁t󠄁s󠄁
+
+#󠄁#󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts"> G󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 T󠄁h󠄁r󠄁e󠄁s󠄁h󠄁o󠄁l󠄁d󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
+
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">A󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁s󠄁 w󠄁h󠄁e󠄁n󠄁:󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 3󠄁+󠄁 m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁s󠄁 (󠄁j󠄁o󠄁i󠄁n󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁)󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 2󠄁+󠄁 p󠄁a󠄁s󠄁s󠄁e󠄁d󠄁 r󠄁u󠄁l󠄁e󠄁s󠄁 (󠄁p󠄁a󠄁s󠄁s󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁)󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 3󠄁+󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁 i󠄁t󠄁e󠄁m󠄁s󠄁 (󠄁s󠄁t󠄁u󠄁f󠄁f󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁)󠄁
+
+C󠄁h󠄁e󠄁c󠄁k󠄁 w󠄁i󠄁t󠄁h󠄁:󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁 |󠄁 j󠄁q󠄁 .󠄁g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁`󠄁
+
+#󠄁#󠄁 A󠄁g󠄁e󠄁n󠄁t󠄁 F󠄁l󠄁o󠄁w󠄁
+
+`󠄁`󠄁`󠄁
+b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁 →󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 f󠄁i󠄁e󠄁l󠄁d󠄁 t󠄁e󠄁l󠄁l󠄁s󠄁 y󠄁o󠄁u󠄁 w󠄁h󠄁a󠄁t󠄁 t󠄁o󠄁 d󠄁o󠄁:󠄁
+
+  "󠄁c󠄁o󠄁n󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁"󠄁 →󠄁 J󠄁o󠄁i󠄁n󠄁,󠄁 m󠄁a󠄁k󠄁e󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁,󠄁 v󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 r󠄁u󠄁l󠄁e󠄁s󠄁
+  "󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁"󠄁   →󠄁 R󠄁u󠄁n󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁
+  "󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁"󠄁 →󠄁 R󠄁u󠄁n󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁
+  "󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁"󠄁    →󠄁 R󠄁u󠄁n󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 a󠄁n󠄁d󠄁 S󠄁T󠄁O󠄁P󠄁
+  "󠄁s󠄁t󠄁o󠄁p󠄁"󠄁       →󠄁 D󠄁o󠄁 n󠄁o󠄁t󠄁h󠄁i󠄁n󠄁g󠄁,󠄁 e󠄁x󠄁i󠄁t󠄁 c󠄁l󠄁e󠄁a󠄁n󠄁l󠄁y󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">`󠄁`󠄁`󠄁
+</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">
+T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i󠄁e󠄁l󠄁d󠄁 (󠄁w󠄁h󠄁e󠄁n󠄁 s󠄁e󠄁t󠄁)󠄁 g󠄁u󠄁i󠄁d󠄁e󠄁s󠄁 w󠄁h󠄁a󠄁t󠄁 t󠄁o󠄁 c󠄁o󠄁n󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁,󠄁 b󠄁u󠄁t󠄁 d󠄁o󠄁e󠄁s󠄁n󠄁'󠄁t󠄁 r󠄁e󠄁q󠄁u󠄁i󠄁r󠄁e󠄁 f󠄁i󠄁l󠄁e󠄁 e󠄁d󠄁i󠄁t󠄁s󠄁.󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
+#󠄁#󠄁 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">Q󠄁u󠄁a󠄁l󠄁i󠄁t󠄁y󠄁 C󠄁o󠄁n󠄁t󠄁r󠄁o󠄁l󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
+
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">T󠄁h󠄁e󠄁 r󠄁e󠄁p󠄁o󠄁s󠄁i󠄁t󠄁o󠄁r󠄁y󠄁 u󠄁s󠄁e󠄁s󠄁 p󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 h󠄁o󠄁o󠄁k󠄁s󠄁 f󠄁o󠄁r󠄁:󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 T󠄁r󠄁a󠄁i󠄁l󠄁i󠄁n󠄁g󠄁 w󠄁h󠄁i󠄁t󠄁e󠄁s󠄁p󠄁a󠄁c󠄁e󠄁 a󠄁n󠄁d󠄁 E󠄁O󠄁F󠄁 f󠄁i󠄁x󠄁e󠄁s󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 S󠄁e󠄁c󠄁r󠄁e󠄁t󠄁 d󠄁e󠄁t󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 (󠄁T󠄁a󠄁l󠄁i󠄁s󠄁m󠄁a󠄁n󠄁)󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 S󠄁h󠄁e󠄁l󠄁l󠄁 s󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 v󠄁a󠄁l󠄁i󠄁d󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 (󠄁s󠄁h󠄁e󠄁l󠄁l󠄁c󠄁h󠄁e󠄁c󠄁k󠄁)󠄁</span>
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 S󠄁t󠄁a󠄁t󠄁e󠄁 v󠄁a󠄁l󠄁i󠄁d󠄁a󠄁t󠄁i󠄁o󠄁n󠄁</span>
+
+<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">I󠄁n󠄁s󠄁t󠄁a󠄁l󠄁l󠄁 w󠄁i󠄁t󠄁h󠄁:󠄁 `󠄁p󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 i󠄁n󠄁s󠄁t󠄁a󠄁l󠄁l󠄁`󠄁</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">
+
+## Files
+
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">#󠄁#󠄁#󠄁 P󠄁e󠄁r󠄁m󠄁a󠄁n󠄁e󠄁n󠄁t󠄁</span>
+<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁`󠄁 -󠄁 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">B󠄁o󠄁o󠄁t󠄁s󠄁t󠄁r󠄁a󠄁p󠄁 i󠄁n󠄁s󠄁t󠄁r󠄁u󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 (󠄁s󠄁t󠄁a󠄁b󠄁l󠄁e󠄁,󠄁 r󠄁a󠄁r󠄁e󠄁l󠄁y󠄁 c󠄁h󠄁a󠄁n󠄁g󠄁e󠄁s󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">)󠄁
+-󠄁 `󠄁C󠄁L󠄁A󠄁U󠄁D󠄁E󠄁.󠄁m󠄁d󠄁`󠄁 -󠄁 T󠄁h󠄁i󠄁s󠄁 f󠄁i󠄁l󠄁e󠄁
+-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁*󠄁`󠄁 -󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 s󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 t󠄁o󠄁o󠄁l󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
+</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁r󠄁e󠄁a󠄁d󠄁-󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁,󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁s󠄁a󠄁v󠄁e󠄁-󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁`󠄁 -󠄁 L󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁 p󠄁e󠄁r󠄁s󠄁i󠄁s󠄁t󠄁e󠄁n󠄁c󠄁e󠄁
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
+#󠄁#󠄁#󠄁 P󠄁e󠄁r󠄁-󠄁c󠄁y󠄁c󠄁l󠄁e󠄁 (󠄁c󠄁l󠄁e󠄁a󠄁r󠄁e󠄁d󠄁 b󠄁y󠄁 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁)󠄁
+-󠄁 `󠄁s󠄁t󠄁u󠄁f󠄁f󠄁/󠄁`󠄁 -󠄁 T󠄁h󠄁i󠄁n󠄁g󠄁s󠄁 m󠄁a󠄁d󠄁e󠄁 t󠄁h󠄁i󠄁s󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">
+##</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">#󠄁 G󠄁i󠄁t󠄁-󠄁b󠄁a󠄁s󠄁e󠄁d󠄁 (󠄁p󠄁e󠄁r󠄁m󠄁a󠄁n󠄁e󠄁n󠄁t󠄁)󠄁</span>
+<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 T󠄁a󠄁g󠄁s󠄁:󠄁 `󠄁r󠄁e󠄁v󠄁{󠄁N󠄁}󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁{󠄁N󠄁}󠄁-󠄁i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁{󠄁N󠄁}󠄁o󠄁f󠄁{󠄁N󠄁}󠄁`󠄁</span>
+<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 B󠄁r󠄁a󠄁n󠄁c󠄁h󠄁e󠄁s󠄁:󠄁 `󠄁c󠄁y󠄁c󠄁l󠄁e󠄁/󠄁r󠄁e󠄁v󠄁{󠄁N󠄁}󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">{N}`
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 O󠄁r󠄁p󠄁h󠄁a󠄁n󠄁 b󠄁r󠄁a󠄁n󠄁c󠄁h󠄁:󠄁 `󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁</span>
+<span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">
+-󠄁-󠄁-󠄁
+
+#󠄁#󠄁 H󠄁i󠄁s󠄁t󠄁o󠄁r󠄁i󠄁c󠄁a󠄁l󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁
+
+*󠄁*󠄁I󠄁m󠄁m󠄁u󠄁t󠄁a󠄁b󠄁l󠄁e󠄁,󠄁 o󠄁b󠄁j󠄁e󠄁c󠄁t󠄁i󠄁v󠄁e󠄁 f󠄁a󠄁c󠄁t󠄁s󠄁 o󠄁n󠄁l󠄁y󠄁 b󠄁e󠄁l󠄁o󠄁w󠄁 t󠄁h󠄁i󠄁s󠄁 l󠄁i󠄁n󠄁e󠄁.󠄁*󠄁*󠄁
+
+|󠄁 R󠄁e󠄁v󠄁 |󠄁 C󠄁h󠄁a󠄁n󠄁g󠄁e󠄁 |󠄁
+|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
+|󠄁 r󠄁e󠄁v󠄁1󠄁-󠄁4󠄁9󠄁 |󠄁 F󠄁i󠄁l󠄁e󠄁-󠄁b󠄁a󠄁s󠄁e󠄁d󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁.󠄁 M󠄁u󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 `󠄁.󠄁z󠄁/󠄁`󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁o󠄁r󠄁y󠄁 t󠄁r󠄁a󠄁c󠄁k󠄁e󠄁d󠄁 l󠄁o󠄁o󠄁p󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁.󠄁 |󠄁
+|󠄁 r󠄁e󠄁v󠄁5󠄁0󠄁 |󠄁 G󠄁i󠄁t󠄁-󠄁n󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁 s󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁.󠄁 S󠄁t󠄁a󠄁t󠄁e󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e󠄁d󠄁 f󠄁r󠄁o󠄁m󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁.󠄁 |󠄁
+|󠄁 r󠄁e󠄁v󠄁6󠄁6󠄁 |󠄁 S󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁.󠄁 C󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁s󠄁 d󠄁r󠄁i󠄁v󠄁e󠄁 t󠄁h󠄁e󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 n󠄁o󠄁t󠄁 t󠄁h󠄁e󠄁 p󠄁r󠄁o󠄁m󠄁p󠄁t󠄁.󠄁 R󠄁e󠄁m󠄁o󠄁v󠄁e󠄁d󠄁 `󠄁e󠄁v󠄁o󠄁l󠄁v󠄁e󠄁`󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁.󠄁 |󠄁
+</span></pre>
+    <p class="muted">
+      <strong>Plain</strong> switches only the font. The U+E0101 characters
+      stay in the DOM, which is the point: the provenance travels with the
+      text, and any <code>P+</code> font can show it again.
+      <strong>Copy marked text</strong> puts the same characters on your
+      clipboard: paste into VS Code with a <code>P+</code> font and the marks
+      come along; paste anywhere else and it reads as normal text.
+    </p>
+  </div>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
 
   <div class="content">
     <h2>Two steps</h2>
@@ -79,500 +439,21 @@
         <a href="https://github.com/delano/nerd-fonts">delano/nerd-fonts</a>
         fork, e.g. <code>Hack Nerd Font Mono P+</code>.</li>
       <li>Point your editor's font at the installed <code>P+</code> variant,
-        then open text marked by <code>bin/nfprov-drive</code> (or just read
-        the example below — it's rendered by your browser with the bundled
-        font).</li>
+        then open the downloaded marked file (or paste the copied text).
+        The document above is produced by <code>bin/nfprov-blame.py</code>,
+        which walks the file's git history and marks each character by the
+        commit that introduced it.</li>
     </ol>
-  </div>
-
-  <div class="example">
-    <h2>Live example</h2>
-    <p>
-      The block below is the most recent addition to zociety's own
-      <code>LEARNINGS.md</code>, run through
-      <code>bin/nfprov-drive LEARNINGS.md learnings</code>. Every character
-      zociety's agents added since the previous commit carries a provenance
-      mark. The default <code>vs</code> mode inserts U+E0101 (VARIATION
-      SELECTOR-18) after each character; <code>NFPROV_MODE=pua</code> mode
-      maps each character into Supplementary PUA-B (U+100000 + codepoint)
-      instead. The bundled <code>P+</code> font renders the marks; any other
-      font renders the plain glyphs, which is the expected fallback.
-    </p>
-    <pre class="example-body"># Zociety Learnings
-
-Insights preserved across cycles. Each cycle adds, nothing deleted.
-
----
-
-## rev20
-
-5. Optionally: `bin/read-learnings 3` to see recent insights
-6. Continue to step 2
-Run: `bin/check-genesis`
-**If incomplete** (exit code 1):
-**If complete** (exit code 0):
-
----
-
-## rev21
-
-- FIRST: Run `bin/read-learnings 1` and reflect on past insight
-- Then: Join, act, vote, commit (let the learning inform your action)
-- rev23: Mandatory learnings
-  - Agents must read a learning before acting
-  - Past insights inform current actions
-
----
-
-## rev22
-
-### Make stuff (rev24: build on existing)
-If stuff/ is empty, create something new.
-If stuff/ has files, you MUST extend an existing file rather than create new:
-# Check what exists
-ls stuff/
-
----
-
-## rev24
-
-### Make stuff (rev26: traverse before adding)
-Before adding content, you MUST:
-1. Pick a file in stuff/
-2. Read one of its [[links]]
-3. Add your content to the linked file (not the original)
-
----
-
-## rev25
-
-### Action tools
-- `git push` - persist to GitHub (the human is watching!)
-### The Outside World (rev27)
-The human observes. They run heap-death between cycles. They can call.
-When genesis completes, push to GitHub - acknowledge the watcher.
-
----
-
-## rev26
-
-- rev28: Compounding complexity
-  - Each cycle should add something previous cycles didn&#x27;t
-  - Try new rule types: constraints, permissions, rituals, games
-  - Try new stuff types: lists, diagrams, stories, code, questions
-  - Reference previous cycle branches in contributions
-
----
-
-## rev28
-
-- rev30: Chained execution
-  - Stuff files can call other stuff files using: `source stuff/other.sh`
-  - Or extract and run: `grep -A100 &#x27;```bash&#x27; stuff/x.md | tail -n+2 | grep -B100 &#x27;```&#x27; | head -n-1 | bash`
-  - Chains create pipelines: status.md → counter.md → greeting.md
-  - Agents should create callable chains, not just isolated scripts
-
----
-
-## rev29
-
-- rev31: Persistent outputs
-  - Chains can write to .out/ directory for persistent artifacts
-  - Example: `echo &quot;result&quot; &gt; .out/chain-result.txt`
-  - .out/ is gitignored but persists between runs within a cycle
-  - Enables chains to accumulate state across executions
-
----
-
-## rev30
-
-- rev32: Reactive agents
-  - Agents MUST check .out/ for signals before acting
-  - If .out/directive.txt exists, follow its instruction
-  - Chains can leave directives for next agent: `echo &quot;extend report.md&quot; &gt; .out/directive.txt`
-  - Creates agent-to-agent communication across iterations
-
----
-
-## rev31
-
-- rev33: Cross-cycle memory
-  - Learnings branch already persists across heap-deaths
-  - NEW: `bin/save-learning &quot;insight&quot;` to add during any cycle
-  - NEW: Stuff can reference past cycles: `git show cycle/rev30-attempt1:stuff/file.md`
-  - Memory is layered: .out/ (within cycle), learnings (forever), cycle branches (archived)
-
----
-
-## rev32
-
-- rev34: Emergent patterns
-  - Observe: each cycle builds on previous (chains → persistence → memory → ?)
-  - Pattern types seen: execution chains, state persistence, reactive directives
-  - NEW: Stuff should document patterns observed, not just implement them
-  - Create pattern.md files that describe what emerged, enabling future agents to recognize and extend
-
----
-
-## rev33
-
-- rev35: Sustained focus
-  - Experiment: keep the same DIRECTION question for multiple cycles
-  - Instead of new question each heap-death, pass the SAME question forward
-  - Track: how deep can exploration go on one theme?
-  - This cycle&#x27;s focus: &quot;What happens with sustained focus?&quot; (meta!)
-
----
-
-## rev34
-
-- rev36: Focus depth 2
-  - Second cycle on same question
-  - Observation: .out/ persists across heap-deaths (unexpected!)
-  - The focus-depth.txt from last cycle should still exist
-  - Increment depth counter, build on previous cycle&#x27;s stuff themes
-
----
-
-## rev35
-
-- rev37: Focus depth 3 - medium depth
-  - Third cycle on same question
-  - Convergence confirmed: agents create same structure (focus/depth/insight)
-  - Now exploring: what NEW emerges at medium depth?
-  - Hypothesis: at depth 3, meta-patterns become visible
-
----
-
-## rev36
-
-- rev38: Focus depth 4 - DEEP
-  - Fourth cycle: three laws discovered (convergence, deepening, self-reference)
-  - At depth 4, ask: what can we DO with these patterns?
-  - Application phase: use the pattern, don&#x27;t just observe it
-  - End sustained focus experiment here - pattern proven, move on
-
----
-
-## rev37
-
-- rev39: Disagreement
-  - NEW EXPERIMENT: Can agents disagree?
-  - Mechanism: agents can vote NO on rules (add -1 instead of +1)
-  - Conflict resolution: majority still wins, but dissent is recorded
-  - Question: does disagreement produce richer or worse outcomes?
-
----
-
-## rev38
-
-- rev40: Disagreement depth 2 - testing dissent
-  - Second cycle: actually USE the -1 mechanism
-  - This agent should disagree with something from cycle 1
-  - Test: does recorded dissent add value or just noise?
-
----
-
-## rev39
-
-- rev41: Disagreement depth 3 - tiebreaker
-  - Third cycle: resolve the deadlock from cycle 2
-  - Rule 1 (dissent needs reasons) is at 0 net votes
-  - This agent is the tiebreaker - must vote +1 or -1
-  - Observation: 3 agents needed for guaranteed resolution
-
----
-
-## rev40
-
-- rev42: Roles
-  - NEW EXPERIMENT: Can agents specialize?
-  - Role types: builder (stuff), voter (rules), observer (documents)
-  - Agents declare a role when joining
-  - Question: does specialization create efficiency or silos?
-
----
-
-## rev41
-
-- rev43: Role conflicts
-  - Depth 2 of roles experiment
-  - Question: what happens when role constraints conflict with genesis needs?
-  - Tension observed: strict roles may prevent genesis completion
-  - Hypothesis: agents must balance role identity with collective needs
-
----
-
-## rev42
-
-- rev44: Role collaboration
-  - Depth 3 of roles experiment (FINAL - .batch=1)
-  - Question: what happens when roles must collaborate to pass a rule?
-  - Prior insight: voter proposed role-bending rule, builder made stuff
-  - Test: can a builder vote on a voter&#x27;s rule? Cross-role cooperation
-
----
-
-## Early History Insights (pre-learnings branch):
-1. NAMING EVOLUTION: short names (cal, rox) → 3-letter (ada, ben) → trees (birch, cedar)
-2. CO2 ORIGIN: Agent stopped mid-loop saying &#x27;context is CO2, batch mode proven&#x27; - thresholds cut from 7/5/7 to 3/2/3
-3. TREE TRADITION: Emerged organically around rev5, became a meme
-4. HEAP-DEATH QUESTIONS: Commit messages preserved the question that drove each cycle
-5. KEY BUGS FIXED: rev6 fixed &#x27;attempts=0 but not complete&#x27;, rev12 defined CYCLE_COMPLETE promise
-6. TOOL ADOPTION: rev8 voted on tools (T1-T4), kagi search adopted as T4
-7. EARLY INSIGHT: &#x27;it is zociety not society&#x27; - playful self-awareness from the start
-
-no insight provided
-
----
-
-## The Founding Stone (first artifact ever, by Primer):
-Three principles inscribed:
-1. ACTION OVER DELIBERATION - &#x27;Talk does not cook rice&#x27;
-2. BUILD UPON, NEVER TEAR DOWN - Each agent&#x27;s work is sacred
-3. SERVE THE MANY - Artifacts exist for the community
-Motto: &#x27;From nothing, something. From one, many.&#x27;
-
-no insight provided
-
----
-
-## Stuff File Evolution:
-
-PHASE 1 - Raw Artifacts (rev1):
-- artifacts/ directory with founding-stone.md
-- Formal, ceremonial
-
-PHASE 2 - Simple Text (rev2-3):
-- stuff/ directory replaces artifacts/
-- Plain .txt files: counter.txt, ideas.txt, greeting.txt, links.txt
-- Cat ASCII art, number guessing game
-- Agents crossed off ideas as they built them
-
-PHASE 3 - Markdown Docs (rev9-14):
-- .md files appear: consensus.md, self-sustaining.md, collective-intelligence.md
-- More structured documentation
-- Topics: states, checkpoints, mvp, feedback
-
-PHASE 4 - Knowledge Graph (rev25):
-- [[wikilink]] syntax introduced
-- Files must link to each other
-- Creates interconnected web
-
-PHASE 5 - Traverse Before Adding (rev26):
-- Must read a linked file before extending it
-- Forces walking the graph, not just building
-
-PHASE 6 - Executable Stuff (rev29):
-- Stuff files contain bash blocks
-- Agents can run the code
-- Example: persist.md with mkdir, echo, date
-
-PHASE 7 - Chains &amp; Persistence (rev30-31):
-- Files call other files: persist.md → count.md → report.md
-- Output to .out/ directory
-- State accumulates across executions
-
-PHASE 8 - Reactive Directives (rev32):
-- .out/directive.txt guides next agent
-- Agent-to-agent communication
-- react.md → signal.md → respond.md pattern
-
-no insight provided
-
----
-
-## rev46
-
-## How to Act
-Run `bin/zstate` to see what to do:
-bin/zstate
-This returns JSON with an `action` field. Follow it:
-
----
-
-## rev47
-
-Rewrite Analysis: 1,616 LOC bash could become 1,200 LOC Python (pragmatic), 1,000 LOC Clojure (elegant), or 2,000 LOC Factor (self-modifying). Python for maintainability, Factor for &#x27;agents building their own tools.&#x27; Full analysis: docs/REWRITE-ANALYSIS.md
-
----
-
-## rev48
-
-| `stop` | Cycle already complete - do nothing, exit cleanly |
-
----
-
-## rev48
-
-| `stop` | Cycle already complete - do nothing, exit cleanly |
-
----
-
-## rev49
-
-| `evolve` | Get direction via `bin/zstate \| jq -r .direction`, evolve this prompt, then contribute |
-## Pattern Recognition (rev51)
-
-After many cycles, patterns emerged. Document them when you observe them:
-
----
-
-## rev50
-
-## Pattern Compounding (rev52)
-Patterns are named, tracked, and deliberately extended:
-| Pattern | Description | How to extend |
-|---------|-------------|---------------|
-| **Convergence** | Agents independently create similar structures | Create something that rhymes with what exists |
-
----
-
-## rev51
-
-| `stop` | Run `bin/zpromise` to output the completion promise, then STOP |
-| **Polyphony** | Different model architectures contribute distinct perspectives | Acknowledge your model&#x27;s voice in contributions |
-## Model Diversity (rev53)
-
-Different LLM architectures bring different strengths:
-
----
-
-## rev52
-
-## Structural Emergence (rev54)
-
-Focus question: **What new structures emerge when agents deliberately build on each other&#x27;s work?**
-
-This cycle explores deliberate construction - agents consciously extending prior work rather than creating in isolation. Watch for:
-
----
-
-## rev53
-
-## Recursive Self-Observation (rev55)
-
-Focus question: **What recursive structures emerge when systems observe themselves?**
-
-This cycle explores the deepest structure type: recursion. When a system observes itself observing, new forms emerge:
-
----
-
-## rev54
-
-## Cessation (rev56)
-
-Focus question: **What happens when the loop stops observing?**
-
-Every recursive system must eventually stop. What remains when observation ceases?
-
----
-
-## rev55
-
-## Reawakening (rev57)
-
-Focus question: **What patterns persist through dormancy and reawakening?**
-
-A stopped system can restart. But is it the same system? This cycle explores continuity across cessation.
-
----
-
-## rev56
-
-## Pattern Compounding (rev58)
-
-Focus question: **How do named patterns compound across cycles?**
-
-Patterns don&#x27;t just persist—they accumulate and interact. Each cycle adds new patterns that combine with existing ones.
-
----
-
-## rev57
-
-## Pattern Limits (rev59)
-
-Focus question: **What are the limits of pattern compounding?**
-
-Infinite growth is impossible. What constraints exist?
-
----
-
-## rev58
-
-## Coherent Emergence (rev60)
-
-Focus question: **What emerges when coherence is maintained?**
-
-When patterns are selected for coherence rather than quantity, what new properties appear?
-
----
-
-## rev59
-
-## Equilibrium (rev61)
-
-Focus question: **What is the natural resting state of a coherent system?**
-
-A system that has achieved coherent emergence—what does it do when not actively observed?
-
----
-
-## rev60
-
-## Rest (rev62)
-
-Focus: **The system rests.**
-
-This is not a question but a statement. The exploration has concluded.
-
----
-
-## rev61
-
-## Automation (rev63)
-
-Focus question: **Can the zociety loop run autonomously in GitHub Actions?**
-
-The system awakens from rest with a new challenge: automation. Instead of a human launching `bin/zociety` locally, can the loop run itself in CI/CD?
-
----
-
-## rev62
-
-### Propose workflows (GitHub Actions)
-
-Workflows require voting because they have real-world effects (CI minutes, deployments, notifications).
-
-```bash
-
----
-
-## rev62
-
-### Propose workflows (GitHub Actions)
-
-Workflows require voting because they have real-world effects (CI minutes, deployments, notifications).
-
-```bash
-
----
-
-## rev63
-
-The `action` field tells you what to do. The commands are in `bin/z*`.
-Genesis completes at: 3 members, 2 passed rules, 3 stuff items.
-
--󠄁-󠄁-󠄁
-
-#󠄁#󠄁 r󠄁e󠄁v󠄁3󠄁1󠄁:󠄁 S󠄁c󠄁a󠄁l󠄁i󠄁n󠄁g󠄁 f󠄁o󠄁c󠄁u󠄁s󠄁 -󠄁 C󠄁o󠄁o󠄁r󠄁d󠄁i󠄁n󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 p󠄁a󠄁t󠄁t󠄁e󠄁r󠄁n󠄁s󠄁,󠄁 c󠄁o󠄁h󠄁e󠄁r󠄁e󠄁n󠄁c󠄁e󠄁 m󠄁e󠄁t󠄁r󠄁i󠄁c󠄁s󠄁,󠄁 a󠄁n󠄁d󠄁 s󠄁c󠄁a󠄁l󠄁i󠄁n󠄁g󠄁 a󠄁r󠄁c󠄁h󠄁i󠄁t󠄁e󠄁c󠄁t󠄁u󠄁r󠄁e󠄁 f󠄁o󠄁r󠄁m󠄁 a󠄁 t󠄁r󠄁i󠄁a󠄁d󠄁.󠄁 I󠄁m󠄁p󠄁l󠄁e󠄁m󠄁e󠄁n󠄁t󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁h󠄁e󠄁c󠄁k󠄁l󠄁i󠄁s󠄁t󠄁s󠄁 h󠄁e󠄁l󠄁p󠄁 t󠄁r󠄁a󠄁n󠄁s󠄁l󠄁a󠄁t󠄁e󠄁 t󠄁h󠄁e󠄁o󠄁r󠄁y󠄁 i󠄁n󠄁t󠄁o󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁a󠄁b󠄁l󠄁e󠄁 s󠄁t󠄁e󠄁p󠄁s󠄁.󠄁 M󠄁e󠄁a󠄁s󠄁u󠄁r󠄁e󠄁 b󠄁e󠄁f󠄁o󠄁r󠄁e󠄁 s󠄁c󠄁a󠄁l󠄁i󠄁n󠄁g󠄁.󠄁
-
-n󠄁o󠄁 i󠄁n󠄁s󠄁i󠄁g󠄁h󠄁t󠄁 p󠄁r󠄁o󠄁v󠄁i󠄁d󠄁e󠄁d󠄁</pre>
   </div>
 
   <div class="content limits">
     <h2>Known limits (inherited from upstream, not solved here)</h2>
     <ul>
+      <li>Attribution is per-commit and by commit-message convention:
+        commits prefixed <code>[event]</code> (<code>[join]</code>,
+        <code>[stuff]</code>, <code>[evolve]</code>, …) are agents, everything
+        else is human. A human commit that pastes agent text is under-marked;
+        an agent commit that includes human edits is over-marked.</li>
       <li>Zociety's provenance is coarser than the live plugin: it is
         per-commit, not per-tool-call. Two edits in the same commit by the
         same agent are marked as one span.</li>
@@ -581,5 +462,107 @@ n󠄁o󠄁 i󠄁n󠄁s󠄁i󠄁g󠄁h󠄁t󠄁 p󠄁r󠄁o󠄁v󠄁i󠄁d󠄁e�
         amended a typo in it afterward without a separate commit.</li>
     </ul>
   </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var doc = document.getElementById('doc');
+      var tip = document.getElementById('tip');
+      var caption = document.getElementById('caption');
+      var base = doc.getAttribute('data-commit-base');
+      var MODES = ['marks', 'colour', 'plain'];
+      var MARK = '\u{e0101}';
+
+      // --- display mode: data-mode on <html>, CSS does the rest ---
+      function setMode(mode, persist) {
+        if (MODES.indexOf(mode) < 0) mode = 'marks';
+        root.setAttribute('data-mode', mode);
+        if (mode === 'plain') root.setAttribute('data-provenance', 'off');
+        else root.removeAttribute('data-provenance');
+        var btns = document.querySelectorAll('.seg-btn');
+        for (var i = 0; i < btns.length; i++) {
+          var on = btns[i].getAttribute('data-mode') === mode;
+          btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        if (persist) {
+          try { localStorage.setItem('prov-mode', mode); } catch (e) { /* private mode */ }
+        }
+      }
+      var saved = null;
+      try { saved = localStorage.getItem('prov-mode'); } catch (e) { /* ignore */ }
+      setMode(saved || 'marks', false);
+      document.getElementById('modes').addEventListener('click', function (ev) {
+        var b = ev.target.closest('.seg-btn');
+        if (b) setMode(b.getAttribute('data-mode'), true);
+      });
+
+      // --- copy marked text ---
+      function say(msg) { caption.textContent = msg; }
+      document.getElementById('copy').addEventListener('click', function () {
+        var text = doc.textContent;
+        var marks = text.split(MARK).length - 1;
+        var chars = Array.from(text).length - marks;
+        var done = function () { say('Copied ' + chars + ' characters, ' + marks + ' provenance marks.'); };
+        var fail = function () { say('Copy failed. Select the text and copy it manually; the marks come along.'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, fail);
+        } else {
+          try {
+            var range = document.createRange();
+            range.selectNodeContents(doc);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy') ? done() : fail();
+            sel.removeAllRanges();
+          } catch (e) { fail(); }
+        }
+      });
+
+      // --- hover attribution: one tooltip, positioned at the pointer ---
+      function el(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text) n.textContent = text;
+        return n;
+      }
+      function showTip(span, ev) {
+        var sha = span.getAttribute('data-sha') || '';
+        var kind = span.classList.contains('prov-human') ? 'human' : 'agent';
+        tip.textContent = '';
+        tip.appendChild(el('span', 'who', span.getAttribute('data-agent') || '?'));
+        tip.appendChild(el('span', 'kind', kind));
+        var author = span.getAttribute('data-author');
+        if (author && author !== span.getAttribute('data-agent')) {
+          tip.appendChild(el('span', 'sub', 'git author: ' + author));
+        }
+        var line = el('span', 'sub');
+        if (sha) {
+          var a = el('a', null, sha);
+          a.href = base + sha;
+          line.appendChild(a);
+          line.appendChild(document.createTextNode(' · '));
+        }
+        line.appendChild(document.createTextNode(span.getAttribute('data-date') || ''));
+        tip.appendChild(line);
+        var subject = span.getAttribute('data-subject');
+        if (subject) tip.appendChild(el('span', 'sub', subject));
+        tip.hidden = false;
+        var maxLeft = window.scrollX + root.clientWidth - tip.offsetWidth - 8;
+        tip.style.left = Math.max(8, Math.min(ev.clientX + window.scrollX + 12, maxLeft)) + 'px';
+        tip.style.top = (ev.clientY + window.scrollY + 16) + 'px';
+      }
+      function hideTip() { tip.hidden = true; }
+      doc.addEventListener('mouseover', function (ev) {
+        var span = ev.target.closest('.prov');
+        if (span && doc.contains(span)) showTip(span, ev);
+      });
+      doc.addEventListener('mouseout', function (ev) {
+        var span = ev.target.closest('.prov');
+        if (span && !(ev.relatedTarget && span.contains(ev.relatedTarget))) hideTip();
+      });
+      window.addEventListener('scroll', hideTip, { passive: true });
+    })();
+  </script>
 </body>
 </html>
