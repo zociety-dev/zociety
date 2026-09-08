@@ -158,8 +158,12 @@ Everything else (Greek, Cyrillic, icons, U+2192) passes through unmarked:
 nfprov still emits base+VS18, but the font has no such sequence, so every
 renderer drops the selector and draws the plain glyph. No tofu, no mark.
 Width (Mono, Propo, proportional) is a separate P+ face, not a selector.
-WebKit (Safari, Orion) ignores the VS sequences entirely; the page falls
-back to PUA-B display there (#13). `bin/nfprov-upstream.py` and
+WebKit (Safari, Orion) ignores the VS sequences entirely because both
+shape text with CoreText, which drops an unregistered variation selector
+before the P+ face ever sees it; the page falls back to PUA-B display
+there (#13). Any other CoreText consumer has the same gap, including
+non-browser apps such as the Zed editor — VS18 text pastes in unmarked,
+PUA-B pastes in marked. `bin/nfprov-upstream.py` and
 `bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
 by copying, and keep the source SHA in the header. Attribution is by
 commit convention: `[event]` commits are agents (name from the zevent

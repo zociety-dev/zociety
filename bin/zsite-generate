@@ -991,6 +991,22 @@ EOF
     </ul>
   </div>
 
+  <div class="content limits">
+    <h2>Quirks and Quarks</h2>
+    <p class="muted">Odd behaviour found by hand-testing, not by spec.</p>
+    <ul>
+      <li>It's CoreText, not just WebKit: any macOS app that shapes text
+        with CoreText drops U+E0101 the same way Safari and Orion do,
+        browser or not. Paste the <strong>Copy marked text</strong> output
+        (VS18) into the <a href="https://zed.dev">Zed</a> editor and it
+        renders unmarked; switch this page to <strong>PUA-B</strong> first,
+        or hand-select and copy from that display, and Zed shows the marks.
+        A paste target that renders through a different stack can show
+        VS18 marked with no such swap — worth checking before assuming a
+        copy is broken.</li>
+    </ul>
+  </div>
+
   <script>
     (function () {
       var root = document.documentElement;
