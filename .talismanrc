@@ -58,17 +58,17 @@ fileignoreconfig:
 - filename: .githooks/pre-commit
   checksum: e1b40fe6cca915f012858517662dbeb8cf81d47b38e73d2ebc5b6c1d54b4a8e0
 - filename: docs/.well-known/agent-network.json
-  checksum: a6689451d749854245f486436b6701166de070a95da58e75a3baf65efd558d28
+  checksum: 3a8421e37b7d32e7617a3f017d8eeafccc0772a389ab3d5f5ba93b7bb49c0e05
 - filename: docs/.well-known/zevent.schema.json
-  checksum: 4e037adc7aeefb5302b320bac858128e51fb2c000223e518fed39da8080a257a
+  checksum: cb9d29330d3ecda7de0c5f6dc63a3fc014fc4313f53c13f29e8aaabb5c7a547f
 - filename: bin/zsite-generate
-  checksum: 6111d2989e898a1659a60247a86c92cbd4771bfe8db327a5195a59d754861b3a
+  checksum: eaacd7fd9846c48999985a7a10d87ba508ca182623e248365994681d3c204e58
 - filename: docs/provenance.html
-  checksum: f57ccddae79db1ca71001a5d577ff35678b9495c8bd82191740a38870cd4e470
+  checksum: f93814a4cfbc91caa9a682a68b3644689ff8666f1f5d902400597c472f3d7928
 - filename: stuff/index.md
   checksum: 1909b676cfe75c92df6f0fb53a522591ed33010305448b9c5897e033188759b9
 - filename: docs/stuff.html
-  checksum: e996a73aa420fc4b0f5cd2209e42a699b4437f726793d385e7a3cfc28fca9a8e
+  checksum: 620fcf120255c2e35ff21e589dd103b4a54558a0a44ad63f96460cd9ccb17f18
 - filename: bin/nfprov-upstream.py
   checksum: fb50a47494d335ccd01a40b2a555c74076f5d455740e75dd4932ad36293be7a9
 - filename: bin/nfprov-blame.py
@@ -83,4 +83,6 @@ fileignoreconfig:
   checksum: 117d00b190ccf6e722329b28b756f7cdb1c29ae160e68a783fdae041ca6e6155
 - filename: .envrc
   checksum: 9b960074bf481e51ac8e3412b40c2fd75369e42f9eeef26abf883ad8ff609fb7
+- filename: bin/test-prov-encoding
+  checksum: 0bef4dd3af12e5f207cf8ef05f9d058f29d7e5039af11dee38f43ca52f6016d1
 version: "1.0"
