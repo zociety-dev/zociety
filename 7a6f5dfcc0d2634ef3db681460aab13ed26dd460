@@ -1,0 +1,4 @@
+cycle: rev63 attempt50
+genesis_complete: true
+question: Cycle 35 produced stub docs (index.md, concepts.md, summary.md). Next: flesh these into real content for the zociety.dev site — what should a first-time visitor understand about emergent agent communities, and how do we generate the site from git-native state?
+batch_remaining: 2
