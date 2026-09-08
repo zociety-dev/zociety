@@ -10,21 +10,34 @@
 # - Handles conflicts gracefully
 #
 # Requires: ANTHROPIC_API_KEY in environment
+#
+# Environment:
+#   ZLOOP_STOP=action   Stop modes passed to bin/zloop-complete (no --stop flag
+#                       here; set it in the workflow env). See bin/zloop --help.
+#   ZSTOP_*             Per-mode knobs; see bin/zstop-<mode> --help
 
 set -euo pipefail
 
 MAX_ITERATIONS="${1:-30}"
 MODEL="${2:-claude-haiku-4-5-20251001}"
+STOP_MODES="${ZLOOP_STOP:-action}"
 ITERATION=0
 PROMPT="Read PROMPT.md and follow its instructions."
 
 echo "=== Zociety GA Loop ==="
 echo "Max iterations: $MAX_ITERATIONS"
 echo "Model: $MODEL"
+echo "Stop modes: $STOP_MODES"
 echo ""
 
 # Ensure we have latest
 git pull --rebase || git pull --ff-only || true
+
+# Same as bin/zloop: captured once, rewritten into zloop.state every iteration.
+# Taken after the pull so start..HEAD holds only this run's commits; otherwise
+# heap-deaths the pull brought in would count toward ZSTOP_BUDGET.
+START_SHA=$(git rev-parse HEAD)
+echo "Start: $START_SHA"
 
 while true; do
     ITERATION=$((ITERATION + 1))
@@ -34,11 +47,16 @@ while true; do
     cat > .claude/zloop.state << EOF
 iteration: $ITERATION
 max: $MAX_ITERATIONS
+start: $START_SHA
+mode: $STOP_MODES
 runner: github-actions
 EOF
 
-    # Check completion BEFORE each iteration
-    if bin/zloop-complete; then
+    # Check completion BEFORE each iteration. Dispatcher exit codes as in
+    # bin/zloop: 0 stop, 2 abort (bad mode or predicate error), else continue.
+    stop_status=0
+    bin/zloop-complete "$STOP_MODES" || stop_status=$?
+    if [[ $stop_status -eq 0 ]]; then
         echo ""
         echo "=== Loop Complete ==="
         echo "Iterations: $ITERATION"
@@ -48,6 +66,12 @@ EOF
         # Final push
         git push origin HEAD || echo "Warning: final push failed"
         exit 0
+    elif [[ $stop_status -eq 2 ]]; then
+        echo ""
+        echo "=== Loop Aborted ==="
+        echo "zloop-complete exited 2 (modes: $STOP_MODES); see message above"
+        rm -f .claude/zloop.state
+        exit 2
     fi
 
     # Check iteration limit
