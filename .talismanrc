@@ -79,4 +79,6 @@ fileignoreconfig:
   checksum: b54ce9f67ab88bfee94d8a0e16b773aa463b8df6e6e25c2abd2eca3cdd7be272
 - filename: bin/test-zstop-modes
   checksum: 6247bece24c37b4344e6795a542ee15895831ee00dcec95e4548fd289fc4521d
+- filename: bin/zgit
+  checksum: 117d00b190ccf6e722329b28b756f7cdb1c29ae160e68a783fdae041ca6e6155
 version: "1.0"

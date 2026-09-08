@@ -126,6 +126,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zcomplete` | Record genesis completion |
 | `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode) |
 | `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
+| `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zpromise` | Output completion promise |
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
