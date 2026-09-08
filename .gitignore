@@ -5,3 +5,6 @@
 container/secrets/*
 !container/secrets/.gitkeep
 .zociety.log
+
+# Talisman generated report output (not source)
+talisman_report/

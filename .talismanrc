@@ -1,4 +1,6 @@
 fileignoreconfig:
+- filename: talisman_report/talisman_reports/data/report.json
+  checksum: 9932ed4213d4ad25cbd50395d128f865e93038d5255f7a73502fb1d383aaf9da
 - filename: TEST-REPORT.md
   checksum: c2f00863afac3f43ffd3d525bb8073385478bb20ee5aa6504e73b349bb6b5af7
 - filename: PROJECT-OVERVIEW.md
@@ -63,4 +65,8 @@ fileignoreconfig:
   checksum: 2939c749147910a019edc85009fba6f496d71bb2372bd00adb0e45cdc3ab03ac
 - filename: docs/provenance.html
   checksum: c46deecce24ad881d2d7ab794299db1090e44917c1588d0f7268a7d347769639
+- filename: stuff/index.md
+  checksum: 1909b676cfe75c92df6f0fb53a522591ed33010305448b9c5897e033188759b9
+- filename: docs/stuff.html
+  checksum: e996a73aa420fc4b0f5cd2209e42a699b4437f726793d385e7a3cfc28fca9a8e
 version: "1.0"

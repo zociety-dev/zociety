@@ -70,6 +70,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
 | `bin/zheap-death` | Archive cycle, prepare next |
+| `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
 | `bin/zpromise` | Output completion promise |
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion |

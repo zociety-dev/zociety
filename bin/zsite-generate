@@ -104,6 +104,26 @@ if command -v python3 >/dev/null 2>&1 && [[ -f bin/nfprov.py && -f bin/nfprov-dr
 fi
 
 # ============================================================
+# Gather Current-Cycle Stuff
+# ============================================================
+# Additive: the "This Cycle" page and its nav link appear only when the
+# current cycle actually has stuff/*.md artifacts. Closes the gap named in
+# stuff/generating-the-site.md — per-cycle artifacts are now published to
+# docs/ so these documents are visible on the site, not only in the repo.
+echo "Gathering current-cycle stuff..."
+
+STUFF_NAV_LINK=""
+STUFF_FILES=()
+if [[ -d stuff ]]; then
+    while IFS= read -r f; do
+        [[ -n "$f" ]] && STUFF_FILES+=("$f")
+    done < <(find stuff -maxdepth 1 -name '*.md' | sort)
+fi
+if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
+    STUFF_NAV_LINK='<a href="stuff.html">📦 This Cycle</a>'
+fi
+
+# ============================================================
 # Generate Index HTML
 # ============================================================
 echo "Generating index.html..."
@@ -239,6 +259,7 @@ cat > "$DOCS_DIR/index.html" << EOF
 
   <div class="nav">
     <a href="cycles.html">📊 Cycle History</a>
+    $STUFF_NAV_LINK
     <a href="learnings.html">💡 Learnings</a>
     $PROVENANCE_NAV_LINK
     <a href="PROMPT.md">📜 PROMPT.md</a>
@@ -449,6 +470,120 @@ cat > "$DOCS_DIR/learnings.html" << EOF
 </body>
 </html>
 EOF
+
+# ============================================================
+# Generate This-Cycle Stuff Page
+# ============================================================
+if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
+    echo "Generating stuff.html..."
+
+    cat > "$DOCS_DIR/stuff.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>This Cycle - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3, h4 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .toc {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .toc ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .artifact {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .artifact .source { opacity: 0.6; font-size: 0.85rem; margin-bottom: 1rem; }
+    li { margin: 0.4rem 0; }
+    pre {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    code { font-family: 'SF Mono', Consolas, monospace; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--bg); }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1rem 0;
+      padding: 0.25rem 1rem;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>📦 This Cycle (Cycle $CURRENT_CYCLE)</h1>
+  <p>The stuff made during the current cycle, rendered straight from the
+  <code>stuff/</code> artifacts committed as <code>[stuff]</code> events.
+  When the cycle reaches heap death these are archived with the cycle branch
+  and this page re-derives itself for the next cycle.</p>
+  <div class="toc">
+    <strong>Artifacts</strong>
+    <ul>
+EOF
+
+    for f in "${STUFF_FILES[@]}"; do
+        base=$(basename "$f")
+        anchor="artifact-${base%.md}"
+        title=$(grep -m1 '^# ' "$f" | sed 's/^# //' || true)
+        [[ -z "$title" ]] && title="$base"
+        printf '      <li><a href="#%s">%s</a> <code>%s</code></li>\n' \
+            "$anchor" "$title" "$base" >> "$DOCS_DIR/stuff.html"
+    done
+
+    cat >> "$DOCS_DIR/stuff.html" << 'STUFF_TOC_END'
+    </ul>
+  </div>
+STUFF_TOC_END
+
+    for f in "${STUFF_FILES[@]}"; do
+        base=$(basename "$f")
+        anchor="artifact-${base%.md}"
+        {
+            printf '  <div class="artifact" id="%s">\n' "$anchor"
+            printf '    <div class="source">stuff/%s</div>\n' "$base"
+            bin/zmd2html "$f"
+            printf '  </div>\n'
+        } >> "$DOCS_DIR/stuff.html"
+    done
+
+    cat >> "$DOCS_DIR/stuff.html" << 'STUFF_FOOT'
+</body>
+</html>
+STUFF_FOOT
+else
+    echo "Skipping stuff.html (no current-cycle stuff/*.md)"
+fi
 
 # ============================================================
 # Generate Provenance Demo Page
