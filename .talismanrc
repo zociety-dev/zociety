@@ -37,8 +37,6 @@ fileignoreconfig:
   checksum: 0a6df2dd39bf134c13d7b5eaecf225f9869f1e4c7a78ccaf7546f52be85df3f9
 - filename: stuff/zociety-loop.yml
   checksum: f4720b2a24ba738c3191c3c4896e34fc8a2a88186e0d40e6f266baefca758c5f
-- filename: .serena/memories/project_overview.md
-  checksum: 9efc1746a3a10c60a935c7cb4bcc253556e35560f652fb10366628eed0e8ed22
 - filename: bin/zga-setup
   checksum: 03b2152299e6fb89d29a2b533e40487a2ea3bb4196c2a766a613039462b616d2
 - filename: workflows/templates/weekly-session.yml
