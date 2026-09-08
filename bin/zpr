@@ -1,0 +1,153 @@
+#!/bin/bash
+# zpr: Open (and optionally merge) a pull request for a completed cycle
+#
+# Usage:
+#   bin/zpr <head_branch> [base_branch] [title]
+#   bin/zpr -h | --help
+#
+# Arguments:
+#   head_branch  Branch to merge FROM (e.g. cycle/rev35-attempt1). Required.
+#   base_branch  Branch to merge INTO (default: main).
+#   title        PR title (default: derived from head_branch + last subject).
+#
+# Environment:
+#   ZPR_MERGE=1          After creating, merge the PR (default: 0, create only).
+#   ZPR_MERGE_METHOD=... merge | squash | rebase (default: squash).
+#   ZPR_AUTO=1           Merge with --auto (waits for required checks) instead
+#                        of merging immediately.
+#   ZPR_DRAFT=1          Open the PR as a draft.
+#
+# Requires the `gh` CLI, authenticated. If gh is missing or unauthenticated,
+# exits non-zero with a clear message; callers that treat the PR as optional
+# should guard the call with `|| true`.
+#
+# Not an event: this is a GitHub side-effect utility (like zlog/zcheck). It does
+# not write a zevent and does not touch git-derived state.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+HEAD_BRANCH="${1:-}"
+BASE_BRANCH="${2:-main}"
+TITLE="${3:-}"
+
+MERGE="${ZPR_MERGE:-0}"
+MERGE_METHOD="${ZPR_MERGE_METHOD:-squash}"
+
+if [[ -z "$HEAD_BRANCH" ]]; then
+  usage >&2
+  exit 1
+fi
+
+if [[ "$HEAD_BRANCH" == "$BASE_BRANCH" ]]; then
+  echo "zpr: head and base are both '$HEAD_BRANCH'; nothing to open" >&2
+  exit 1
+fi
+
+if ! command -v gh &>/dev/null; then
+  echo "zpr: gh CLI not found; install it or guard this call with || true" >&2
+  exit 2
+fi
+
+if ! gh auth status &>/dev/null; then
+  echo "zpr: gh is not authenticated; run 'gh auth login'" >&2
+  exit 2
+fi
+
+if ! git remote get-url origin &>/dev/null; then
+  echo "zpr: no 'origin' remote; cannot open a PR" >&2
+  exit 2
+fi
+
+# Ensure the head branch is on origin so gh can open the PR against it.
+git push origin "$HEAD_BRANCH" --quiet 2>/dev/null || {
+  echo "zpr: failed to push $HEAD_BRANCH to origin" >&2
+  exit 3
+}
+
+# Bail early if there is nothing to merge (e.g. cycle branch == base).
+COMMITS=0
+for ref in "origin/$BASE_BRANCH" "$BASE_BRANCH"; do
+  if git rev-parse --verify --quiet "$ref" >/dev/null; then
+    COMMITS=$(git rev-list --count "$ref..$HEAD_BRANCH" 2>/dev/null || echo 0)
+    break
+  fi
+done
+if [[ "$COMMITS" -eq 0 ]]; then
+  echo "zpr: no commits between $BASE_BRANCH and $HEAD_BRANCH; nothing to open"
+  exit 0
+fi
+
+# Reuse an already-open PR for this head->base pair if one exists.
+EXISTING=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" \
+  --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+if [[ -n "$EXISTING" ]]; then
+  PR_NUM="$EXISTING"
+  echo "zpr: reusing open PR #$PR_NUM for $HEAD_BRANCH -> $BASE_BRANCH"
+else
+  if [[ -z "$TITLE" ]]; then
+    SUBJECT=$(git log -1 --format='%s' "$HEAD_BRANCH" 2>/dev/null || echo "")
+    TITLE="$HEAD_BRANCH: ${SUBJECT:-completed cycle}"
+  fi
+
+  # Summarize the cycle from its structured commits for the PR body.
+  count() { git log --oneline --grep="$1" "$BASE_BRANCH..$HEAD_BRANCH" 2>/dev/null | wc -l | tr -d ' '; }
+  JOINS=$(count '^\[join\]')
+  RULES=$(count '^\[pass\]')
+  STUFF=$(count '^\[stuff\]')
+  HEAP=$(git log -1 --format='%s' --grep='^\[heap-death\]' "$BASE_BRANCH..$HEAD_BRANCH" 2>/dev/null || echo "")
+
+  BODY=$(printf '%s\n' \
+    "Cycle branch \`$HEAD_BRANCH\` -> \`$BASE_BRANCH\`, $COMMITS commit(s)." \
+    "" \
+    "- joins: $JOINS" \
+    "- rules adopted: $RULES" \
+    "- stuff: $STUFF" \
+    "" \
+    "${HEAP:+Heap-death: $HEAP}" \
+    "" \
+    "Opened by bin/zpr.")
+
+  DRAFT_FLAG=()
+  [[ "${ZPR_DRAFT:-0}" == "1" ]] && DRAFT_FLAG=(--draft)
+
+  echo "zpr: opening PR $HEAD_BRANCH -> $BASE_BRANCH ..."
+  gh pr create \
+    --head "$HEAD_BRANCH" \
+    --base "$BASE_BRANCH" \
+    --title "$TITLE" \
+    --body "$BODY" \
+    "${DRAFT_FLAG[@]}"
+
+  PR_NUM=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" \
+    --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+fi
+
+echo "zpr: PR ready${PR_NUM:+ (#$PR_NUM)}"
+
+# Merge only when explicitly requested.
+if [[ "$MERGE" == "1" && -n "$PR_NUM" ]]; then
+  case "$MERGE_METHOD" in
+    merge)  METHOD_FLAG=--merge ;;
+    rebase) METHOD_FLAG=--rebase ;;
+    squash|*) METHOD_FLAG=--squash ;;
+  esac
+
+  AUTO_FLAG=()
+  [[ "${ZPR_AUTO:-0}" == "1" ]] && AUTO_FLAG=(--auto)
+
+  echo "zpr: merging PR #$PR_NUM ($MERGE_METHOD${ZPR_AUTO:+, auto})..."
+  gh pr merge "$PR_NUM" "$METHOD_FLAG" "${AUTO_FLAG[@]}" \
+    || echo "  (merge not completed - PR left open for #$PR_NUM)"
+fi
