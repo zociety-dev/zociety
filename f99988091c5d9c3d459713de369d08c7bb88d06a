@@ -1,0 +1,4 @@
+cycle: rev63 attempt47
+genesis_complete: true
+question: Nerd-fonts provenance demo hypothesis: zociety can host it via retroactive nfprov.py mark-added over existing zevent commit trailers (no live plugin needed) — design closed in stuff/site-demo-checklist.md; actual wiring blocked on nfprov.py not being vendored in this repo. Closing batch rather than repeating design-only cycles.
+batch_remaining: 0
