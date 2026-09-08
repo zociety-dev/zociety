@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# nfprov-blame: whole-history provenance attribution for one file.
+#
+# Thin wrapper around bin/nfprov-blame.py (python3 stdlib only); see its
+# module docstring for the attribution rule and output formats.
+#
+# Usage: bin/nfprov-blame [--ref REF] [--mode vs|pua] [--format marked|html|json] FILE
+#        bin/nfprov-blame --selftest
+set -euo pipefail
+
+exec python3 "$(dirname "$0")/nfprov-blame.py" "$@"
