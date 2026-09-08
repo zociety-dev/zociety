@@ -127,9 +127,9 @@ fi
 
 # Default batch_size from the budget so the event data agrees with the loop:
 # what is left of ZSTOP_BUDGET after the heap-deaths already in start..HEAD,
-# counting this one. Floored at 1 (remaining 0 -> promise). Budget mode is
-# detected from the mode list, not from whether ZSTOP_BUDGET is exported:
-# bin/zstop-budget defaults to 3 either way.
+# counting this one. Floored at 1 (remaining 0 -> promise). Budget mode means
+# the mode list names budget, or ZSTOP_BUDGET is exported (a by-hand run
+# outside bin/zloop that still wants the budget arithmetic).
 BUDGET_MODE=0
 [[ ",$STOP_MODE," == *,budget,* || -n "${ZSTOP_BUDGET:-}" ]] && BUDGET_MODE=1
 

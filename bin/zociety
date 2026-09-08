@@ -173,10 +173,10 @@ run_container() {
 
     # Forward ZLOOP_* tuning vars (VERBOSE, TIMEOUT, DEBUG, STOP), ZSTOP_* stop
     # predicate knobs (BUDGET, PATIENCE, ...), ZHEAP_DEATH_* (ANY_BRANCH) and
-    # ANTHROPIC_MODEL from the host env. `--env NAME` (no value) passes the current value through; without
-    # this the containerized bin/zloop never sees them. bin/zloop runs claude
-    # with no --model flag, so ANTHROPIC_MODEL is how the model is pinned inside
-    # the container. Also honor NO_COLOR if set.
+    # ANTHROPIC_MODEL from the host env. `--env NAME` (no value) passes the
+    # current value through; without this the containerized bin/zloop never
+    # sees them. bin/zloop runs claude with no --model flag, so ANTHROPIC_MODEL
+    # is how the model is pinned inside the container. Also honor NO_COLOR if set.
     local env_args=()
     local _name
     while IFS='=' read -r _name _; do
