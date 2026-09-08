@@ -15,8 +15,13 @@ MSG=$(git log -1 --format=%B "$COMMIT")
 # Extract subject line
 SUBJECT=$(echo "$MSG" | head -1)
 
-# Extract JSON trailer
+# Extract JSON trailer: compact single line (bin/zevent) or a
+# pretty-printed body ([direction] from bin/zheap-death). Either way
+# normalise to one compact line.
 JSON=$(echo "$MSG" | grep '^{"z":1' || true)
+if [[ -z "$JSON" ]]; then
+  JSON=$(git log -1 --format=%b "$COMMIT" | jq -c 'select(type == "object" and .z == 1)' 2>/dev/null || true)
+fi
 
 echo "Subject: $SUBJECT"
 echo ""
@@ -32,7 +37,7 @@ echo "$JSON" | jq .
 echo ""
 
 # Validate JSON structure
-VALID=$(echo "$JSON" | jq -e '
+if echo "$JSON" | jq -e '
   .z == 1 and
   .event != null and
   .cycle != null and
@@ -44,9 +49,7 @@ VALID=$(echo "$JSON" | jq -e '
   .state.rules != null and
   .state.stuff != null and
   .state.complete != null
-' && echo "true" || echo "false")
-
-if [[ "$VALID" == "true" ]]; then
+' >/dev/null; then
   echo "✓ JSON structure is valid"
   echo "  Event: $(echo "$JSON" | jq -r .event)"
   echo "  Cycle: $(echo "$JSON" | jq -r .cycle)"
