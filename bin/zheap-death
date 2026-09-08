@@ -2,19 +2,41 @@
 # zheap-death: Archive the current cycle and prepare the next one
 #
 # Usage:
-#   bin/zheap-death <agent> <question> [batch_size]
+#   bin/zheap-death [--done] <agent> <question> [batch_size]
 #   bin/zheap-death -h | --help
+#
+# Options:
+#   --done       Set "done": true in the heap-death event data. The agent is
+#                saying the hypothesis is settled; bin/zstop-feedback stops
+#                the loop on it. Flags go before positional arguments.
 #
 # Arguments:
 #   agent        Name of the agent recording the heap-death (e.g. sonnet)
 #   question     Direction for the next cycle. Becomes the tag message and,
 #                if batch remains, the [direction] event the next cycle reads.
-#   batch_size   Cycles left in this batch, counting this one (default: 3).
+#   batch_size   Cycles left in this batch, counting this one.
 #                remaining = batch_size - 1. With 1, no direction event is
 #                written and the next agent's action becomes "promise".
+#                Default: when the loop runs in budget mode (mode: in
+#                .claude/zloop.state contains "budget", or ZSTOP_BUDGET is
+#                set) and start: resolves, ZSTOP_BUDGET (default 3) minus the
+#                [heap-death] commits in start..HEAD, floored at 1, so the
+#                event agrees with bin/zstop-budget. Otherwise 3.
 #
 # Environment:
 #   ZEVENT_NO_VERIFY=1   Commit with --no-verify (skip pre-commit hooks)
+#   ZHEAP_DEATH_ANY_BRANCH=1
+#                        Allow running off main. By default zheap-death refuses
+#                        on any other branch (or detached HEAD): a by-hand test
+#                        run would otherwise commit a live [heap-death] into a
+#                        feature branch and push cycle/* refs and tags to origin.
+#   ZSTOP_BUDGET=3       Heap-deaths per loop run; drives the batch_size default
+#   ZSTOP_*              Every ZSTOP_* variable present is recorded under
+#                        data.zstop in the heap-death and direction events
+#
+# Regime record: mode: from .claude/zloop.state is written as data.stop_mode
+# to the heap-death and direction events and appended to the tag message as
+# " stop=<list>". Without the state file no stop_mode key or tag suffix.
 #
 # What it does, in order:
 #   1. Derives the next tag from existing tags: rev bumps if PROMPT.md
@@ -25,7 +47,8 @@
 #      rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
 #   5. Pushes HEAD, tag, branch, and notes to origin if a remote exists.
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
-#      REGISTRY.md, LAWS.md, .batch, DIRECTION.md, .claude/zloop.state.
+#      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
+#      (gitignored) .claude/zloop.state.
 #   7. If remaining > 0, commits a [direction] event for the next cycle.
 #
 # Run this when bin/zstate reports action "heap-death".
@@ -36,26 +59,110 @@ usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 }
 
-case "${1:-}" in
-  -h|--help)
-    usage
-    exit 0
-    ;;
-esac
+DONE=false
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --done)
+      DONE=true
+      ;;
+    --)
+      shift
+      POSITIONAL+=("$@")
+      break
+      ;;
+    -*)
+      echo "zheap-death: unknown option '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      ;;
+  esac
+  shift
+done
+set -- "${POSITIONAL[@]}"
 
 AGENT="${1:-}"
 QUESTION="${2:-}"
-BATCH_SIZE="${3:-3}"
+BATCH_SIZE="${3:-}"
 
 if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
   usage >&2
   exit 1
 fi
 
+# Refuse to archive a cycle from anywhere but main unless told otherwise. Every
+# step below writes history (event commit, cycle branch, tag, pushes), so a
+# stray run on a feature branch leaks a heap-death into that branch's PR.
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ "$CURRENT_BRANCH" != "main" && "${ZHEAP_DEATH_ANY_BRANCH:-0}" != "1" ]]; then
+  echo "zheap-death: refusing to run on '${CURRENT_BRANCH:-detached HEAD}' (not main); set ZHEAP_DEATH_ANY_BRANCH=1 to override" >&2
+  exit 1
+fi
+
+#############################################
+# 0. Read the loop regime from zloop.state
+#############################################
+#
+# Step 7 removes .claude/zloop.state, so read it here, before anything else.
+
+STATE_FILE=.claude/zloop.state
+LOOP_START=""
+STOP_MODE=""
+if [[ -f "$STATE_FILE" ]]; then
+  LOOP_START=$(grep '^start:' "$STATE_FILE" | cut -d: -f2 | tr -d ' ' || true)
+  STOP_MODE=$(grep '^mode:' "$STATE_FILE" | cut -d: -f2- | tr -d ' ' || true)
+fi
+
+if [[ -n "${ZSTOP_BUDGET:-}" ]] && ! [[ "$ZSTOP_BUDGET" =~ ^[0-9]+$ ]]; then
+  echo "zheap-death: ZSTOP_BUDGET must be a non-negative integer, got '$ZSTOP_BUDGET'" >&2
+  exit 1
+fi
+
+# Default batch_size from the budget so the event data agrees with the loop:
+# what is left of ZSTOP_BUDGET after the heap-deaths already in start..HEAD,
+# counting this one. Floored at 1 (remaining 0 -> promise). Budget mode is
+# detected from the mode list, not from whether ZSTOP_BUDGET is exported:
+# bin/zstop-budget defaults to 3 either way.
+BUDGET_MODE=0
+[[ ",$STOP_MODE," == *,budget,* || -n "${ZSTOP_BUDGET:-}" ]] && BUDGET_MODE=1
+
+if [[ -z "$BATCH_SIZE" ]]; then
+  if [[ "$BUDGET_MODE" -eq 1 && -n "$LOOP_START" ]] \
+    && git rev-parse --verify -q "${LOOP_START}^{commit}" >/dev/null 2>&1; then
+    BUDGET="${ZSTOP_BUDGET:-3}"
+    SO_FAR=$(git rev-list --count --grep='^\[heap-death\]' "${LOOP_START}..HEAD")
+    BATCH_SIZE=$((BUDGET - SO_FAR))
+    [[ "$BATCH_SIZE" -lt 1 ]] && BATCH_SIZE=1
+    echo "batch_size defaulted to $BATCH_SIZE (budget=$BUDGET, $SO_FAR heap-deaths since ${LOOP_START:0:7})" >&2
+  else
+    BATCH_SIZE=3
+  fi
+fi
+
 if ! [[ "$BATCH_SIZE" =~ ^[0-9]+$ ]]; then
   echo "zheap-death: batch_size must be a non-negative integer, got '$BATCH_SIZE'" >&2
   exit 1
 fi
+
+# Every ZSTOP_* variable present, as {"BUDGET": "3", ...}
+KNOBS_JSON='{}'
+for v in $(compgen -v ZSTOP_ || true); do
+  KNOBS_JSON=$(jq -nc --argjson o "$KNOBS_JSON" --arg k "${v#ZSTOP_}" --arg val "${!v}" \
+    '$o + {($k): $val}')
+done
+
+# Regime fields merged into both event payloads. Empty object when there is
+# no zloop.state mode and no ZSTOP_* variables.
+REGIME=$(jq -nc --arg mode "$STOP_MODE" --argjson zstop "$KNOBS_JSON" \
+  '(if $mode != "" then {stop_mode: $mode} else {} end)
+   + (if ($zstop | length) > 0 then {zstop: $zstop} else {} end)')
 
 # Warn if batch_size would result in immediate promise
 if [[ "$BATCH_SIZE" -lt 2 ]]; then
@@ -148,17 +255,20 @@ CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
 # 4. Commit heap-death event
 #############################################
 
-DATA=$(jq -n \
+DATA=$(jq -nc \
   --arg tag "$TAG" \
   --arg branch "$CYCLE_BRANCH" \
   --arg question "$QUESTION" \
   --argjson remaining "$REMAINING" \
+  --argjson is_done "$DONE" \
+  --argjson regime "$REGIME" \
   '{
     tag: $tag,
     branch: $branch,
     question: $question,
-    batch_remaining: $remaining
-  }')
+    batch_remaining: $remaining,
+    done: $is_done
+  } + $regime')
 
 echo "Recording heap-death event..."
 bin/zevent heap-death "$AGENT" "$QUESTION" "$DATA"
@@ -172,7 +282,7 @@ git checkout -b "$CYCLE_BRANCH" 2>/dev/null || git checkout "$CYCLE_BRANCH"
 git checkout - --quiet
 
 echo "Tagging: $TAG"
-git tag "$TAG" -m "$QUESTION"
+git tag "$TAG" -m "$QUESTION${STOP_MODE:+ stop=$STOP_MODE}"
 
 # Add git note with cycle metadata
 echo "Adding git notes..."
@@ -223,7 +333,9 @@ for d in stuff artifacts; do
   [[ -d "$d" ]] && git rm -rf "$d" --quiet
 done
 
-git rm -f .claude/zloop.state --quiet 2>/dev/null || true
+# .claude/ is gitignored, so the state file is never tracked and `git rm`
+# would be a no-op. Plain rm: bin/zloop rewrites it on its next iteration.
+rm -f .claude/zloop.state
 
 #############################################
 # 8. Commit direction event for next cycle (only if batch remains)
@@ -244,6 +356,7 @@ if [[ "$REMAINING" -gt 0 ]]; then
     --arg question "$QUESTION" \
     --argjson total "$BATCH_SIZE" \
     --argjson remaining "$REMAINING" \
+    --argjson regime "$REGIME" \
     '{
       z: 1,
       event: $type,
@@ -257,11 +370,11 @@ if [[ "$REMAINING" -gt 0 ]]; then
         stuff: 0,
         complete: false
       },
-      data: {
+      data: ({
         question: $question,
         batch_total: $total,
         batch_remaining: $remaining
-      }
+      } + $regime)
     }'
   )
 
