@@ -900,6 +900,11 @@ $PROV_LEGEND_HTML
         <button type="button" class="seg-btn" data-mode="colour" aria-pressed="false">Colour by author</button>
         <button type="button" class="seg-btn" data-mode="plain" aria-pressed="false">Plain</button>
       </div>
+      <div class="seg" id="encodings" role="group" aria-label="Mark encoding">
+        <button type="button" class="seg-btn" data-encoding="auto" aria-pressed="true">Auto</button>
+        <button type="button" class="seg-btn" data-encoding="vs" aria-pressed="false">VS18</button>
+        <button type="button" class="seg-btn" data-encoding="pua" aria-pressed="false">PUA-B</button>
+      </div>
       <button type="button" class="action" id="copy">Copy marked text</button>
       <a class="action" href="$PROV_MARKED_NAME" download>Download $PROV_MARKED_NAME</a>
     </div>
@@ -918,12 +923,20 @@ EOF
     cat << 'PROV_TAIL'
 </pre>
     <p class="muted">
-      <strong>Plain</strong> switches only the font. The U+E0101 characters
-      stay in the DOM, which is the point: the provenance travels with the
-      text, and any <code>P+</code> font can show it again.
+      <strong>Plain</strong> switches only the font (and puts the U+E0101
+      form back if PUA-B was on screen, since the fallback fonts have no
+      PUA-B glyphs). The U+E0101 characters stay in the DOM, which is the
+      point: the provenance travels with the text, and any <code>P+</code>
+      font can show it again.
       <strong>Copy marked text</strong> puts the same characters on your
       clipboard: paste into VS Code with a <code>P+</code> font and the marks
       come along; paste anywhere else and it reads as normal text.
+      <strong>PUA-B</strong> swaps each marked glyph for its Supplementary
+      Private Use Area-B mirror (the fork's fallback for engines that drop
+      U+E0101; <strong>Auto</strong> picks it only when this one does).
+      Text you select and copy by hand in that display carries PUA-B code
+      points; the button always emits the U+E0101 form, and
+      <code>bin/nfprov.py strip</code> and <code>inspect</code> read both.
     </p>
   </div>
   <div class="tip" id="tip" role="tooltip" hidden></div>
@@ -970,20 +983,107 @@ EOF
       var base = doc.getAttribute('data-commit-base');
       var MODES = ['marks', 'colour', 'plain'];
       var MARK = '\u{e0101}';
+      // The document as generated, U+E0101 after every agent character.
+      // Taken before any display transform so Copy is byte-identical
+      // whatever the page currently shows.
+      var VS_TEXT = doc.textContent;
+
+      // --- VS18 <-> PUA-B, the fork's two encodings of the same mark ---
+      // Mirrors bin/nfprov-mapping.json (vendored from delano/nerd-fonts#15)
+      // and nfprov.mark_span(text, 'pua'): the P+ fonts carry a PUA-B
+      // mirror (U+100000 + code point) for U+0021..U+00FF minus
+      // U+007F..U+00A0 and U+00AD, 188 glyphs. Only those bases convert;
+      // any other base keeps its selector, exactly as the marker does.
+      var PUA_BASE = 0x100000;
+      var VS_PAIR = /([\u0021-\u007e\u00a1-\u00ac\u00ae-\u00ff])\u{e0101}/gu;
+      var PUA_CHAR = /[\u{100021}-\u{10007e}\u{1000a1}-\u{1000ac}\u{1000ae}-\u{1000ff}]/gu;
+      function vsToPua(s) {
+        return s.replace(VS_PAIR, function (pair, c) {
+          return String.fromCodePoint(PUA_BASE + c.charCodeAt(0));
+        });
+      }
+      function puaToVs(s) {
+        return s.replace(PUA_CHAR, function (c) {
+          return String.fromCharCode(c.codePointAt(0) - PUA_BASE) + MARK;
+        });
+      }
+      window.__prov = { vsToPua: vsToPua, puaToVs: puaToVs };
+
+      // Rewrite text nodes in place so the .prov spans (hover attribution)
+      // survive; never replace doc.textContent wholesale. The legend's
+      // .sample spans carry the same marks, so they follow the document.
+      function transformDoc(fn) {
+        var roots = [doc].concat(Array.prototype.slice.call(document.querySelectorAll('.sample')));
+        var nodes = [];
+        for (var r = 0; r < roots.length; r++) {
+          var walker = document.createTreeWalker(roots[r], NodeFilter.SHOW_TEXT, null, false);
+          while (walker.nextNode()) nodes.push(walker.currentNode);
+        }
+        for (var i = 0; i < nodes.length; i++) {
+          var before = nodes[i].nodeValue;
+          var after = fn(before);
+          if (after !== before) nodes[i].nodeValue = after;
+        }
+      }
+
+      // --- does this engine draw the selector? ---
+      // Renders 'a' and 'a'+U+E0101 in the P+ face and compares pixels.
+      // Identical means the selector was dropped (WebKit); every failure
+      // path resolves false so Chrome and Firefox keep the VS text.
+      var FACE = "'Agave Nerd Font Mono P+'";
+      async function detectVsIgnored() {
+        try {
+          if (!document.fonts || !document.fonts.load || !document.createElement('canvas').getContext) return false;
+          var spec = '32px ' + FACE;
+          await document.fonts.load(spec, 'a' + MARK);
+          await document.fonts.ready;
+          if (!document.fonts.check(spec)) return false;
+          var canvas = document.createElement('canvas');
+          canvas.width = 48;
+          canvas.height = 48;
+          var ctx = canvas.getContext('2d');
+          if (!ctx) return false;
+          ctx.font = spec;
+          ctx.textBaseline = 'top';
+          var draw = function (text) {
+            ctx.clearRect(0, 0, 48, 48);
+            ctx.fillText(text, 4, 4);
+            return ctx.getImageData(0, 0, 48, 48).data;
+          };
+          var plain = draw('a');
+          var marked = draw('a' + MARK);
+          var ink = false;
+          for (var i = 0; i < plain.length; i++) {
+            if (plain[i] !== marked[i]) return false;
+            if (plain[i]) ink = true;
+          }
+          return ink;
+        } catch (e) {
+          return false;
+        }
+      }
 
       // --- display mode: data-mode on <html>, CSS does the rest ---
+      // Plain drops the P+ face, and the fallback fonts have no PUA-B
+      // glyphs, so plain always shows the VS18 form: applyEncoding() runs
+      // after every mode change once the encoding state exists.
+      var encodingReady = false;
       function setMode(mode, persist) {
         if (MODES.indexOf(mode) < 0) mode = 'marks';
         root.setAttribute('data-mode', mode);
         if (mode === 'plain') root.setAttribute('data-provenance', 'off');
         else root.removeAttribute('data-provenance');
-        var btns = document.querySelectorAll('.seg-btn');
-        for (var i = 0; i < btns.length; i++) {
-          var on = btns[i].getAttribute('data-mode') === mode;
-          btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
-        }
+        pressButtons('modes', 'data-mode', mode);
         if (persist) {
           try { localStorage.setItem('prov-mode', mode); } catch (e) { /* private mode */ }
+        }
+        if (encodingReady) applyEncoding();
+      }
+      function pressButtons(groupId, attr, value) {
+        var btns = document.getElementById(groupId).querySelectorAll('.seg-btn');
+        for (var i = 0; i < btns.length; i++) {
+          var on = btns[i].getAttribute(attr) === value;
+          btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
         }
       }
       var saved = null;
@@ -994,25 +1094,86 @@ EOF
         if (b) setMode(b.getAttribute('data-mode'), true);
       });
 
-      // --- copy marked text ---
+      // --- mark encoding: auto follows detection, vs/pua force ---
+      var ENCODINGS = ['auto', 'vs', 'pua'];
+      var detected = 'vs';   // what detectVsIgnored() decides, vs until it has
+      var choice = 'auto';   // the user's pick
+      var current = 'vs';    // what the DOM holds right now
+      var encNote = document.createElement('span');
+      encNote.id = 'encnote';
+      caption.appendChild(document.createTextNode(' '));
+      caption.appendChild(encNote);
+      function isPlain() { return root.getAttribute('data-provenance') === 'off'; }
+      function effectiveEncoding() {
+        if (isPlain()) return 'vs';
+        return choice === 'auto' ? detected : choice;
+      }
+      function describeEncoding() {
+        if (isPlain()) return 'Plain: marks stay in the DOM as VS18 (U+E0101 after each glyph).';
+        var eff = effectiveEncoding();
+        var how = eff === 'pua' ? 'PUA-B (U+100000 + code point)' : 'VS18 (U+E0101 after each glyph)';
+        var why = choice !== 'auto' ? 'forced' : (detected === 'pua' ? 'auto: this engine drops U+E0101' : 'auto');
+        return 'Marks shown as ' + how + ', ' + why + '.';
+      }
+      function updateEncodingNote() {
+        if (!encNote.parentNode) {
+          caption.appendChild(document.createTextNode(' '));
+          caption.appendChild(encNote);
+        }
+        encNote.textContent = describeEncoding();
+      }
+      function applyEncoding() {
+        var want = effectiveEncoding();
+        if (want !== current) {
+          transformDoc(want === 'pua' ? vsToPua : puaToVs);
+          current = want;
+        }
+        updateEncodingNote();
+      }
+      function setEncoding(enc, persist) {
+        if (ENCODINGS.indexOf(enc) < 0) enc = 'auto';
+        choice = enc;
+        pressButtons('encodings', 'data-encoding', enc);
+        applyEncoding();
+        if (persist) {
+          try { localStorage.setItem('prov-encoding', enc); } catch (e) { /* private mode */ }
+        }
+      }
+      var savedEnc = null;
+      try { savedEnc = localStorage.getItem('prov-encoding'); } catch (e) { /* ignore */ }
+      encodingReady = true;
+      setEncoding(savedEnc || 'auto', false);
+      document.getElementById('encodings').addEventListener('click', function (ev) {
+        var b = ev.target.closest('.seg-btn');
+        if (b) setEncoding(b.getAttribute('data-encoding'), true);
+      });
+      detectVsIgnored().then(function (ignored) {
+        detected = ignored ? 'pua' : 'vs';
+        applyEncoding();
+      });
+
+      // --- copy marked text: always the VS18 snapshot, never the display ---
       function say(msg) { caption.textContent = msg; }
       document.getElementById('copy').addEventListener('click', function () {
-        var text = doc.textContent;
+        var text = VS_TEXT;
         var marks = text.split(MARK).length - 1;
         var chars = Array.from(text).length - marks;
         var done = function () { say('Copied ' + chars + ' characters, ' + marks + ' provenance marks.'); };
-        var fail = function () { say('Copy failed. Select the text and copy it manually; the marks come along.'); };
+        var fail = function () { say('Copy failed. Download the marked file instead; hand-selected text carries whichever encoding is on screen.'); };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(done, fail);
         } else {
           try {
-            var range = document.createRange();
-            range.selectNodeContents(doc);
-            var sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            document.execCommand('copy') ? done() : fail();
-            sel.removeAllRanges();
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            ok ? done() : fail();
           } catch (e) { fail(); }
         }
       });
@@ -1227,7 +1388,7 @@ cat > "$DOCS_DIR/.well-known/zevent.schema.json" << 'SCHEMA_EOF'
     },
     "data": {
       "type": "object",
-      "description": "Event-specific payload.",
+      "description": "Event-specific payload. heap-death: tag, branch, question, batch_remaining, done (bool, set by zheap-death --done). heap-death and direction also carry stop_mode (string, the zloop --stop list) and zstop (object of ZSTOP_* knobs) when recorded under bin/zloop.",
       "additionalProperties": true
     }
   }
