@@ -22,6 +22,12 @@ TIMEOUT_SECS="${ZLOOP_TIMEOUT:-300}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 VERBOSE="${ZLOOP_VERBOSE:-0}"
 
+# Remove the loop-state file on any exit (Ctrl-C, termination, normal finish)
+# instead of leaving a stale .claude/zloop.state behind. The running claude is
+# in this script's foreground process group, so an interactive SIGINT already
+# reaches it; this just guarantees cleanup.
+trap 'rm -f .claude/zloop.state' EXIT
+
 debug() {
   if [[ "$DEBUG" == "1" ]]; then
     echo "[debug] $*" >&2
@@ -67,9 +73,10 @@ EOF
   fi
 
   echo ""
-  echo "=== Iteration $ITERATION/$MAX_ITERATIONS ==="
+  echo "=== Iteration $ITERATION/$MAX_ITERATIONS ($(date '+%H:%M:%S')) ==="
   bin/zstate | jq -c '{action, phase}'
   echo ""
+  iter_start=$SECONDS
 
   # Build claude command arguments for autonomous operation:
   #   --print: Output result without interactive mode
@@ -113,6 +120,8 @@ EOF
       debug "Claude exited with code $?"
     }
   fi
+
+  echo "[zloop] Iteration $ITERATION finished in $((SECONDS - iter_start))s" >&2
 
   debug "Iteration $ITERATION complete, sleeping 1s..."
   # Small delay to avoid rate limits
