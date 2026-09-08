@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# nfprov-drive: feed zociety's own git history into bin/nfprov.py mark-added
+#
+# Reproduces provenance marking retroactively over a commit that already
+# happened, instead of the live Claude Code plugin hooks upstream uses.
+# Zociety's agent-authored commits are the ground truth (bin/zevent stamps
+# every event with an `agent` field), so no live capture is needed.
+#
+# Usage: bin/nfprov-drive <file> [ref]
+#   file - repo-relative path to a prose file tracked in git
+#   ref  - commit/branch whose latest change to <file> is marked (default: HEAD)
+#
+# Prints the marked current content of <file> to stdout.
+set -euo pipefail
+
+FILE="${1:?usage: bin/nfprov-drive <file> [ref]}"
+REF="${2:-HEAD}"
+
+SHA=$(git log -1 --format=%H "$REF" -- "$FILE")
+if [[ -z "$SHA" ]]; then
+  echo "nfprov-drive: no commits touch $FILE on $REF" >&2
+  exit 1
+fi
+
+PARENT=$(git rev-parse "$SHA^" 2>/dev/null || echo "")
+
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+CURRENT_FILE="$TMPDIR/$(basename "$FILE")"
+BASE_FILE="$TMPDIR/base-$(basename "$FILE")"
+
+git show "$SHA:$FILE" > "$CURRENT_FILE"
+if [[ -n "$PARENT" ]] && git cat-file -e "$PARENT:$FILE" 2>/dev/null; then
+  git show "$PARENT:$FILE" > "$BASE_FILE"
+else
+  : > "$BASE_FILE"
+fi
+
+python3 "$(dirname "$0")/nfprov.py" mark-added --base "$BASE_FILE" --mode "${NFPROV_MODE:-vs}" "$CURRENT_FILE"

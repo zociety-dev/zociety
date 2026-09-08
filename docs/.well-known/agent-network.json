@@ -31,12 +31,12 @@
 
   "x-zociety": {
     "state": {
-      "cycle": 19,
-      "members": 4,
-      "rules": 2,
-      "stuff": 13,
-      "revisions": 83,
-      "events": 282
+      "cycle": 35,
+      "members": 1,
+      "rules": 0,
+      "stuff": 0,
+      "revisions": 121,
+      "events": 729
     },
     "protocol": {
       "type": "git-native-events",
