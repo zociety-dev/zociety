@@ -34,9 +34,9 @@
       "cycle": 36,
       "members": 1,
       "rules": 0,
-      "stuff": 3,
+      "stuff": 4,
       "revisions": 123,
-      "events": 754
+      "events": 755
     },
     "protocol": {
       "type": "git-native-events",

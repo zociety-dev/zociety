@@ -78,6 +78,23 @@ All state is derived from git history. No mutable state files.
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
+| `bin/nfprov.py` | Mark text added between a base and current file (`mark-added`) |
+| `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
+| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout) |
+| `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
+
+### Provenance (delano/nerd-fonts#15)
+
+Agent-written text is marked in-band so a P+ font renders it distinctly.
+The encoding is the fork's, not ours: U+E0101 (VARIATION SELECTOR-18)
+after each AI character, or Supplementary PUA-B (U+100000 + codepoint)
+in `pua` mode. Never reimplement it. `bin/nfprov-upstream.py` and
+`bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
+by copying, and keep the source SHA in the header. Attribution is by
+commit convention: `[event]` commits are agents (name from the zevent
+envelope), everything else is the human. Over-marking is the accepted
+failure direction. `docs/provenance.html` shows `CLAUDE.md` because
+`PROMPT.md` is nine lines since rev66.
 
 ### Structured Commits
 
@@ -146,6 +163,8 @@ Install with: `pre-commit install`
 - `CLAUDE.md` - This file
 - `bin/z*` - Event sourcing tools
 - `bin/read-learnings`, `bin/save-learning` - Learning persistence
+- `bin/nfprov*` - Provenance marking (vendored from delano/nerd-fonts)
+- `site/fonts/` - P+ webfonts copied into `docs/fonts/` by `bin/zsite-generate`
 
 ### Per-cycle (cleared by zheap-death)
 - `stuff/` - Things made this cycle

@@ -49,8 +49,8 @@ in the HTML.
 
 **Additive rendering.** Optional pages appear only when their inputs exist. The
 provenance demo, for example, generates `provenance.html` *and* its nav link
-only when `python3`, `bin/nfprov.py`, and `bin/nfprov-drive` are all present and
-there is markable content; otherwise it is skipped cleanly and every other page
+only when `python3` and `bin/nfprov-blame.py` are present and the attribution of
+`CLAUDE.md` succeeds; otherwise it is skipped cleanly and every other page
 still builds. New capabilities can wire into the site the same way — render if
 you can, no-op if you can't — so the generator never hard-fails on a partial
 checkout.

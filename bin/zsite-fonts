@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# zsite-fonts - Rebuild the self-hosted P+ WOFF2 faces under site/fonts/
+#
+# Usage:
+#   bin/zsite-fonts <font.ttf> [<font.ttf>...]
+#   bin/zsite-fonts -h | --help
+#
+# Arguments:
+#   font.ttf     A P+ TrueType face from the delano/nerd-fonts fork, e.g.
+#                ~/Library/Fonts/AgaveNerdFontMonoP+-Regular.ttf
+#
+# Environment:
+#   ZSITE_FONTS_OUT   Output directory (default: site/fonts)
+#
+# What it does:
+#   Subsets each input with pyftsubset and writes <basename>.woff2 into the
+#   output directory. The subset is small (Basic Latin, Latin-1, general
+#   punctuation, arrows, box drawing) but keeps the provenance machinery
+#   intact: the cmap format 14 variation sequences (U+E0100-E0104), the
+#   Supplementary PUA-B mirror glyphs (U+100000 + codepoint), all OpenType
+#   layout features and all name records. Afterwards it verifies with
+#   fontTools that a format 14 subtable survived and that U+E0101 and
+#   U+100061 ('a' in PUA-B) still resolve.
+#
+#   The generated files are committed; bin/zsite-generate copies them into
+#   docs/fonts/ so CI builds never need the source TTFs.
+#
+# Requires: pyftsubset (python3 + fonttools + brotli).
+
+set -euo pipefail
+
+if [[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+fi
+
+OUT_DIR="${ZSITE_FONTS_OUT:-site/fonts}"
+# Basic Latin, Latin-1 Supplement, General Punctuation, Arrows, Box Drawing,
+# Block Elements, variation selectors E0100-E0104, PUA-B mirror of ASCII.
+UNICODES='0020-007E,00A0-00FF,2000-206F,2190-21FF,2500-259F,E0100-E0104,100000-1000FF'
+
+command -v pyftsubset >/dev/null 2>&1 || {
+    echo "Error: pyftsubset not found (pip install fonttools brotli)" >&2
+    exit 1
+}
+
+mkdir -p "$OUT_DIR"
+
+for src in "$@"; do
+    [[ -f "$src" ]] || { echo "Error: missing input: $src" >&2; exit 1; }
+    base=$(basename "$src")
+    out="$OUT_DIR/${base%.*}.woff2"
+
+    pyftsubset "$src" \
+        --unicodes="$UNICODES" \
+        --layout-features='*' \
+        --name-IDs='*' \
+        --notdef-outline \
+        --glyph-names \
+        --drop-tables+=PfEd \
+        --flavor=woff2 \
+        --output-file="$out"
+
+    python3 - "$out" << 'PY'
+import sys
+from fontTools.ttLib import TTFont
+
+path = sys.argv[1]
+f = TTFont(path)
+tables = [(s.platformID, s.platEncID, s.format) for s in f["cmap"].tables]
+uvs = [s for s in f["cmap"].tables if s.format == 14]
+cmap = f.getBestCmap()
+ok = bool(uvs) and 0x100061 in cmap
+if uvs:
+    ok = ok and any(cp == 0x61 for cp, _ in uvs[0].uvsDict.get(0xE0101, []))
+print(f"  cmap subtables: {tables}")
+print(f"  format14={bool(uvs)} E0101->a={ok} PUA-B a={cmap.get(0x100061)}")
+if not ok:
+    print(f"Error: provenance machinery missing from {path}", file=sys.stderr)
+    sys.exit(1)
+PY
+
+    printf '%8d  %s\n' "$(wc -c < "$out")" "$out"
+done
