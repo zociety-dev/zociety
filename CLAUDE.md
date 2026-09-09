@@ -141,7 +141,8 @@ All state is derived from git history. No mutable state files.
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
-| `bin/nfprov.py` | Mark text added between a base and current file (`mark-added`) |
+| `bin/nfprov.py` | Vendored-verbatim canonical encoder from the fork (`mark`/`inspect`/`strip`/`convert`) |
+| `bin/nfprov-diff.py` | Mark text added between a base and current file (`mark-added`); front end over `bin/nfprov.py` |
 | `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
 | `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout) |
 | `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
@@ -163,9 +164,11 @@ shape text with CoreText, which drops an unregistered variation selector
 before the P+ face ever sees it; the page falls back to PUA-B display
 there (#13). Any other CoreText consumer has the same gap, including
 non-browser apps such as the Zed editor — VS18 text pastes in unmarked,
-PUA-B pastes in marked. `bin/nfprov-upstream.py` and
-`bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
-by copying, and keep the source SHA in the header. Attribution is by
+PUA-B pastes in marked. `bin/nfprov.py` and
+`bin/nfprov-mapping.json` are vendored verbatim from the fork (`bin/nfprov.py`
+is the fork's reference encoder; `bin/nfprov-diff.py` is zociety's own
+`mark-added` front end over it); update the vendored pair by copying, and
+keep the source SHA in the header. Attribution is by
 commit convention: `[event]` commits are agents (name from the zevent
 envelope), everything else is the human. Over-marking is the accepted
 failure direction. `docs/provenance.html` shows `CLAUDE.md` because

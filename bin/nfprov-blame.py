@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """nfprov-blame.py -- whole-history provenance attribution for one file.
 
-Where bin/nfprov.py marks the characters added by a *single* commit, this
+Where bin/nfprov-diff.py marks the characters added by a *single* commit, this
 tool walks every commit that touched FILE and attributes each character of
 the final content to the commit that introduced it, so the zociety.dev site
 can render a document with human-written and agent-written characters
@@ -12,7 +12,7 @@ visibly distinct.
 
 Attribution walk. `git log --reverse REF -- FILE` gives the commits in
 order. For each one the content before and after is compared with the SAME
-span rule bin/nfprov.py uses (its helpers are imported, not copied):
+span rule bin/nfprov-diff.py uses (its helpers are imported, not copied):
 SequenceMatcher on lines; equal lines keep their prior attribution;
 inserted lines are attributed wholly to the commit; replaced blocks pair
 old/new lines index-wise, keep the attribution of the common prefix and
@@ -69,9 +69,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # keep bin/ free of __pycache__
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import nfprov  # noqa: E402  (bin/nfprov.py; loads bin/nfprov-upstream.py lazily)
+# Load the front end by path: its file is bin/nfprov-diff.py (hyphen -> not
+# importable), and a plain `import nfprov` would grab the vendored canonical
+# tool at bin/nfprov.py instead. It lazily loads bin/nfprov.py in turn.
+import importlib.util  # noqa: E402
+_diff_path = Path(__file__).resolve().with_name("nfprov-diff.py")
+_spec = importlib.util.spec_from_file_location("nfprov_diff", _diff_path)
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"cannot load {_diff_path}")
+nfprov = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(nfprov)
 
 AGENT_SUBJECT = re.compile(r"^\[([a-z-]+)\] (.*)$")
 AGENT_TOKEN = re.compile(r"^[A-Za-z0-9][\w.-]*$")

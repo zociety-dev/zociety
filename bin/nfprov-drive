@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nfprov-drive: feed zociety's own git history into bin/nfprov.py mark-added
+# nfprov-drive: feed zociety's own git history into bin/nfprov-diff.py mark-added
 #
 # Reproduces provenance marking retroactively over a commit that already
 # happened, instead of the live Claude Code plugin hooks upstream uses.
@@ -15,7 +15,7 @@
 #         (VARIATION SELECTOR-18, the "ai" selector)
 #   pua - characters in the mapping table are replaced by U+100000+cp
 #         (plane-16 PUA); others fall back to the VS encoding
-# Both are byte-compatible with the P+ fonts and `bin/nfprov-upstream.py inspect`.
+# Both are byte-compatible with the P+ fonts and `bin/nfprov.py inspect`.
 #
 # Prints the marked current content of <file> to stdout.
 set -euo pipefail
@@ -44,4 +44,4 @@ else
   : > "$BASE_FILE"
 fi
 
-python3 "$(dirname "$0")/nfprov.py" mark-added --base "$BASE_FILE" --mode "${NFPROV_MODE:-vs}" "$CURRENT_FILE"
+python3 "$(dirname "$0")/nfprov-diff.py" mark-added --base "$BASE_FILE" --mode "${NFPROV_MODE:-vs}" "$CURRENT_FILE"

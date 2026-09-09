@@ -1023,7 +1023,7 @@ EOF
 
       // --- VS18 <-> PUA-B, the fork's two encodings of the same mark ---
       // Mirrors bin/nfprov-mapping.json (vendored from delano/nerd-fonts#15)
-      // and nfprov.mark_span(text, 'pua'): the P+ fonts carry a PUA-B
+      // and nfprov-diff.py's mark_span(text, 'pua'): the P+ fonts carry a PUA-B
       // mirror (U+100000 + code point) for U+0021..U+00FF minus
       // U+007F..U+00A0 and U+00AD, 188 glyphs. Only those bases convert;
       // any other base keeps its selector, exactly as the marker does.
