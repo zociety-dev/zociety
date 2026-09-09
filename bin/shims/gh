@@ -1,0 +1,27 @@
+#!/bin/bash
+# PATH shim (installed by .envrc via direnv): inside the zociety worktree,
+# route ALL gh through bin/zgh so it runs as zociety-dev in the container.
+# Unlike git, gh is network-only: the host account (delano) cannot even see
+# the private zociety-dev/zociety repo, so there is no useful host fast path.
+# Outside the worktree, be a transparent passthrough to the real gh.
+set -e
+
+SELF="$(cd "$(dirname "$0")" && pwd)"
+
+# The real gh: the first one on PATH that is not this shim directory.
+real=""
+IFS=:
+for d in $PATH; do
+  [[ "$d" == "$SELF" ]] && continue
+  [[ -x "$d/gh" ]] && { real="$d/gh"; break; }
+done
+unset IFS
+
+ROOT="${ZOCIETY_ROOT:-}"
+if [[ -z "$ROOT" || ( "$PWD" != "$ROOT" && "$PWD" != "$ROOT"/* ) ]]; then
+  [[ -n "$real" ]] && exec "$real" "$@"
+  echo "gh-shim: real gh not found on PATH" >&2
+  exit 127
+fi
+
+exec "$ROOT/bin/zgh" "$@"

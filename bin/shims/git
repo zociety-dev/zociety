@@ -1,0 +1,51 @@
+#!/bin/bash
+# PATH shim (installed by .envrc via direnv): inside the zociety worktree,
+# route git WRITES through bin/zgit so they run as zociety-dev in the
+# container. Read-only git, and any git outside the worktree (e.g. the
+# throwaway repos bin/test-zstop-modes builds under /tmp), run against the
+# real host binary for speed. See bin/zgit for the container routing.
+set -e
+
+SELF="$(cd "$(dirname "$0")" && pwd)"
+
+# The real git: the first one on PATH that is not this shim directory.
+real=""
+IFS=:
+for d in $PATH; do
+  [[ "$d" == "$SELF" ]] && continue
+  [[ -x "$d/git" ]] && { real="$d/git"; break; }
+done
+unset IFS
+[[ -n "$real" ]] || { echo "git-shim: real git not found on PATH" >&2; exit 127; }
+
+# Only intercept inside the zociety worktree (ZOCIETY_ROOT is exported by
+# .envrc). Anywhere else, be a transparent passthrough.
+ROOT="${ZOCIETY_ROOT:-}"
+if [[ -z "$ROOT" || ( "$PWD" != "$ROOT" && "$PWD" != "$ROOT"/* ) ]]; then
+  exec "$real" "$@"
+fi
+
+# Find the subcommand, skipping global options (and the value-taking ones).
+verb=""
+skip=0
+for arg in "$@"; do
+  if [[ $skip -eq 1 ]]; then skip=0; continue; fi
+  case "$arg" in
+    -C|-c|--git-dir|--work-tree|--namespace) skip=1; continue ;;
+    --exec-path) skip=1; continue ;;
+    -*) continue ;;
+    *) verb="$arg"; break ;;
+  esac
+done
+
+# Read-only verbs stay on the host: fast, and correct for a repo the host can
+# read. Everything else may write (commit, push, add, merge, rebase, tag,
+# fetch, config, ...) and goes through the container as zociety-dev.
+case "$verb" in
+  status|log|diff|show|ls-files|ls-tree|ls-remote|rev-parse|rev-list|\
+  describe|blame|cat-file|for-each-ref|shortlog|reflog|grep|whatchanged|\
+  name-rev|show-ref|show-branch|var|help|version|""|--version|--help)
+    exec "$real" "$@" ;;
+esac
+
+exec "$ROOT/bin/zgit" "$@"

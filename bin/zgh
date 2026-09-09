@@ -1,0 +1,92 @@
+#!/bin/bash
+# zgh: Run gh (GitHub CLI) inside the zociety container (as zociety-dev), from the host
+#
+# Usage:
+#   bin/zgh <gh args...>
+#   bin/zgh -h | --help
+#
+# On the host, gh is delano, who has no write access to zociety-dev/zociety;
+# inside the container gh (and git) are zociety-dev. This wrapper picks the
+# route, exactly like bin/zgit:
+#
+#   inside the container   exec gh directly (agents can call bin/zgh too)
+#   container running      bin/zociety exec ... (the user's live session holds
+#                          the container name; a second podman run would fail
+#                          with "name already in use")
+#   otherwise              bin/zociety ... (fresh podman run --rm)
+#
+# GH_PAGER=cat is always set: the container gets a TTY, so gh would otherwise
+# page list/view output. It is passed through `env` so it reaches the
+# container (bin/zociety only forwards a fixed env allow-list).
+#
+# stdin does NOT reach the container, so a body must come in as an argument:
+# --body "..." (or --body-file <file>), never --body-file -, --input -, or an
+# editor. Those forms are refused here rather than hanging. --web is refused
+# too: there is no browser in the container.
+#
+# Read-only gh (pr view, issue list, ...) works on the host directly; use this
+# wrapper when the command writes, or when the host account lacks access.
+# Plain git goes through bin/zgit the same way.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zgh: $*" >&2
+  exit 1
+}
+
+case "${1:-}" in
+  ""|-h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONTAINER_NAME="zociety-sandbox"
+
+# Refuse the forms that need stdin, a browser or an editor: with no stdin in
+# the container they hang, holding the container name until killed.
+prev=""
+for arg in "$@"; do
+  case "$arg" in
+    --web)
+      die "'--web' opens a browser, which the container has none of; use flags instead"
+      ;;
+    -)
+      [[ "$prev" == "--body-file" || "$prev" == "-F" || "$prev" == "--input" || "$prev" == "-f" ]] \
+        && die "'$prev -' reads stdin, which does not reach the container; pass --body \"...\" or --body-file <file>"
+      ;;
+  esac
+  prev="$arg"
+done
+
+# `gh pr create` / `gh issue create` open an editor unless a body is supplied.
+if [[ "$1" == "pr" || "$1" == "issue" ]] && [[ "$2" == "create" ]]; then
+  has_body=0
+  for arg in "${@:3}"; do
+    case "$arg" in
+      -b|-b*|--body|--body=*|-F|-F*|--body-file|--body-file=*|\
+      -f|--fill|--fill-first|--fill-verbose)
+        has_body=1
+        ;;
+    esac
+  done
+  [[ $has_body -eq 1 ]] || die "'$1 create' would open an editor in the container; pass --body \"...\", --body-file <file>, or --fill"
+fi
+
+# Inside the container there is nothing to wrap.
+if [[ -f /run/.containerenv || -f /.dockerenv || -n "${container:-}" ]]; then
+  export GH_PAGER=cat
+  exec gh "$@"
+fi
+
+if podman container exists "$CONTAINER_NAME" 2>/dev/null; then
+  exec "$SCRIPT_DIR/zociety" exec env GH_PAGER=cat gh "$@"
+fi
+
+exec "$SCRIPT_DIR/zociety" env GH_PAGER=cat gh "$@"

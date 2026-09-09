@@ -313,14 +313,14 @@ fi
 #
 # Opens cycle branch -> main so the cycle lands via a reviewable PR instead of
 # a silent branch push. Create-only by default; set ZPR_MERGE=1 (optionally with
-# ZPR_AUTO=1) to also merge. Non-fatal: a missing/unauthenticated gh, or an
-# empty diff (cycle branch == main), just skips.
+# ZPR_AUTO=1) to also merge. Non-fatal: no origin remote, or an empty diff
+# (cycle branch == main), just skips. gh runs as zociety-dev in the container.
 
-if git remote get-url origin &>/dev/null && command -v gh &>/dev/null; then
+if git remote get-url origin &>/dev/null; then
   echo "Opening pull request for $CYCLE_BRANCH..."
-  bin/zpr "$CYCLE_BRANCH" main \
+  bin/zpr-flow "$CYCLE_BRANCH" main \
     "Cycle rev${REV}-attempt${ATTEMPT}: ${QUESTION:0:60}" \
-    || echo "  (zpr skipped/failed - continuing)"
+    || echo "  (zpr-flow skipped/failed - continuing)"
 fi
 
 #############################################
