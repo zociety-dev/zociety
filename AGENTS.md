@@ -43,6 +43,12 @@ Zociety's own loop with dynamic completion checking:
 - Only claude's result goes to stdout; all loop chrome goes to stderr
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
 - Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message
+- Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
+  the agent gets SIGTERM, then SIGKILL after `ZLOOP_KILL_GRACE` seconds, the
+  state file is removed and zloop exits 128+signal (130 for Ctrl-C). For a
+  graceful stop between iterations use `--stop file` and touch `.claude/STOP`.
+  Ctrl-Z is not job control inside the container; if a run is ever stuck,
+  detach with `ctrl-p ctrl-q` and `podman kill zociety-sandbox`
 
 | Script | Purpose |
 |--------|---------|
@@ -95,6 +101,7 @@ feature branch.
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_VERBOSE` | 0 | Pass --verbose to claude (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
+| `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
 
 ### ZSTOP Environment Variables
 
