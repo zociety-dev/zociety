@@ -76,7 +76,24 @@ mkdir -p "$FAKEBIN" "$TMP/nohooks"
 cat > "$FAKEBIN/claude" <<'EOF'
 #!/bin/bash
 set -e
-echo "fake claude ran"
+# With --output-format stream-json (zloop's default compact render, or
+# --verbose) emit a canned event stream instead of the one text line; the
+# result text is the same so stdout assertions hold in every mode. Fields
+# copied from a real claude 2026-09 stream. FAKE_CLAUDE_EXIT=N exits N after
+# the result event, to prove the pipe through bin/zrender keeps claude's
+# status.
+stream=0
+for a in "$@"; do [[ "$a" == "stream-json" ]] && stream=1; done
+if [[ $stream -eq 1 ]]; then
+  echo '{"type":"system","subtype":"init","model":"claude-fake","session_id":"s1","tools":["Bash","Edit"]}'
+  echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git log --oneline -5","description":"Recent commits"}}]}}'
+  echo '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":"abc123 genesis","is_error":false}]}}'
+  echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":"stuff/index.md","old_string":"a","new_string":"b"}}]}}'
+  echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"done\nsecond line never shown"}]}}'
+  echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":6067,"duration_api_ms":4394,"num_turns":2,"total_cost_usd":0.29987025,"result":"fake claude ran","session_id":"s1"}'
+else
+  echo "fake claude ran"
+fi
 echo "$(date +%s) $*" >> "$FAKE_CLAUDE_LOG"
 if [[ -n "${FAKE_CLAUDE_SLEEP:-}" ]]; then
   # Long-running agent for the interrupt cases: record the pid so the case can
@@ -93,7 +110,7 @@ if [[ "${FAKE_CLAUDE_PROMISE:-0}" == "1" ]]; then
   bin/zevent promise fake "cycle complete" '{"terminal":true}' \
     >> "$FAKE_CLAUDE_LOG.err" 2>&1
 fi
-exit 0
+exit "${FAKE_CLAUDE_EXIT:-0}"
 EOF
 chmod +x "$FAKEBIN/claude"
 export PATH="$FAKEBIN:$PATH"
@@ -123,7 +140,7 @@ fresh_repo() {
   git add .gitignore PROMPT.md
   git commit -q -m "genesis fixture"
   rm -f "$FAKE_LOG" "$FAKE_LOG.err" "$FAKE_LOG.pid"
-  unset FAKE_CLAUDE_HEAP_DEATH FAKE_CLAUDE_PROMISE FAKE_CLAUDE_SLEEP
+  unset FAKE_CLAUDE_HEAP_DEATH FAKE_CLAUDE_PROMISE FAKE_CLAUDE_SLEEP FAKE_CLAUDE_EXIT
 }
 
 # heap_death <data_json>: record a [heap-death] event via bin/zevent, quietly
@@ -773,6 +790,87 @@ assert_claude_runs 1
 assert_agent_dead
 assert_elapsed_lt 10
 assert_absent .claude/zloop.state
+echo ""
+
+echo "=== Case 33: default compact render: HUD, tool lines, footer, totals on stderr; result only on stdout (#12) ==="
+fresh_repo render-compact
+run bin/zloop --max 1
+assert_rc 1
+assert_stdout_lines 1
+assert_eq "stdout" "$(cat "$OUT")" "fake claude ran"
+assert_err '^iter 1/1 · cycle [^ ]+ · join · members 0 rules 0 stuff 0 · stop=action$'
+assert_err '^\[0:0[0-9]\] claude claude-fake$'
+assert_err '^\[0:0[0-9]\] Bash     git log --oneline -5$'
+assert_err '^\[0:0[0-9]\] Edit     stuff/index\.md$'
+assert_err '^\[0:0[0-9]\] · done$'
+assert_no_err 'second line never shown'
+assert_err '^duration 6s · turns 2 · [$]0\.30$'
+assert_err '^\[zloop\] Totals: 1 iteration · duration 6s · turns 2 · [$]0\.30$'
+assert_no_err '"type":"'
+echo ""
+
+echo "=== Case 34: --quiet keeps today's buffered output (no render, no totals) ==="
+fresh_repo render-quiet
+run bin/zloop --quiet --max 1
+assert_rc 1
+assert_stdout_lines 1
+assert_eq "stdout" "$(cat "$OUT")" "fake claude ran"
+assert_err '^Quiet: buffered agent output$'
+assert_err '^\{"action":"join","phase":'
+assert_no_err '^\[0:0[0-9]\] '
+assert_no_err 'Totals:'
+assert_eq "claude got stream-json" "$(grep -c 'stream-json' "$FAKE_LOG")" 0
+echo ""
+
+echo "=== Case 34b: --verbose is the raw stream-json events with partial messages ==="
+fresh_repo render-raw
+run bin/zloop --verbose --max 1
+assert_rc 1
+assert_stdout_lines 6
+assert_err '^Verbose: raw stream-json events$'
+assert_no_err '^\[0:0[0-9]\] '
+assert_eq "claude got --include-partial-messages" "$(grep -c -- '--include-partial-messages' "$FAKE_LOG")" 1
+echo ""
+
+echo "=== Case 35: claude's non-zero exit survives the bin/zrender pipe into the backoff logic ==="
+fresh_repo render-exit
+export FAKE_CLAUDE_EXIT=3
+run env ZLOOP_BACKOFF_MAX=1 bin/zloop --max 1
+unset FAKE_CLAUDE_EXIT
+assert_rc 1
+assert_stdout_lines 1
+assert_err '^\[0:0[0-9]\] Bash     git log --oneline -5$'
+assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(exit 3\)$'
+assert_err '^\[zloop\] zagent exited 3 \(1 consecutive\); backing off 1s$'
+echo ""
+
+echo "=== Case 35b: iteration timeout (124) survives the pipe and does not count as a failure ==="
+fresh_repo render-timeout
+export FAKE_CLAUDE_SLEEP=30
+run bin/zloop --timeout 1 --max 1
+unset FAKE_CLAUDE_SLEEP
+assert_rc 1
+assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(exit 124\)$'
+assert_err '^\[zloop\] Iteration timed out after 1s$'
+assert_no_err 'consecutive'
+assert_agent_dead
+echo ""
+
+echo "=== Case 36: bin/zrender heartbeat, error footer and metrics file ==="
+slow_stream() {
+  echo '{"type":"system","subtype":"init","model":"claude-fake"}'
+  sleep 2.5
+  echo '{"type":"result","subtype":"success","is_error":true,"duration_ms":65000,"num_turns":7,"total_cost_usd":1.5,"result":"partial answer"}'
+}
+metrics="$TMP/metrics.txt"
+rm -f "$metrics"
+RC=0
+slow_stream | env ZRENDER_HEARTBEAT=1 ZRENDER_METRICS="$metrics" "$SRC_BIN/zrender" >"$OUT" 2>"$ERR" || RC=$?
+assert_rc 0
+assert_eq "stdout" "$(cat "$OUT")" "partial answer"
+assert_err '^… thinking [12]s$'
+assert_err '^duration 1m05s · turns 7 · [$]1\.50 · error$'
+assert_eq "metrics" "$(cat "$metrics")" "65000 7 1.5 true"
 echo ""
 
 #############################################

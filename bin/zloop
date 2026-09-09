@@ -10,7 +10,8 @@
 #   -s, --stop LIST    Stop modes, comma-separated (default: action)
 #                      Modes: action, budget, converge, feedback, file
 #                      e.g. --stop action,file  or  --stop budget,converge,file
-#   -v, --verbose      Stream claude events as they happen (stream-json)
+#   -q, --quiet        Buffered output: nothing until claude's result arrives
+#   -v, --verbose      Raw stream-json events, partial messages included
 #   -d, --debug        Enable debug output
 #   -h, --help         Show this help
 #
@@ -18,7 +19,8 @@
 #   ZLOOP_TIMEOUT=300       Timeout per iteration in seconds
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
-#   ZLOOP_VERBOSE=1         Pass --verbose to claude
+#   ZLOOP_QUIET=1           Same as --quiet
+#   ZLOOP_VERBOSE=1         Same as --verbose
 #   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
 #   ZLOOP_KILL_GRACE=10     Seconds to wait for the agent to exit on Ctrl-C
 #                           before it is killed outright
@@ -26,7 +28,9 @@
 #
 # Output discipline:
 #   stdout  claude's result only (safe to redirect to a file)
-#   stderr  loop chrome: headers, state, timing, warnings
+#   stderr  loop chrome: headers, state, timing, warnings; by default also
+#           the live render from bin/zrender (HUD line per iteration, one
+#           line per tool call, heartbeat, cost footer, run totals)
 #
 # Stopping: Ctrl-C (SIGINT), SIGTERM or SIGHUP ends the run at once: the
 # agent gets SIGTERM, then SIGKILL after ZLOOP_KILL_GRACE seconds, the state
@@ -49,7 +53,11 @@ MAX_ITERATIONS=60
 TIMEOUT_SECS="${ZLOOP_TIMEOUT:-300}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
-VERBOSE="${ZLOOP_VERBOSE:-0}"
+# Render level handed to bin/zagent --render: compact (default), text
+# (--quiet) or raw (--verbose).
+RENDER="compact"
+[[ "${ZLOOP_VERBOSE:-0}" == "1" ]] && RENDER="raw"
+[[ "${ZLOOP_QUIET:-0}" == "1" ]] && RENDER="text"
 BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
 KILL_GRACE="${ZLOOP_KILL_GRACE:-10}"
 BACKOFF_BASE=1
@@ -84,7 +92,10 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     -v|--verbose)
-      VERBOSE=1
+      RENDER="raw"
+      ;;
+    -q|--quiet)
+      RENDER="text"
       ;;
     -d|--debug)
       DEBUG=1
@@ -138,9 +149,30 @@ done
 # iteration because zheap-death deletes the file when it archives.
 START_SHA=$(git rev-parse HEAD)
 
+# Per-iteration metrics from bin/zrender's result footer (compact mode only),
+# summed into the run totals on every exit path.
+METRICS_FILE=$(mktemp "${TMPDIR:-/tmp}/zloop-metrics.XXXXXX")
+if [[ "$RENDER" == "compact" ]]; then
+  export ZRENDER_METRICS="$METRICS_FILE"
+fi
+
 # Remove the loop-state file on any exit (signal, abort, normal finish)
 # instead of leaving a stale state file behind.
-trap 'rm -f .zociety/zloop.state .claude/zloop.state' EXIT
+trap 'rm -f .zociety/zloop.state .claude/zloop.state "$METRICS_FILE"' EXIT
+
+# print_totals: "[zloop] Totals: 3 iterations · duration 12m03s · turns 51 · $3.20"
+# from the metrics file; silent when no result event was rendered.
+print_totals() {
+  [[ -s "$METRICS_FILE" ]] || return 0
+  LC_NUMERIC=C awk '
+    { n++; ms += $1; turns += $2; cost += $3 }
+    END {
+      s = int(ms / 1000)
+      if (s >= 60) d = sprintf("%dm%02ds", int(s / 60), s % 60); else d = s "s"
+      printf "[zloop] Totals: %d iteration%s · duration %s · turns %d · $%.2f\n", \
+        n, (n == 1 ? "" : "s"), d, turns, cost
+    }' "$METRICS_FILE" >&2
+}
 
 # Interrupt handling (issue #11). The agent runs as a background job and the
 # loop `wait`s on it: bash runs a trap the moment `wait` returns, whereas a
@@ -173,6 +205,7 @@ on_signal() {
     wait "$pid" 2>/dev/null || true
   fi
   log "=== Loop Interrupted (SIG$sig) ==="
+  print_totals
   exit $((128 + num))
 }
 trap 'on_signal INT 2' INT
@@ -201,7 +234,10 @@ log "Max iterations: $MAX_ITERATIONS"
 log "Timeout per iteration: ${TIMEOUT_SECS}s"
 log "Stop modes: $STOP_MODES"
 log "Start: $START_SHA"
-[[ "$VERBOSE" == "1" ]] && log "Verbose: streaming agent events"
+case "$RENDER" in
+  raw)  log "Verbose: raw stream-json events" ;;
+  text) log "Quiet: buffered agent output" ;;
+esac
 [[ "$DEBUG" == "1" ]] && log "Debug mode: enabled"
 log ""
 
@@ -230,6 +266,7 @@ EOF
       log ""
       log "=== Loop Complete ==="
       log "Iterations: $((ITERATION - 1))"
+      print_totals
       bin/zstate | jq '{action, phase, genesis}' >&2
       exit 0
       ;;
@@ -237,6 +274,7 @@ EOF
       log ""
       log "=== Loop Aborted ==="
       log "zloop-complete exited 2 (modes: $STOP_MODES); see message above"
+      print_totals
       exit 2
       ;;
   esac
@@ -248,21 +286,25 @@ EOF
     log ""
     log "=== Max Iterations Reached ==="
     log "Stopped after $MAX_ITERATIONS iterations"
+    print_totals
     bin/zstate | jq '{action, phase, genesis}' >&2
     exit 1
   fi
 
   log ""
   log "=== Iteration $ITERATION/$MAX_ITERATIONS ($(date '+%H:%M:%S')) ==="
-  bin/zstate | jq -c '{action, phase}' >&2
+  if [[ "$RENDER" == "compact" ]]; then
+    # HUD line: iter 2/5 · cycle 36 · contribute · members 1 rules 0 stuff 1 · stop=action
+    bin/zstate | jq -r --arg it "$ITERATION/$MAX_ITERATIONS" --arg stop "$STOP_MODES" \
+      '"iter \($it) · cycle \(.cycle) · \(.action) · members \(.genesis.members) rules \(.genesis.rules) stuff \(.genesis.stuff) · stop=\($stop)"' >&2
+  else
+    bin/zstate | jq -c '{action, phase}' >&2
+  fi
   log ""
   iter_start=$SECONDS
 
   # Build agent runner arguments
-  AGENT_ARGS=()
-  if [[ "$VERBOSE" == "1" ]]; then
-    AGENT_ARGS+=("--verbose")
-  fi
+  AGENT_ARGS=(--render "$RENDER")
   if [[ -n "${ZOCIETY_AGENT_CLIENT:-}" ]]; then
     AGENT_ARGS+=("--client" "$ZOCIETY_AGENT_CLIENT")
   fi

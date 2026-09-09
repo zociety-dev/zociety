@@ -20,6 +20,7 @@ Note: It's "zociety" not "society".
 # Direct execution
 bin/zloop 60
 bin/zloop --max 60 --timeout 600 --verbose   # flags override ZLOOP_* env
+bin/zloop --quiet 60                         # buffered output, no live render
 bin/zloop --stop action,file 60              # pick stop modes (default: action)
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
@@ -40,7 +41,15 @@ Zociety's own loop with dynamic completion checking:
   finishing on the last iteration exits 0 (`Loop Complete`), not 1
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
 - Each iteration has a 5-minute timeout (configurable via `ZLOOP_TIMEOUT`)
-- Only claude's result goes to stdout; all loop chrome goes to stderr
+- Only claude's result goes to stdout; all loop chrome goes to stderr, so
+  `bin/zloop 1 > out.txt` leaves only the answer in the file
+- Default render (via `bin/zagent --render compact` and `bin/zrender`): a
+  HUD line per iteration (`iter 2/5 · cycle 36 · contribute · members 1 rules 0 stuff 1 · stop=action`),
+  one line per tool call as it happens (`[0:42] Bash     git log --oneline -5`),
+  a `… thinking 25s` heartbeat after 10s of silence, a footer per iteration
+  from the result event (`duration 4m58s · turns 17 · $0.83`) and run totals
+  at the end. `--quiet` is the old buffered output; `--verbose` is the raw
+  stream-json events with partial messages
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
 - Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message
 - Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
@@ -54,6 +63,7 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
 
@@ -99,7 +109,8 @@ feature branch.
 | `ZLOOP_TIMEOUT` | 300 | Timeout per iteration in seconds |
 | `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
-| `ZLOOP_VERBOSE` | 0 | Pass --verbose to claude (1 = on) |
+| `ZLOOP_QUIET` | 0 | Same as `--quiet`: buffered result only, no live render (1 = on) |
+| `ZLOOP_VERBOSE` | 0 | Same as `--verbose`: raw stream-json events (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
 
@@ -140,6 +151,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
 | `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zrender` | Compact live render of claude's stream-json (used by `bin/zagent --render compact`) |
 | `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
 | `bin/zstop-budget` | Stop predicate: `ZSTOP_BUDGET` heap-deaths since loop start |
 | `bin/zstop-converge` | Stop predicate: recent cycles stopped changing `stuff/` |
