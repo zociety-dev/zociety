@@ -198,6 +198,7 @@ run_container() {
     fi
 
     podman run --rm "${interactive_args[@]}" \
+        --init \
         --name "$CONTAINER_NAME" \
         --read-only \
         --tmpfs /tmp:size=200M,mode=1777 \
