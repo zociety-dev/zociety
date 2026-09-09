@@ -24,6 +24,7 @@ check_script() {
 
 echo "Checking core scripts..."
 check_script "bin/zstate" "bin/zstate - Query current state"
+check_script "bin/zagent" "bin/zagent - Extensible agent runner wrapper"
 check_script "bin/zevent" "bin/zevent - Create event commits"
 check_script "bin/zjoin" "bin/zjoin - Join event wrapper"
 check_script "bin/zvote" "bin/zvote - Vote event wrapper"

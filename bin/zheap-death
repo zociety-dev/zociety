@@ -110,9 +110,13 @@ fi
 # 0. Read the loop regime from zloop.state
 #############################################
 #
-# Step 7 removes .claude/zloop.state, so read it here, before anything else.
+# Step 7 removes the state file, so read it here, before anything else.
 
-STATE_FILE=.claude/zloop.state
+if [[ -f .zociety/zloop.state ]]; then
+  STATE_FILE=.zociety/zloop.state
+else
+  STATE_FILE=.claude/zloop.state
+fi
 LOOP_START=""
 STOP_MODE=""
 if [[ -f "$STATE_FILE" ]]; then
@@ -200,9 +204,9 @@ else
 fi
 
 # Get iteration count from zloop state or estimate from commits
-if [[ -f .claude/zloop.state ]]; then
-  ITERATIONS=$(grep '^iteration:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "0")
-  MAX_ITER=$(grep '^max:' .claude/zloop.state 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "60")
+if [[ -f "$STATE_FILE" ]]; then
+  ITERATIONS=$(grep '^iteration:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "0")
+  MAX_ITER=$(grep '^max:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "60")
 else
   # Estimate from event commits in this cycle
   ITERATIONS=$(git log --oneline --grep='^\[' | wc -l | tr -d ' ')
@@ -333,9 +337,9 @@ for d in stuff artifacts; do
   [[ -d "$d" ]] && git rm -rf "$d" --quiet
 done
 
-# .claude/ is gitignored, so the state file is never tracked and `git rm`
+# State directories are gitignored, so the state files are never tracked and `git rm`
 # would be a no-op. Plain rm: bin/zloop rewrites it on its next iteration.
-rm -f .claude/zloop.state
+rm -f .zociety/zloop.state .claude/zloop.state
 
 #############################################
 # 8. Commit direction event for next cycle (only if batch remains)

@@ -130,10 +130,10 @@ done
 START_SHA=$(git rev-parse HEAD)
 
 # Remove the loop-state file on any exit (Ctrl-C, termination, normal finish)
-# instead of leaving a stale .claude/zloop.state behind. The running claude is
+# instead of leaving a stale state file behind. The running agent is
 # in this script's foreground process group, so an interactive SIGINT already
 # reaches it; this just guarantees cleanup.
-trap 'rm -f .claude/zloop.state' EXIT
+trap 'rm -f .zociety/zloop.state .claude/zloop.state' EXIT
 
 ITERATION=0
 FAILURES=0
@@ -143,7 +143,7 @@ log "Max iterations: $MAX_ITERATIONS"
 log "Timeout per iteration: ${TIMEOUT_SECS}s"
 log "Stop modes: $STOP_MODES"
 log "Start: $START_SHA"
-[[ "$VERBOSE" == "1" ]] && log "Verbose: streaming claude events"
+[[ "$VERBOSE" == "1" ]] && log "Verbose: streaming agent events"
 [[ "$DEBUG" == "1" ]] && log "Debug mode: enabled"
 log ""
 
@@ -152,13 +152,14 @@ while true; do
 
   # Write state for zheap-death and the stop predicates to read. All keys go
   # every iteration: the file is rewritten here and deleted by zheap-death.
-  mkdir -p .claude
-  cat > .claude/zloop.state << EOF
+  mkdir -p .zociety .claude
+  cat > .zociety/zloop.state << EOF
 iteration: $ITERATION
 max: $MAX_ITERATIONS
 start: $START_SHA
 mode: $STOP_MODES
 EOF
+  cp .zociety/zloop.state .claude/zloop.state 2>/dev/null || true
 
   # Check completion BEFORE each iteration. The dispatcher's exit code is
   # three-valued: 0 stop, 2 abort (bad mode name or predicate error), anything
@@ -199,45 +200,34 @@ EOF
   log ""
   iter_start=$SECONDS
 
-  # Build claude command arguments for autonomous operation:
-  #   --print: Output result without interactive mode
-  #   --dangerously-skip-permissions: Skip tool permission prompts
-  #   --strict-mcp-config: Skip all MCP servers (they may hang in containers)
-  #   --no-session-persistence: Don't save sessions (avoids file conflicts)
-  CLAUDE_ARGS=(
-    --print
-    --dangerously-skip-permissions
-    --strict-mcp-config
-    --no-session-persistence
-  )
-
-  # In --print's default (text) mode nothing is emitted until the whole agent
-  # turn finishes, so iterations look "stuck". VERBOSE switches to streaming
-  # JSON, which prints events (tool calls, partial text) as they happen.
+  # Build agent runner arguments
+  AGENT_ARGS=()
   if [[ "$VERBOSE" == "1" ]]; then
-    CLAUDE_ARGS+=(--verbose --output-format stream-json --include-partial-messages)
+    AGENT_ARGS+=("--verbose")
   fi
+  if [[ -n "${ZOCIETY_AGENT_CLIENT:-}" ]]; then
+    AGENT_ARGS+=("--client" "$ZOCIETY_AGENT_CLIENT")
+  fi
+  AGENT_ARGS+=("$PROMPT")
 
-  CLAUDE_ARGS+=("$PROMPT")
+  debug "Running: bin/zagent ${AGENT_ARGS[*]}"
 
-  debug "Running: claude ${CLAUDE_ARGS[*]}"
-
-  # Run one Claude iteration. claude's stdout stays on stdout (the work
+  # Run one agent iteration. bin/zagent's stdout stays on stdout (the work
   # product); its stderr stays on stderr. A non-zero exit never ends the loop.
-  # </dev/null closes stdin so claude never waits for interactive input.
+  # </dev/null closes stdin so the agent never waits for interactive input.
   exit_code=0
   if command -v timeout &>/dev/null; then
     debug "Using timeout wrapper (${TIMEOUT_SECS}s)"
-    timeout "$TIMEOUT_SECS" claude "${CLAUDE_ARGS[@]}" </dev/null || exit_code=$?
+    timeout "$TIMEOUT_SECS" bin/zagent "${AGENT_ARGS[@]}" </dev/null || exit_code=$?
   else
-    claude "${CLAUDE_ARGS[@]}" </dev/null || exit_code=$?
+    bin/zagent "${AGENT_ARGS[@]}" </dev/null || exit_code=$?
   fi
 
   log "[zloop] Iteration $ITERATION finished in $((SECONDS - iter_start))s (exit $exit_code)"
 
   # Fixed 1s pause on success. On consecutive non-zero exits (rate limits,
   # transient API errors) back off exponentially instead of hammering every
-  # second: 2s, 4s, 8s ... capped at BACKOFF_MAX. A timeout (124) means claude
+  # second: 2s, 4s, 8s ... capped at BACKOFF_MAX. A timeout (124) means the agent
   # was working, not refused, so it does not count toward backoff.
   if [[ $exit_code -eq 0 ]]; then
     FAILURES=0
@@ -253,7 +243,7 @@ EOF
       delay=$BACKOFF_MAX
     fi
     [[ $delay -gt $BACKOFF_MAX ]] && delay=$BACKOFF_MAX
-    log "[zloop] claude exited $exit_code ($FAILURES consecutive); backing off ${delay}s"
+    log "[zloop] zagent exited $exit_code ($FAILURES consecutive); backing off ${delay}s"
   fi
 
   debug "Iteration $ITERATION complete, sleeping ${delay}s..."

@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# zagent - Extensible client-agnostic agent runner for Zociety
+#
+# Usage:
+#   bin/zagent [options] "<prompt>"
+#
+# Options:
+#   -c, --client CLIENT    Specify AI CLI client: claude or gemini (default: $ZOCIETY_AGENT_CLIENT or claude)
+#   -m, --model MODEL      Specify the LLM model to use
+#   -v, --verbose          Enable verbose output streaming
+#   -h, --help             Show this help
+#
+# Environment:
+#   ZOCIETY_AGENT_CLIENT   Defaults to "claude" if not specified.
+#   ANTHROPIC_MODEL        Passed to Claude if specified.
+#   GEMINI_MODEL           Passed to Gemini CLI if specified.
+
+set -euo pipefail
+
+CLIENT="${ZOCIETY_AGENT_CLIENT:-claude}"
+MODEL=""
+VERBOSE=0
+PROMPT=""
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -c|--client)
+      [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; exit 2; }
+      CLIENT="$2"
+      shift
+      ;;
+    -m|--model)
+      [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; exit 2; }
+      MODEL="$2"
+      shift
+      ;;
+    -v|--verbose)
+      VERBOSE=1
+      ;;
+    -*)
+      echo "Error: Unknown option '$1'" >&2
+      exit 2
+      ;;
+    *)
+      if [[ -n "$PROMPT" ]]; then
+        echo "Error: Multiple prompts provided ('$PROMPT' and '$1')" >&2
+        exit 2
+      fi
+      PROMPT="$1"
+      ;;
+  esac
+  shift
+done
+
+if [[ -z "$PROMPT" ]]; then
+  echo "Error: No prompt provided." >&2
+  usage
+  exit 2
+fi
+
+case "$CLIENT" in
+  claude)
+    CLAUDE_ARGS=(
+      --print
+      --dangerously-skip-permissions
+      --strict-mcp-config
+      --no-session-persistence
+    )
+    if [[ -n "$MODEL" ]]; then
+      CLAUDE_ARGS+=(--model "$MODEL")
+    fi
+    if [[ "$VERBOSE" == "1" ]]; then
+      CLAUDE_ARGS+=(--verbose --output-format stream-json --include-partial-messages)
+    fi
+    CLAUDE_ARGS+=("$PROMPT")
+    
+    exec claude "${CLAUDE_ARGS[@]}"
+    ;;
+
+  gemini)
+    GEMINI_ARGS=(
+      -p "$PROMPT"
+      -y
+      --skip-trust
+    )
+    if [[ -n "$MODEL" ]]; then
+      GEMINI_ARGS+=(-m "$MODEL")
+    fi
+    if [[ "$VERBOSE" == "1" ]]; then
+      # Gemini's streaming output mode is stream-json
+      GEMINI_ARGS+=(-o stream-json)
+    fi
+    
+    exec gemini "${GEMINI_ARGS[@]}"
+    ;;
+
+  *)
+    echo "Error: Unknown agent client: $CLIENT" >&2
+    exit 2
+    ;;
+esac
