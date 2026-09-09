@@ -282,11 +282,11 @@ Before proposing any changes, verify correctness using:
 
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes
-- Secret detection (Talisman)
+- Secret detection (gitleaks; `.gitleaks.toml`, inline `# gitleaks:allow` for exemptions)
 - Shell script validation (shellcheck)
 - State validation
 
-Install with: `pre-commit install`
+Install with: `pre-commit install`. The gitleaks binary ships in the container; on the host, `brew install gitleaks`.
 
 ## Files
 

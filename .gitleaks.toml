@@ -1,0 +1,19 @@
+# gitleaks configuration (secret detection, run by pre-commit; see .pre-commit-config.yaml)
+#
+# Extends the built-in ruleset: every default rule applies. Add project-specific
+# exemptions here rather than weakening rules, e.g.
+#
+#   [[allowlists]]
+#   description = "test fixtures"
+#   paths = ['^tests/fixtures/']
+#
+# For a single known-safe line, prefer an inline comment: `... # gitleaks:allow`.
+#
+# Ad hoc scans (binary ships in the container; `brew install gitleaks` on the host):
+#   gitleaks git .     full history
+#   gitleaks dir .     working tree, including untracked files
+
+title = "zociety"
+
+[extend]
+useDefault = true
