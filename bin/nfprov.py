@@ -63,22 +63,6 @@ def is_prose(filename: str) -> bool:
     return Path(filename).suffix.lower() in PROSE_SUFFIXES
 
 
-def common_prefix_len(a: str, b: str) -> int:
-    n = min(len(a), len(b))
-    i = 0
-    while i < n and a[i] == b[i]:
-        i += 1
-    return i
-
-
-def common_suffix_len(a: str, b: str, prefix_len: int) -> int:
-    n = min(len(a), len(b)) - prefix_len
-    i = 0
-    while i < n and a[len(a) - 1 - i] == b[len(b) - 1 - i]:
-        i += 1
-    return i
-
-
 def mark_span(text: str, mode: str) -> str:
     """Encode a span as AI-authored via upstream's do_mark.
 
@@ -93,17 +77,11 @@ def mark_span(text: str, mode: str) -> str:
 
 
 def mark_line_diff(old: str, new: str, mode: str) -> str:
-    """Mark only the span between common prefix/suffix of old vs new."""
-    if old == new:
-        return new
-    prefix_len = common_prefix_len(old, new)
-    suffix_len = common_suffix_len(old, new, prefix_len)
-    # Guard against prefix/suffix overlap on short strings.
-    suffix_len = min(suffix_len, len(new) - prefix_len)
-    head = new[:prefix_len]
-    middle = new[prefix_len: len(new) - suffix_len]
-    tail = new[len(new) - suffix_len:] if suffix_len else ""
-    return head + mark_span(middle, mode) + tail
+    """Mark only the span between common prefix/suffix of old vs new,
+    delegating the calculation directly to upstream's do_mark_added.
+    """
+    selectors, pua2base, base2pua = tables()
+    return upstream().do_mark_added(old, new, "ai", mode, selectors, pua2base, base2pua)
 
 
 def _split_body(line: str) -> tuple[str, str]:
