@@ -70,7 +70,7 @@ fileignoreconfig:
 - filename: docs/stuff.html
   checksum: 620fcf120255c2e35ff21e589dd103b4a54558a0a44ad63f96460cd9ccb17f18
 - filename: bin/nfprov-upstream.py
-  checksum: fb50a47494d335ccd01a40b2a555c74076f5d455740e75dd4932ad36293be7a9
+  checksum: ac48af916a980cb97fe410c5458f861f083bca04caf0001a18737f1aba383814
 - filename: bin/nfprov-blame.py
   checksum: 6d2a2aca3c4336b4aa1bc5bef21b826b80c8605dd7ee3515222e4c4e550eaded
 - filename: bin/zstop-budget

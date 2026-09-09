@@ -43,14 +43,15 @@ while true; do
     ITERATION=$((ITERATION + 1))
 
     # Write state for zheap-death to read
-    mkdir -p .claude
-    cat > .claude/zloop.state << EOF
+    mkdir -p .zociety .claude
+    cat > .zociety/zloop.state << EOF
 iteration: $ITERATION
 max: $MAX_ITERATIONS
 start: $START_SHA
 mode: $STOP_MODES
 runner: github-actions
 EOF
+    cp .zociety/zloop.state .claude/zloop.state 2>/dev/null || true
 
     # Check completion BEFORE each iteration. Dispatcher exit codes as in
     # bin/zloop: 0 stop, 2 abort (bad mode or predicate error), else continue.
@@ -61,7 +62,7 @@ EOF
         echo "=== Loop Complete ==="
         echo "Iterations: $ITERATION"
         bin/zstate | jq '{action, phase, genesis}'
-        rm -f .claude/zloop.state
+        rm -f .zociety/zloop.state .claude/zloop.state
 
         # Final push
         git push origin HEAD || echo "Warning: final push failed"
@@ -70,7 +71,7 @@ EOF
         echo ""
         echo "=== Loop Aborted ==="
         echo "zloop-complete exited 2 (modes: $STOP_MODES); see message above"
-        rm -f .claude/zloop.state
+        rm -f .zociety/zloop.state .claude/zloop.state
         exit 2
     fi
 
@@ -97,10 +98,18 @@ EOF
     bin/zstate | jq -c '{action, phase}'
     echo ""
 
-    # Run one Claude iteration
-    # --print outputs result without interactive mode
-    # --dangerously-skip-permissions allows auto-execution in CI
-    if claude --print --model "$MODEL" --dangerously-skip-permissions "$PROMPT" 2>&1; then
+    # Construct agent arguments
+    AGENT_ARGS=()
+    if [[ -n "${ZOCIETY_AGENT_CLIENT:-}" ]]; then
+      AGENT_ARGS+=("--client" "$ZOCIETY_AGENT_CLIENT")
+    fi
+    if [[ -n "$MODEL" ]]; then
+      AGENT_ARGS+=("--model" "$MODEL")
+    fi
+    AGENT_ARGS+=("$PROMPT")
+
+    # Run one agent iteration
+    if bin/zagent "${AGENT_ARGS[@]}" 2>&1; then
         # Push after successful iteration (if there are changes)
         if ! git diff --quiet HEAD 2>/dev/null; then
             echo ""
@@ -111,7 +120,7 @@ EOF
             } || echo "Warning: push failed, continuing..."
         fi
     else
-        echo "Warning: Claude iteration failed, continuing..."
+        echo "Warning: Agent iteration failed, continuing..."
     fi
 
     # Small delay to avoid rate limits

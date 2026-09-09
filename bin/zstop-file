@@ -27,7 +27,16 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-STOP_FILE="${ZSTOP_FILE:-.claude/STOP}"
+STOP_FILE="${ZSTOP_FILE:-}"
+if [[ -z "$STOP_FILE" ]]; then
+  if [[ -f .zociety/STOP ]]; then
+    STOP_FILE=".zociety/STOP"
+  elif [[ -f .claude/STOP ]]; then
+    STOP_FILE=".claude/STOP"
+  else
+    STOP_FILE=".claude/STOP"
+  fi
+fi
 
 die() {
   echo "zstop-file: $*" >&2

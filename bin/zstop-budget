@@ -20,7 +20,11 @@
 
 set -e
 
-STATE_FILE=.claude/zloop.state
+if [[ -f .zociety/zloop.state ]]; then
+  STATE_FILE=.zociety/zloop.state
+else
+  STATE_FILE=.claude/zloop.state
+fi
 BUDGET="${ZSTOP_BUDGET:-3}"
 
 usage() {
