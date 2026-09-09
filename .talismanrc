@@ -69,10 +69,12 @@ fileignoreconfig:
   checksum: 1909b676cfe75c92df6f0fb53a522591ed33010305448b9c5897e033188759b9
 - filename: docs/stuff.html
   checksum: 620fcf120255c2e35ff21e589dd103b4a54558a0a44ad63f96460cd9ccb17f18
-- filename: bin/nfprov-upstream.py
-  checksum: ac48af916a980cb97fe410c5458f861f083bca04caf0001a18737f1aba383814
+- filename: bin/nfprov.py
+  checksum: 9a866603254ce37fc4c104bc168717746f034456408c7ee112797f42b38e42dc
+- filename: bin/nfprov-diff.py
+  checksum: 5edc07b96b684796439a3eee8caeb227d74f8c1232c4c6fc4cc8e27377b117e1
 - filename: bin/nfprov-blame.py
-  checksum: 6d2a2aca3c4336b4aa1bc5bef21b826b80c8605dd7ee3515222e4c4e550eaded
+  checksum: da26ce8303167464dd7a3b91c7cafa7d2b843c0ed2a064f42e6cd7b53db4f23d
 - filename: bin/zstop-budget
   checksum: aa64fc6203c948d93eb6506a0d4412febad92a1ba31b7a27e33da15c31573db5
 - filename: bin/zstop-feedback

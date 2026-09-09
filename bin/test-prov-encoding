@@ -18,14 +18,14 @@
 # inside its IIFE (exposed as window.__prov). This harness lifts those two
 # function bodies (plus `var MARK = ...` and any sibling helpers they call)
 # out of the generated HTML with python3, runs them under node, and checks
-# them byte for byte against the vendored reference encoder: `bin/nfprov.py
+# them byte for byte against the reference encoder front end: `bin/nfprov-diff.py
 # mark-added` in vs and pua mode over one fixture line (ASCII, Latin-1, a
 # combining sequence, an arrow, CJK, DEL, SOFT HYPHEN, NBSP). The rule is the fork's
 # (delano/nerd-fonts#15, bin/nfprov-mapping.json): a base followed by U+E0101
 # becomes U+100000 + base with the selector dropped only when the base is in
 # the 188-entry PUA table (U+0021..U+00FF minus U+007F..U+00A0 and U+00AD);
 # every other base keeps its selector. Also asserts, as the issue does, that
-# `nfprov-upstream.py inspect` counts the same ai_vs + ai_pua total for both
+# `nfprov.py inspect` counts the same ai_vs + ai_pua total for both
 # encodings. node comes from the host or the container image (node:20).
 
 set -e
@@ -159,8 +159,8 @@ fi
 # mode; the arrow and CJK base are outside the table and keep theirs too.
 printf 'ab \xc3\xa9 e\xcc\x81 \xe2\x86\x92 \xe6\x97\xa5 x\x7fy\xc2\xad \xc2\xa0z\n' > "$TMP/fixture.md"
 
-python3 "$BIN_DIR/nfprov.py" mark-added --mode=vs "$TMP/fixture.md" > "$TMP/expect-vs.txt"
-python3 "$BIN_DIR/nfprov.py" mark-added --mode=pua "$TMP/fixture.md" > "$TMP/expect-pua.txt"
+python3 "$BIN_DIR/nfprov-diff.py" mark-added --mode=vs "$TMP/fixture.md" > "$TMP/expect-vs.txt"
+python3 "$BIN_DIR/nfprov-diff.py" mark-added --mode=pua "$TMP/fixture.md" > "$TMP/expect-pua.txt"
 
 if cmp -s "$TMP/expect-vs.txt" "$TMP/expect-pua.txt"; then
   echo "FAIL: nfprov produced identical vs and pua output; fixture does not exercise the table" >&2
@@ -243,7 +243,7 @@ check "puaToVs(vs) is a no-op" "$TMP/expect-vs.txt" "$TMP/got-vs-idem.txt"
 
 # ai_count <file>: ai_vs + ai_pua from the vendored inspect report
 ai_count() {
-  python3 "$BIN_DIR/nfprov-upstream.py" inspect "$1" \
+  python3 "$BIN_DIR/nfprov.py" inspect "$1" \
     | awk -F': ' '$1 == "ai_vs" || $1 == "ai_pua" { n += $2 } END { print n + 0 }'
 }
 
