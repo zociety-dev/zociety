@@ -115,7 +115,7 @@ Record the regime so runs are comparable:
 | `bin/zociety` | forward `ZSTOP_*` |
 | `bin/zga-loop` | call dispatcher the same way, or leave on `action` and say so |
 | `bin/zcheck` | list new scripts |
-| `CLAUDE.md` | mode table, env table, examples |
+| `AGENTS.md` | mode table, env table, examples |
 
 ## Tests
 

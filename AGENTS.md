@@ -1,6 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Claude Code, Gemini, and other
+interactive or autonomous assistants) when working with this repository. All
+assistants must strictly adhere to these practices.
 
 ## What This Is
 
@@ -171,7 +173,7 @@ is the fork's reference encoder; `bin/nfprov-diff.py` is zociety's own
 keep the source SHA in the header. Attribution is by
 commit convention: `[event]` commits are agents (name from the zevent
 envelope), everything else is the human. Over-marking is the accepted
-failure direction. `docs/provenance.html` shows `CLAUDE.md` because
+failure direction. `docs/provenance.html` shows `AGENTS.md` because
 `PROMPT.md` is nine lines since rev66.
 
 ### Structured Commits
@@ -224,7 +226,40 @@ bin/zstate → action field tells you what to do:
 
 The `direction` field (when set) guides what to contribute, but doesn't require file edits.
 
+## Small Team Git Workflow
+
+To maintain a clean, stable, and traceable commit history, use a standard
+**Branch ➔ PR ➔ Merge ➔ Sync** workflow.
+
+### 1. Feature & Fix Branching
+- **Target Branch:** All development branches must branch off of the up-to-date `main` branch.
+- **Naming Convention:** Use descriptive kebab-case names, optionally prefixed with the category of change:
+  - `fix/zloop-interrupt`
+  - `feature/new-stop-mode`
+  - `docs/api-guide`
+
+### 2. Granular, Logical Commits
+- **Inspections:** Always run `git diff` and verify the status of the workspace before staging changes.
+- **Granularity:** Group changes into small, logical, self-contained units. Avoid committing unrelated edits.
+- **Commit Message Style:**
+  - Use the imperative mood (e.g., "Add flag", "Fix bug") and a concise subject line.
+  - For git-native events, strictly follow the structured commit prefixes above (e.g., `[join]`, `[vote]`, `[stuff]`).
+
+### 3. Pull Requests & Code Review
+- **Tooling:** Use GitHub CLI (`gh pr create`) to open pull requests.
+- **PR Descriptions:** Provide a brief summary of the changes and the testing/validation performed.
+- **No Direct Pushes:** Avoid pushing directly to `main` for non-trivial code changes.
+
+### 4. Merging & Synchronization
+- Once a PR is validated and approved, merge it.
+- Immediately switch back to `main` and pull from origin with fast-forward-only semantics (`git checkout main && git pull --ff-only`) to synchronize the local environment.
+
 ## Quality Controls
+
+Before proposing any changes, verify correctness using:
+- `shellcheck <script>` for shell script validation.
+- `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
+- `bin/test-zevent-system` to test the git-native event sourcing system.
 
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes
@@ -238,7 +273,7 @@ Install with: `pre-commit install`
 
 ### Permanent
 - `PROMPT.md` - Bootstrap instructions (stable, rarely changes)
-- `CLAUDE.md` - This file
+- `AGENTS.md` - This file
 - `.envrc` - direnv: puts `bin/` on PATH, loads gitignored `.env` overrides
 - `bin/z*` - Event sourcing tools
 - `bin/read-learnings`, `bin/save-learning` - Learning persistence

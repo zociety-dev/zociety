@@ -92,7 +92,7 @@ fi
 # blame output does not satisfy the JSON contract below. Every other page
 # keeps generating either way.
 #
-# Contract (bin/nfprov-blame.py --format json CLAUDE.md):
+# Contract (bin/nfprov-blame.py --format json AGENTS.md):
 #   {file, ref, commits, first_date, last_date,
 #    chars:{total,ai,human}, agents:[{name,kind:"ai"|"human",chars,commits}],
 #    spans:[...], marked:"<marked text>", html:"<span class=prov ...>…</span>"}
@@ -111,7 +111,7 @@ if [[ -n "${NFPROV_BLAME_JSON_FILE:-}" ]]; then
     fi
 elif command -v python3 >/dev/null 2>&1 && [[ -f bin/nfprov-blame.py ]]; then
     # PYTHONIOENCODING pins stdout to UTF-8 so U+E0101 survives a C locale.
-    PROVENANCE_BLAME_JSON=$(PYTHONIOENCODING=utf-8 python3 bin/nfprov-blame.py --format json CLAUDE.md 2>/dev/null || true)
+    PROVENANCE_BLAME_JSON=$(PYTHONIOENCODING=utf-8 python3 bin/nfprov-blame.py --format json AGENTS.md 2>/dev/null || true)
 fi
 if [[ -n "$PROVENANCE_BLAME_JSON" ]] && ! printf '%s' "$PROVENANCE_BLAME_JSON" \
         | jq -e '(.html|type=="string") and (.marked|type=="string")
@@ -620,7 +620,7 @@ if [[ -n "$PROVENANCE_BLAME_JSON" ]]; then
     # variables carry the bytes untouched, so U+E0101 survives into the page.
     prov_jq() { printf '%s' "$PROVENANCE_BLAME_JSON" | jq -r "$@"; }
 
-    PROV_FILE=$(prov_jq '.file // "CLAUDE.md"')
+    PROV_FILE=$(prov_jq '.file // "AGENTS.md"')
     PROV_REF=$(prov_jq '.ref // "HEAD"')
     PROV_COMMITS=$(prov_jq '.commits // 0')
     PROV_FIRST=$(prov_jq '.first_date // "?"')
