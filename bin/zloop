@@ -20,11 +20,18 @@
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_VERBOSE=1         Pass --verbose to claude
 #   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
+#   ZLOOP_KILL_GRACE=10     Seconds to wait for the agent to exit on Ctrl-C
+#                           before it is killed outright
 #   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
 #
 # Output discipline:
 #   stdout  claude's result only (safe to redirect to a file)
 #   stderr  loop chrome: headers, state, timing, warnings
+#
+# Stopping: Ctrl-C (SIGINT), SIGTERM or SIGHUP ends the run at once: the
+# agent gets SIGTERM, then SIGKILL after ZLOOP_KILL_GRACE seconds, the state
+# file is removed and zloop exits 128+signal (130 for Ctrl-C). For a graceful
+# stop between iterations use the file stop mode (--stop file, .claude/STOP).
 #
 # Runs Claude Code iterations until bin/zloop-complete returns 0. The resolved
 # stop-mode list is passed to it as the argument; it runs bin/zstop-<mode> for
@@ -44,6 +51,7 @@ STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 VERBOSE="${ZLOOP_VERBOSE:-0}"
 BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
+KILL_GRACE="${ZLOOP_KILL_GRACE:-10}"
 BACKOFF_BASE=1
 
 usage() {
@@ -118,6 +126,7 @@ done
 
 require_int "ZLOOP_TIMEOUT" "$TIMEOUT_SECS"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
+require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 [[ "$STOP_MODES" =~ ^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$ ]] \
   || die "--stop/ZLOOP_STOP expects a comma-separated list of mode names, got '$STOP_MODES'"
 for _mode in ${STOP_MODES//,/ }; do
@@ -129,11 +138,60 @@ done
 # iteration because zheap-death deletes the file when it archives.
 START_SHA=$(git rev-parse HEAD)
 
-# Remove the loop-state file on any exit (Ctrl-C, termination, normal finish)
-# instead of leaving a stale state file behind. The running agent is
-# in this script's foreground process group, so an interactive SIGINT already
-# reaches it; this just guarantees cleanup.
+# Remove the loop-state file on any exit (signal, abort, normal finish)
+# instead of leaving a stale state file behind.
 trap 'rm -f .zociety/zloop.state .claude/zloop.state' EXIT
+
+# Interrupt handling (issue #11). The agent runs as a background job and the
+# loop `wait`s on it: bash runs a trap the moment `wait` returns, whereas a
+# foreground child would defer the trap until that child exited. That mattered
+# because `timeout` puts the agent in its own process group, so a terminal
+# Ctrl-C reached only this script; bash then sat in the foreground wait until
+# claude finished on its own and started the next iteration. On INT/TERM/HUP
+# the agent gets SIGTERM (timeout forwards it to the whole group), then
+# SIGKILL after KILL_GRACE seconds, and zloop exits 128+signal.
+AGENT_PID=""
+
+on_signal() {
+  local sig="$1" num="$2" waited=0 pid
+  trap '' INT TERM HUP
+  log ""
+  log "[zloop] Caught SIG$sig; stopping agent"
+  pid="${AGENT_PID:-$(jobs -p | head -n1)}"
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    while kill -0 "$pid" 2>/dev/null && [[ $waited -lt $KILL_GRACE ]]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      log "[zloop] Agent still running after ${KILL_GRACE}s; sending SIGKILL"
+      # timeout made the agent a group leader; kill the group when there is
+      # one (grandchildren included), else just the pid.
+      kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null || true
+  fi
+  log "=== Loop Interrupted (SIG$sig) ==="
+  exit $((128 + num))
+}
+trap 'on_signal INT 2' INT
+trap 'on_signal TERM 15' TERM
+trap 'on_signal HUP 1' HUP
+
+# `timeout` (GNU or BusyBox) caps an iteration; without it (stock macOS) the
+# iteration runs unbounded, as before.
+TIMEOUT_CMD=()
+if command -v timeout &>/dev/null; then
+  TIMEOUT_CMD=(timeout "$TIMEOUT_SECS")
+fi
+
+# interruptible_sleep N: a foreground `sleep` would delay a trapped SIGTERM
+# (or a SIGHUP) until it returned; a background one lets `wait` return now.
+interruptible_sleep() {
+  sleep "$1" &
+  wait $! || true
+}
 
 ITERATION=0
 FAILURES=0
@@ -215,13 +273,13 @@ EOF
   # Run one agent iteration. bin/zagent's stdout stays on stdout (the work
   # product); its stderr stays on stderr. A non-zero exit never ends the loop.
   # </dev/null closes stdin so the agent never waits for interactive input.
+  # Background + wait rather than a foreground child: see on_signal above.
   exit_code=0
-  if command -v timeout &>/dev/null; then
-    debug "Using timeout wrapper (${TIMEOUT_SECS}s)"
-    timeout "$TIMEOUT_SECS" bin/zagent "${AGENT_ARGS[@]}" </dev/null || exit_code=$?
-  else
-    bin/zagent "${AGENT_ARGS[@]}" </dev/null || exit_code=$?
-  fi
+  [[ ${#TIMEOUT_CMD[@]} -gt 0 ]] && debug "Using timeout wrapper (${TIMEOUT_SECS}s)"
+  ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" </dev/null &
+  AGENT_PID=$!
+  wait "$AGENT_PID" || exit_code=$?
+  AGENT_PID=""
 
   log "[zloop] Iteration $ITERATION finished in $((SECONDS - iter_start))s (exit $exit_code)"
 
@@ -247,5 +305,5 @@ EOF
   fi
 
   debug "Iteration $ITERATION complete, sleeping ${delay}s..."
-  sleep "$delay"
+  interruptible_sleep "$delay"
 done

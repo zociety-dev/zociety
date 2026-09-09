@@ -78,6 +78,13 @@ cat > "$FAKEBIN/claude" <<'EOF'
 set -e
 echo "fake claude ran"
 echo "$(date +%s) $*" >> "$FAKE_CLAUDE_LOG"
+if [[ -n "${FAKE_CLAUDE_SLEEP:-}" ]]; then
+  # Long-running agent for the interrupt cases: record the pid so the case can
+  # check it died, then become a single sleep process (no bash in between to
+  # defer a signal).
+  echo "$$" > "$FAKE_CLAUDE_LOG.pid"
+  exec sleep "$FAKE_CLAUDE_SLEEP"
+fi
 if [[ "${FAKE_CLAUDE_HEAP_DEATH:-0}" == "1" ]]; then
   bin/zevent heap-death fake "synthetic heap-death" '{"batch_remaining":2}' \
     >> "$FAKE_CLAUDE_LOG.err" 2>&1
@@ -115,8 +122,8 @@ fresh_repo() {
   printf '.claude/\n' > .gitignore
   git add .gitignore PROMPT.md
   git commit -q -m "genesis fixture"
-  rm -f "$FAKE_LOG" "$FAKE_LOG.err"
-  unset FAKE_CLAUDE_HEAP_DEATH FAKE_CLAUDE_PROMISE
+  rm -f "$FAKE_LOG" "$FAKE_LOG.err" "$FAKE_LOG.pid"
+  unset FAKE_CLAUDE_HEAP_DEATH FAKE_CLAUDE_PROMISE FAKE_CLAUDE_SLEEP
 }
 
 # heap_death <data_json>: record a [heap-death] event via bin/zevent, quietly
@@ -168,6 +175,31 @@ cycle_branch() {
 run() {
   RC=0
   "$@" >"$OUT" 2>"$ERR" || RC=$?
+}
+
+# run_signaled <SIG> <cmd...>: like run, but start cmd in the background, wait
+# until the fake claude is up (FAKE_CLAUDE_SLEEP set, pid file written), send
+# SIG to cmd and wait for it. Sets ELAPSED (seconds from signal to exit).
+# A non-interactive bash starts background jobs with SIGINT ignored, and a
+# script cannot un-ignore a signal it inherited that way, so cmd is exec'd
+# through perl, which restores the default disposition first.
+run_signaled() {
+  local sig="$1" pid i t0
+  shift
+  rm -f "$FAKE_LOG.pid"
+  perl -e '$SIG{INT} = "DEFAULT"; $SIG{TERM} = "DEFAULT"; $SIG{HUP} = "DEFAULT"; exec @ARGV or die "exec: $!"' \
+    "$@" >"$OUT" 2>"$ERR" &
+  pid=$!
+  for ((i = 0; i < 100; i++)); do
+    [[ -s "$FAKE_LOG.pid" ]] && break
+    sleep 0.1
+  done
+  sleep 0.5
+  t0=$SECONDS
+  kill "-$sig" "$pid"
+  RC=0
+  wait "$pid" || RC=$?
+  ELAPSED=$((SECONDS - t0))
 }
 
 pass() {
@@ -243,6 +275,29 @@ assert_claude_runs() {
     pass "fake claude ran $n time(s)"
   else
     fail "fake claude ran $n time(s) (want $1)"
+  fi
+}
+
+# assert_agent_dead: the pid the sleeping fake claude recorded no longer runs
+assert_agent_dead() {
+  local pid
+  pid=$(cat "$FAKE_LOG.pid" 2>/dev/null || true)
+  if [[ -z "$pid" ]]; then
+    fail "fake claude never recorded its pid"
+  elif kill -0 "$pid" 2>/dev/null; then
+    fail "fake claude (pid $pid) still running"
+    kill -KILL "$pid" 2>/dev/null || true
+  else
+    pass "fake claude (pid $pid) gone"
+  fi
+}
+
+# assert_elapsed_lt <secs>: signal-to-exit took under <secs>
+assert_elapsed_lt() {
+  if [[ "$ELAPSED" -lt "$1" ]]; then
+    pass "exited ${ELAPSED}s after the signal"
+  else
+    fail "exited ${ELAPSED}s after the signal (want < $1)"
   fi
 }
 
@@ -689,6 +744,35 @@ assert_rc 0
 assert_no_err '^zheap-death: refusing'
 assert_eq "[heap-death] commits" "$(git rev-list --count --grep='^\[heap-death\]' HEAD)" 1
 assert_eq "current branch" "$(git branch --show-current)" feat/scratch
+echo ""
+
+echo "=== Case 31: Ctrl-C (SIGINT) mid-iteration stops the agent, exits 130, removes state (#11) ==="
+fresh_repo interrupt-int
+export FAKE_CLAUDE_SLEEP=60
+run_signaled INT env ZLOOP_KILL_GRACE=3 bin/zloop --max 3
+unset FAKE_CLAUDE_SLEEP
+assert_rc 130
+assert_err '^\[zloop\] Caught SIGINT'
+assert_err '^=== Loop Interrupted \(SIGINT\) ==='
+assert_no_err '^=== Iteration 2/'
+assert_claude_runs 1
+assert_agent_dead
+assert_elapsed_lt 10
+assert_absent .claude/zloop.state
+assert_absent .zociety/zloop.state
+echo ""
+
+echo "=== Case 32: SIGTERM mid-iteration (podman stop, kill) exits 143 the same way ==="
+fresh_repo interrupt-term
+export FAKE_CLAUDE_SLEEP=60
+run_signaled TERM env ZLOOP_KILL_GRACE=3 bin/zloop --max 3
+unset FAKE_CLAUDE_SLEEP
+assert_rc 143
+assert_err '^=== Loop Interrupted \(SIGTERM\) ==='
+assert_claude_runs 1
+assert_agent_dead
+assert_elapsed_lt 10
+assert_absent .claude/zloop.state
 echo ""
 
 #############################################
