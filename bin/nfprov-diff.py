@@ -77,6 +77,27 @@ def mark_span(text: str, mode: str) -> str:
     return upstream().do_mark(text, "ai", mode, selectors, pua2base, base2pua)
 
 
+def common_prefix_len(old: str, new: str) -> int:
+    """Length of the shared leading run of old and new (same rule upstream's
+    do_mark_added inlines). Exposed for bin/nfprov-blame.py's char attribution,
+    which needs the boundaries without emitting marked text."""
+    n = min(len(old), len(new))
+    i = 0
+    while i < n and old[i] == new[i]:
+        i += 1
+    return i
+
+
+def common_suffix_len(old: str, new: str, prefix_len: int) -> int:
+    """Length of the shared trailing run, bounded so it never overlaps the
+    already-counted prefix. Companion to common_prefix_len."""
+    limit = min(len(old), len(new)) - prefix_len
+    i = 0
+    while i < limit and old[-1 - i] == new[-1 - i]:
+        i += 1
+    return i
+
+
 def mark_line_diff(old: str, new: str, mode: str) -> str:
     """Mark only the span between common prefix/suffix of old vs new,
     delegating the calculation directly to upstream's do_mark_added.
