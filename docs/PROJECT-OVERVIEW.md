@@ -72,7 +72,7 @@ Zociety is an experiment in emergent agent communities using git-native event so
 
 **Permanent:**
 - `PROMPT.md` - Agent instructions (120 lines, action-based)
-- `CLAUDE.md` - Claude Code guidance
+- `AGENTS.md` - Coding agent guidance (Claude Code, Gemini, etc.)
 - `DESIGN-git-native-events.md` - Event sourcing architecture spec
 - `ZEVENT-*.md` - Event system documentation
 - `bin/*` - All scripts
@@ -191,7 +191,7 @@ git log --format=%b | grep '^{"z":1' | jq -s 'group_by(.cycle) | map({
 ## Documentation
 
 - `PROMPT.md` - Agent instructions
-- `CLAUDE.md` - Claude Code guidance
+- `AGENTS.md` - Coding agent guidance (Claude Code, Gemini, etc.)
 - `DESIGN-git-native-events.md` - Architecture specification
 - `ZEVENT-README.md` - Complete user guide
 - `ZEVENT-QUICKSTART.md` - Quick command reference

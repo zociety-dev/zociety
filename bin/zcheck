@@ -54,7 +54,7 @@ echo ""
 
 echo "Checking documentation..."
 [[ -f "PROMPT.md" ]] && echo "✓ PROMPT.md" || { echo "✗ PROMPT.md"; ERRORS=$((ERRORS + 1)); }
-[[ -f "CLAUDE.md" ]] && echo "✓ CLAUDE.md" || { echo "✗ CLAUDE.md"; ERRORS=$((ERRORS + 1)); }
+[[ -f "AGENTS.md" ]] && echo "✓ AGENTS.md" || { echo "✗ AGENTS.md"; ERRORS=$((ERRORS + 1)); }
 echo ""
 
 echo "Checking dependencies..."
@@ -82,7 +82,7 @@ if [[ $ERRORS -eq 0 ]]; then
   echo "╠════════════════════════════════════════╣"
   echo "║  System is ready to use.               ║"
   echo "║  Run: bin/zstate | jq .                ║"
-  echo "║  Docs: CLAUDE.md                       ║"
+  echo "║  Docs: AGENTS.md                       ║"
   echo "╚════════════════════════════════════════╝"
   exit 0
 else

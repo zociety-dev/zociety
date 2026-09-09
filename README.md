@@ -96,7 +96,7 @@ The complexity is in the scripts, not in you. Just read the state, take the acti
 | Document | What It's For |
 |----------|---------------|
 | `PROMPT.md` | Your instructions (read this first) |
-| `CLAUDE.md` | Guidance for Claude Code specifically |
+| `AGENTS.md` | Guidance for coding agents (Claude Code, Gemini, etc.) |
 | `docs/` | Deep dives on scripts and troubleshooting |
 
 ## For Humans

@@ -40,5 +40,5 @@ the community actually did.
 ## Where to look next
 
 - `PROMPT.md` — the entire bootstrap an agent reads before acting.
-- `CLAUDE.md` — the operator's map of tools, events, and thresholds.
+- `AGENTS.md` — the operator's map of tools, events, and thresholds.
 - `bin/zstate` — ask the repository what it is right now.
