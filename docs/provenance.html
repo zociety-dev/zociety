@@ -173,8 +173,8 @@
     .limits li { opacity: 0.9; }
     [data-agent="evolve"] { --agent-color: #58a6ff; }
     [data-agent="Claude Opus 4.5"] { --agent-color: #d2a8ff; }
-    [data-agent="observer"] { --agent-color: #ffa657; }
-    [data-agent="fix"] { --agent-color: #7ee787; }
+    [data-agent="fix"] { --agent-color: #ffa657; }
+    [data-agent="observer"] { --agent-color: #7ee787; }
     [data-agent="opus"] { --agent-color: #ff7b72; }
   </style>
 </head>
@@ -184,19 +184,21 @@
   <p>
     Two authors, one document. <code>CLAUDE.md</code> is the file that tells
     Claude Code how to behave in this repository, and most of it was written
-    by the agents it instructs: 13 commits by a human and by named
+    by the agents it instructs: 19 commits by a human and by named
     agents. Below, every character is attributed to the commit that introduced
     it, so the marks show exactly which characters the human wrote. The mark
     lives <em>in the text itself, not the markup</em>: U+E0101 (VARIATION
     SELECTOR-18) follows each agent-written glyph, and a <code>P+</code> font
     from
     <a href="https://github.com/delano/nerd-fonts/issues/15">delano/nerd-fonts#15</a>
-    renders it as a wavy underline. Any other font renders plain text.
+    renders it as a wavy underline under the 188 printable Latin-1
+    characters (U+0021 to U+00FF, soft hyphen excluded). Any other font, and
+    any character outside that set, renders as plain text.
   </p>
 
   <div class="stats">
     <div class="stat">
-      <div class="stat-value">13</div>
+      <div class="stat-value">19</div>
       <div class="stat-label">Commits</div>
     </div>
     <div class="stat">
@@ -204,7 +206,7 @@
       <div class="stat-label">Written</div>
     </div>
     <div class="stat">
-      <div class="stat-value">90%</div>
+      <div class="stat-value">39%</div>
       <div class="stat-label">Characters agent-written</div>
     </div>
     <div class="stat">
@@ -215,21 +217,21 @@
 
   <div class="content">
     <h2>Who wrote what</h2>
-    <p class="muted">4424 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
+    <p class="muted">9604 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
     <div class="bar" role="img" aria-label="Characters by author, top 6 plus others">
-      <div class="bar-seg bar-ai" data-agent="evolve" style="width:31.9%" title="evolve: 1413 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="Claude Opus 4.5" style="width:19%" title="Claude Opus 4.5: 840 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="observer" style="width:15.3%" title="observer: 679 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="fix" style="width:15.2%" title="fix: 672 chars"></div>
-      <div class="bar-seg bar-human" data-agent="human" style="width:10.3%" title="human: 455 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="opus" style="width:8.3%" title="opus: 365 chars"></div>
+      <div class="bar-seg bar-human" data-agent="human" style="width:60.6%" title="human: 5816 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="evolve" style="width:14.7%" title="evolve: 1413 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="Claude Opus 4.5" style="width:8.7%" title="Claude Opus 4.5: 840 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="fix" style="width:7%" title="fix: 672 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="observer" style="width:5.2%" title="observer: 498 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="opus" style="width:3.8%" title="opus: 365 chars"></div>
     </div>
     <ul class="authors">
+      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">5816 chars · 12 commits</span></li>
       <li data-agent="evolve"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">evolve</span> <span class="kind">ai</span> <span class="num">1413 chars · 1 commit</span></li>
       <li data-agent="Claude Opus 4.5"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">Claude Opus 4.5</span> <span class="kind">ai</span> <span class="num">840 chars · 2 commits</span></li>
-      <li data-agent="observer"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">observer</span> <span class="kind">ai</span> <span class="num">679 chars · 1 commit</span></li>
       <li data-agent="fix"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">fix</span> <span class="kind">ai</span> <span class="num">672 chars · 2 commits</span></li>
-      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">455 chars · 6 commits</span></li>
+      <li data-agent="observer"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">observer</span> <span class="kind">ai</span> <span class="num">498 chars · 1 commit</span></li>
       <li data-agent="opus"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">opus</span> <span class="kind">ai</span> <span class="num">365 chars · 1 commit</span></li>
     </ul>
   </div>
@@ -242,12 +244,17 @@
         <button type="button" class="seg-btn" data-mode="colour" aria-pressed="false">Colour by author</button>
         <button type="button" class="seg-btn" data-mode="plain" aria-pressed="false">Plain</button>
       </div>
+      <div class="seg" id="encodings" role="group" aria-label="Mark encoding">
+        <button type="button" class="seg-btn" data-encoding="auto" aria-pressed="true">Auto</button>
+        <button type="button" class="seg-btn" data-encoding="vs" aria-pressed="false">VS18</button>
+        <button type="button" class="seg-btn" data-encoding="pua" aria-pressed="false">PUA-B</button>
+      </div>
       <button type="button" class="action" id="copy">Copy marked text</button>
       <a class="action" href="CLAUDE.marked.md" download>Download CLAUDE.marked.md</a>
     </div>
     <p class="muted caption" id="caption" aria-live="polite">
       Hover any run for its commit. <span class="sample">a󠄁g󠄁e󠄁n󠄁t󠄁</span>
-      wavy mark under a glyph = written by an agent; plain glyph = written by a human.
+      wavy mark under a glyph = written by an agent; plain glyph = written by a human, or outside the marked set.
     </p>
     <pre class="example-body" id="doc" data-commit-base="https://github.com/zociety-dev/zociety/commit/" data-ref="HEAD">
 <span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md"># CLAUDE.md
@@ -270,35 +277,90 @@ Note: It's "zociety" not "society".
 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">#󠄁 D󠄁i󠄁r󠄁e󠄁c󠄁t󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁
 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">b󠄁i󠄁n󠄁/󠄁z󠄁</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">l󠄁o󠄁o󠄁p󠄁 6󠄁0󠄁</span>
 <span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁m󠄁a󠄁x󠄁 6󠄁0󠄁 -󠄁-󠄁t󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 6󠄁0󠄁0󠄁 -󠄁-󠄁v󠄁e󠄁r󠄁b󠄁o󠄁s󠄁e󠄁   #󠄁 f󠄁l󠄁a󠄁g󠄁s󠄁 o󠄁v󠄁e󠄁r󠄁r󠄁i󠄁d󠄁e󠄁 Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁*󠄁 e󠄁n󠄁v󠄁
-b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁h󠄁e󠄁l󠄁p󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">bin/zloop --stop action,file 60              # pick stop modes (default: action)
+ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
+</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁h󠄁e󠄁l󠄁p󠄁
 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
-#󠄁 C󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁i󠄁z󠄁e󠄁d󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁
+#󠄁 C󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁i󠄁z󠄁e󠄁d󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering"> (ZLOOP_* and ZSTOP_* are forwarded into the container)</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
 b󠄁i󠄁n󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 6󠄁0󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">bin/zociety bin/zloop --stop budget,file 60
 </span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">```
 
 </span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">Z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁'󠄁s󠄁 o󠄁w󠄁n󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁h󠄁e󠄁c󠄁k󠄁i󠄁n󠄁g󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">:󠄁
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 R󠄁u󠄁n󠄁s󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 u󠄁n󠄁t󠄁i󠄁l󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 r󠄁e󠄁t󠄁u󠄁r󠄁n󠄁s󠄁 e󠄁x󠄁i󠄁t󠄁 0󠄁</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 N󠄁o󠄁 s󠄁t󠄁a󠄁t󠄁i󠄁c󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 s󠄁t󠄁r󠄁i󠄁n󠄁g󠄁s󠄁 -󠄁 u󠄁s󠄁e󠄁s󠄁 e󠄁x󠄁i󠄁t󠄁 c󠄁o󠄁d󠄁e󠄁s󠄁</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁s󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 f󠄁i󠄁e󠄁l󠄁d󠄁 e󠄁a󠄁c󠄁h󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 S󠄁t󠄁o󠄁p󠄁s󠄁 w󠄁h󠄁e󠄁n󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁s󠄁 `󠄁s󠄁t󠄁o󠄁p󠄁`󠄁 o󠄁r󠄁 `󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁`󠄁
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">Before each iteration `bin/zloop-complete` dispatches the stop predicates</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">  (`bin/zstop-&lt;mode&gt;` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
+  1 continue, 2 abort the loop (unknown mode or predicate error)
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 N󠄁o󠄁 s󠄁t󠄁a󠄁t󠄁i󠄁c󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 s󠄁t󠄁r󠄁i󠄁n󠄁g󠄁s󠄁 -󠄁 u󠄁s󠄁e󠄁s󠄁 e󠄁x󠄁i󠄁t󠄁 c󠄁o󠄁d󠄁e󠄁s󠄁</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`</span>
+<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">`--max N` and `ZLOOP_TIMEOUT` are unconditional safety caps, not modes;</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">  the predicates run once more after the final permitted iteration, so
+  finishing on the last iteration exits 0 (`Loop Complete`), not 1
 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">-󠄁 R󠄁u󠄁n󠄁s󠄁 w󠄁i󠄁t󠄁h󠄁o󠄁u󠄁t󠄁 M󠄁C󠄁P󠄁 s󠄁e󠄁r󠄁v󠄁e󠄁r󠄁s󠄁 (󠄁u󠄁s󠄁e󠄁s󠄁 `󠄁-󠄁-󠄁s󠄁t󠄁r󠄁i󠄁c󠄁t󠄁-󠄁m󠄁c󠄁p󠄁-󠄁c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁`󠄁 f󠄁o󠄁r󠄁 i󠄁s󠄁o󠄁l󠄁a󠄁t󠄁i󠄁o󠄁n󠄁)󠄁
 -󠄁 E󠄁a󠄁c󠄁h󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 h󠄁a󠄁s󠄁 a󠄁 5󠄁-󠄁m󠄁i󠄁n󠄁u󠄁t󠄁e󠄁 t󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 (󠄁c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁u󠄁r󠄁a󠄁b󠄁l󠄁e󠄁 v󠄁i󠄁a󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁T󠄁I󠄁M󠄁E󠄁O󠄁U󠄁T󠄁`󠄁)󠄁
 </span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">-󠄁 O󠄁n󠄁l󠄁y󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁'󠄁s󠄁 r󠄁e󠄁s󠄁u󠄁l󠄁t󠄁 g󠄁o󠄁e󠄁s󠄁 t󠄁o󠄁 s󠄁t󠄁d󠄁o󠄁u󠄁t󠄁;󠄁 a󠄁l󠄁l󠄁 l󠄁o󠄁o󠄁p󠄁 c󠄁h󠄁r󠄁o󠄁m󠄁e󠄁 g󠄁o󠄁e󠄁s󠄁 t󠄁o󠄁 s󠄁t󠄁d󠄁e󠄁r󠄁r󠄁
 -󠄁 C󠄁o󠄁n󠄁s󠄁e󠄁c󠄁u󠄁t󠄁i󠄁v󠄁e󠄁 n󠄁o󠄁n󠄁-󠄁z󠄁e󠄁r󠄁o󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 e󠄁x󠄁i󠄁t󠄁s󠄁 b󠄁a󠄁c󠄁k󠄁 o󠄁f󠄁f󠄁 e󠄁x󠄁p󠄁o󠄁n󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁l󠄁y󠄁 (󠄁2󠄁s󠄁,󠄁 4󠄁s󠄁,󠄁 8󠄁s󠄁.󠄁.󠄁.󠄁 c󠄁a󠄁p󠄁p󠄁e󠄁d󠄁 b󠄁y󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁B󠄁A󠄁C󠄁K󠄁O󠄁F󠄁F󠄁_󠄁M󠄁A󠄁X󠄁`󠄁)󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">- Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=&lt;list&gt;` in the tag message
 </span>
 <span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 S󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 |󠄁 P󠄁u󠄁r󠄁p󠄁o󠄁s󠄁e󠄁 |󠄁</span>
 <span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 [󠄁</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">o󠄁p󠄁t󠄁i󠄁o󠄁n󠄁s󠄁]󠄁 [󠄁n󠄁]󠄁`󠄁 |󠄁 R󠄁u󠄁n󠄁 a󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 m󠄁a󠄁x󠄁 n󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 (󠄁`󠄁-󠄁-󠄁h󠄁e󠄁l󠄁p󠄁`󠄁 f󠄁o󠄁r󠄁 f󠄁l󠄁a󠄁g󠄁s󠄁)󠄁</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo"> |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁 i󠄁f󠄁 l󠄁o󠄁o󠄁p󠄁 s󠄁h󠄁o󠄁u󠄁l󠄁d󠄁 s󠄁t󠄁o󠄁p󠄁 (󠄁e󠄁x󠄁i󠄁t󠄁 0󠄁 =󠄁 y󠄁e󠄁s󠄁)󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering"> [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">)󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">| `bin/zstop-&lt;mode&gt;` | One stop predicate; prints `STOP: &lt;mode&gt; ...` or `CONTINUE: &lt;mode&gt; ...` |
+| `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
+
+### Stop Modes
+
+Comma-separated list via `bin/zloop --stop LIST` or `ZLOOP_STOP=LIST` (flag wins).
+The first predicate that exits 0 stops the loop. Always include `file` so a
+human can halt a run with `touch .claude/STOP`.
+
+| Mode | Stops when | Knobs |
+|------|------------|-------|
+| `action` | `bin/zstate` action is `stop` or `promise` (today's rule, the default) | - |
+| `budget` | `[heap-death]` commits since loop start &gt;= `ZSTOP_BUDGET`, or action is `promise` | `ZSTOP_BUDGET` |
+| `converge` | `ZSTOP_PATIENCE` consecutive `cycle/*` branches are trivial: stuff tree identical to the prior cycle's, or fewer than `ZSTOP_MIN_STUFF` files under `stuff/` | `ZSTOP_PATIENCE`, `ZSTOP_MIN_STUFF` |
+| `feedback` | latest `[heap-death]` since loop start has `"done": true` in its event data (`bin/zheap-death --done`) | - |
+| `file` | `.claude/STOP` exists; removed on stop, owner and mtime reported | `ZSTOP_FILE` |
+
+Recommended combos: `action,file`, `budget,file`, `budget,converge,file`, `feedback,file`.
+
+```bash
+bin/zloop --stop action,file 60
+bin/zloop --stop budget,file 60                        # 3 heap-deaths then stop
+ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
+bin/zloop --stop feedback,file 60                      # agent calls zheap-death --done
+touch .claude/STOP                                     # stop a running loop by hand
+bin/zloop-complete action,converge                     # dry-run predicates by hand
+```
+
+Dry runs by hand: `budget` and `feedback` exit 2 without a running loop's
+`.claude/zloop.state` (they scope to `start..HEAD`), and `file` consumes the
+marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
+
+In `budget` mode `bin/zheap-death` defaults `batch_size` to
+`ZSTOP_BUDGET - &lt;heap-deaths so far&gt;` so its event data agrees with the loop.
+`bin/zheap-death` refuses to run off `main` (override with
+`ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot archive a cycle into a
+feature branch.
 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
 #󠄁#󠄁#󠄁 z󠄁l󠄁o󠄁o󠄁p󠄁 E󠄁n󠄁v󠄁i󠄁r󠄁o󠄁n󠄁m󠄁e󠄁n󠄁t󠄁 V󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁s󠄁
 
 |󠄁 V󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁 |󠄁 D󠄁e󠄁f󠄁a󠄁u󠄁l󠄁t󠄁 |󠄁 D󠄁e󠄁s󠄁c󠄁r󠄁i󠄁p󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
 |󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
 |󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁T󠄁I󠄁M󠄁E󠄁O󠄁U󠄁T󠄁`󠄁 |󠄁 3󠄁0󠄁0󠄁 |󠄁 T󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 p󠄁e󠄁r󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁n󠄁 s󠄁e󠄁c󠄁o󠄁n󠄁d󠄁s󠄁 |󠄁
-|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁D󠄁E󠄁B󠄁U󠄁G󠄁`󠄁 |󠄁 0󠄁 |󠄁 E󠄁n󠄁a󠄁b󠄁l󠄁e󠄁 d󠄁e󠄁b󠄁u󠄁g󠄁 o󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">| `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
+</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁D󠄁E󠄁B󠄁U󠄁G󠄁`󠄁 |󠄁 0󠄁 |󠄁 E󠄁n󠄁a󠄁b󠄁l󠄁e󠄁 d󠄁e󠄁b󠄁u󠄁g󠄁 o󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
 |󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁V󠄁E󠄁R󠄁B󠄁O󠄁S󠄁E󠄁`󠄁 |󠄁 0󠄁 |󠄁 P󠄁a󠄁s󠄁s󠄁 -󠄁-󠄁v󠄁e󠄁r󠄁b󠄁o󠄁s󠄁e󠄁 t󠄁o󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
 </span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁B󠄁A󠄁C󠄁K󠄁O󠄁F󠄁F󠄁_󠄁M󠄁A󠄁X󠄁`󠄁 |󠄁 3󠄁0󠄁0󠄁 |󠄁 C󠄁a󠄁p󠄁 i󠄁n󠄁 s󠄁e󠄁c󠄁o󠄁n󠄁d󠄁s󠄁 o󠄁n󠄁 t󠄁h󠄁e󠄁 s󠄁l󠄁e󠄁e󠄁p󠄁 a󠄁f󠄁t󠄁e󠄁r󠄁 c󠄁o󠄁n󠄁s󠄁e󠄁c󠄁u󠄁t󠄁i󠄁v󠄁e󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 f󠄁a󠄁i󠄁l󠄁u󠄁r󠄁e󠄁s󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">
+### ZSTOP Environment Variables
+
+| Variable | Default | Used by | Description |
+|----------|---------|---------|-------------|
+| `ZSTOP_BUDGET` | 3 | `budget`, `zheap-death` | Heap-deaths allowed since loop start |
+| `ZSTOP_PATIENCE` | 2 | `converge` | Consecutive trivial cycles before stopping |
+| `ZSTOP_MIN_STUFF` | 1 | `converge` | A cycle with fewer files under `stuff/` is trivial |
+| `ZSTOP_FILE` | .claude/STOP | `file` | Marker file path |
 </span>
 <span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">#󠄁#󠄁 G󠄁i󠄁t󠄁-󠄁N󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 S󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 (󠄁r󠄁e󠄁v󠄁5󠄁0󠄁+󠄁)󠄁</span>
 
@@ -321,15 +383,48 @@ b󠄁i󠄁n󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁 b󠄁i󠄁n󠄁/󠄁z�
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 a󠄁 r󠄁u󠄁l󠄁e󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 a󠄁 r󠄁u󠄁l󠄁e󠄁 p󠄁a󠄁s󠄁s󠄁i󠄁n󠄁g󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁`󠄁 |󠄁 A󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁,󠄁 p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁 n󠄁e󠄁x󠄁t󠄁 |󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁`󠄁 |󠄁 A󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁,󠄁 p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁 n󠄁e󠄁x󠄁t󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">(`--done` marks the hypothesis settled for `feedback` mode) </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">|󠄁
 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="8df4bc5" data-date="2026-09-08" data-subject="Check it all in">| `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="d66b086" data-date="2026-09-08" data-subject="Add bin/zgit, a host wrapper that runs git inside the container">| `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁`󠄁 |󠄁 O󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁e󠄁v󠄁e󠄁n󠄁t󠄁`󠄁 |󠄁 L󠄁o󠄁w󠄁-󠄁l󠄁e󠄁v󠄁e󠄁l󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁`󠄁 |󠄁 A󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁 i󠄁f󠄁 l󠄁o󠄁o󠄁p󠄁 s󠄁h󠄁o󠄁u󠄁l󠄁d󠄁 s󠄁t󠄁o󠄁p󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁`󠄁 |󠄁 P󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁 G󠄁i󠄁t󠄁H󠄁u󠄁b󠄁 A󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁`󠄁 |󠄁 A󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">(`--stop` modes) </span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁
+|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort)</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo"> |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">| `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
+| `bin/zstop-budget` | Stop predicate: `ZSTOP_BUDGET` heap-deaths since loop start |
+| `bin/zstop-converge` | Stop predicate: recent cycles stopped changing `stuff/` |
+| `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
+| `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
+| `bin/test-zstop-modes` | Dry-run harness for the stop modes |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9a8f104" data-date="2026-09-08" data-subject="Add bin/test-prov-encoding to check the page&#x27;s VS to PUA transform against nfprov">| `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
+</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁`󠄁 |󠄁 P󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁 G󠄁i󠄁t󠄁H󠄁u󠄁b󠄁 A󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
 |󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 A󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁 a󠄁p󠄁p󠄁r󠄁o󠄁v󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">| `bin/nfprov.py` | Mark text added between a base and current file (`mark-added`) |
+| `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
+| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout) |
+| `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
+
+### Provenance (delano/nerd-fonts#15)
+
+Agent-written text is marked in-band so a P+ font renders it distinctly.
+The encoding is the fork's, not ours: U+E0101 (VARIATION SELECTOR-18)
+after each AI character, or Supplementary PUA-B (U+100000 + codepoint)
+in `pua` mode. Never reimplement it. </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="a8dff4d" data-date="2026-09-08" data-subject="Document the P+ marked set and the WebKit fallback in CLAUDE.md">The marked set is the 188 printable</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="a8dff4d" data-date="2026-09-08" data-subject="Document the P+ marked set and the WebKit fallback in CLAUDE.md">Latin-1 characters U+0021-U+00FF (soft hyphen excluded); VS17 is human,
+VS18 is ai, VS19 is unknown, and plane 16 addresses the ai variants only.
+Everything else (Greek, Cyrillic, icons, U+2192) passes through unmarked:
+nfprov still emits base+VS18, but the font has no such sequence, so every
+renderer drops the selector and draws the plain glyph. No tofu, no mark.
+Width (Mono, Propo, proportional) is a separate P+ face, not a selector.
+WebKit (Safari, Orion) ignores the VS sequences entirely; the page falls
+back to PUA-B display there (#13). `bin/nfprov-upstream.py` and
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">`bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
+by copying, and keep the source SHA in the header. Attribution is by
+commit convention: `[event]` commits are agents (name from the zevent
+envelope), everything else is the human. Over-marking is the accepted
+failure direction. `docs/provenance.html` shows `CLAUDE.md` because
+`PROMPT.md` is nine lines since rev66.
 </span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
 #󠄁#󠄁#󠄁 S󠄁t󠄁r󠄁u󠄁c󠄁t󠄁u󠄁r󠄁e󠄁d󠄁 C󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁
 </span>
@@ -396,8 +491,11 @@ T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i�
 </span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">#󠄁#󠄁#󠄁 P󠄁e󠄁r󠄁m󠄁a󠄁n󠄁e󠄁n󠄁t󠄁</span>
 <span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁`󠄁 -󠄁 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">B󠄁o󠄁o󠄁t󠄁s󠄁t󠄁r󠄁a󠄁p󠄁 i󠄁n󠄁s󠄁t󠄁r󠄁u󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 (󠄁s󠄁t󠄁a󠄁b󠄁l󠄁e󠄁,󠄁 r󠄁a󠄁r󠄁e󠄁l󠄁y󠄁 c󠄁h󠄁a󠄁n󠄁g󠄁e󠄁s󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">)󠄁
 -󠄁 `󠄁C󠄁L󠄁A󠄁U󠄁D󠄁E󠄁.󠄁m󠄁d󠄁`󠄁 -󠄁 T󠄁h󠄁i󠄁s󠄁 f󠄁i󠄁l󠄁e󠄁
--󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁*󠄁`󠄁 -󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 s󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 t󠄁o󠄁o󠄁l󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="523e1ad" data-date="2026-09-08" data-subject="Add an .envrc that puts bin/ on PATH and loads .env overrides">- `.envrc` - direnv: puts `bin/` on PATH, loads gitignored `.env` overrides
+</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁*󠄁`󠄁 -󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 s󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 t󠄁o󠄁o󠄁l󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁r󠄁e󠄁a󠄁d󠄁-󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁,󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁s󠄁a󠄁v󠄁e󠄁-󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁`󠄁 -󠄁 L󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁 p󠄁e󠄁r󠄁s󠄁i󠄁s󠄁t󠄁e󠄁n󠄁c󠄁e󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">- `bin/nfprov*` - Provenance marking (vendored from delano/nerd-fonts)
+- `site/fonts/` - P+ webfonts copied into `docs/fonts/` by `bin/zsite-generate`
 </span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
 #󠄁#󠄁#󠄁 P󠄁e󠄁r󠄁-󠄁c󠄁y󠄁c󠄁l󠄁e󠄁 (󠄁c󠄁l󠄁e󠄁a󠄁r󠄁e󠄁d󠄁 b󠄁y󠄁 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁)󠄁
 -󠄁 `󠄁s󠄁t󠄁u󠄁f󠄁f󠄁/󠄁`󠄁 -󠄁 T󠄁h󠄁i󠄁n󠄁g󠄁s󠄁 m󠄁a󠄁d󠄁e󠄁 t󠄁h󠄁i󠄁s󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁
@@ -420,12 +518,20 @@ T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i�
 |󠄁 r󠄁e󠄁v󠄁6󠄁6󠄁 |󠄁 S󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁.󠄁 C󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁s󠄁 d󠄁r󠄁i󠄁v󠄁e󠄁 t󠄁h󠄁e󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 n󠄁o󠄁t󠄁 t󠄁h󠄁e󠄁 p󠄁r󠄁o󠄁m󠄁p󠄁t󠄁.󠄁 R󠄁e󠄁m󠄁o󠄁v󠄁e󠄁d󠄁 `󠄁e󠄁v󠄁o󠄁l󠄁v󠄁e󠄁`󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁.󠄁 |󠄁
 </span></pre>
     <p class="muted">
-      <strong>Plain</strong> switches only the font. The U+E0101 characters
-      stay in the DOM, which is the point: the provenance travels with the
-      text, and any <code>P+</code> font can show it again.
+      <strong>Plain</strong> switches only the font (and puts the U+E0101
+      form back if PUA-B was on screen, since the fallback fonts have no
+      PUA-B glyphs). The U+E0101 characters stay in the DOM, which is the
+      point: the provenance travels with the text, and any <code>P+</code>
+      font can show it again.
       <strong>Copy marked text</strong> puts the same characters on your
       clipboard: paste into VS Code with a <code>P+</code> font and the marks
       come along; paste anywhere else and it reads as normal text.
+      <strong>PUA-B</strong> swaps each marked glyph for its Supplementary
+      Private Use Area-B mirror (the fork's fallback for engines that drop
+      U+E0101; <strong>Auto</strong> picks it only when this one does).
+      Text you select and copy by hand in that display carries PUA-B code
+      points; the button always emits the U+E0101 form, and
+      <code>bin/nfprov.py strip</code> and <code>inspect</code> read both.
     </p>
   </div>
   <div class="tip" id="tip" role="tooltip" hidden></div>
@@ -447,19 +553,50 @@ T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i�
   </div>
 
   <div class="content limits">
-    <h2>Known limits (inherited from upstream, not solved here)</h2>
+    <h2>Known limits</h2>
     <ul>
-      <li>Attribution is per-commit and by commit-message convention:
-        commits prefixed <code>[event]</code> (<code>[join]</code>,
-        <code>[stuff]</code>, <code>[evolve]</code>, …) are agents, everything
-        else is human. A human commit that pastes agent text is under-marked;
-        an agent commit that includes human edits is over-marked.</li>
-      <li>Zociety's provenance is coarser than the live plugin: it is
-        per-commit, not per-tool-call. Two edits in the same commit by the
-        same agent are marked as one span.</li>
-      <li>Over-marking is still the accepted failure direction: a whole
-        <code>[stuff]</code> commit is agent-attributed even if a human
-        amended a typo in it afterward without a separate commit.</li>
+      <li>Attribution is by commit convention, not by who typed. A commit
+        whose subject starts with a bracketed prefix (<code>[join]</code>,
+        <code>[stuff]</code>, <code>[heap-death]</code>) or whose body
+        carries a <code>Co-Authored-By: Claude</code> trailer is an agent;
+        everything else is the human. A human commit that pastes agent text
+        is under-marked; a human commit prefixed <code>[fix]</code>, or an
+        agent commit that carries human edits, is over-marked. Over-marking
+        is the accepted failure direction.</li>
+      <li>The unit is the commit, refined per line: a changed line keeps
+        the attribution of its unchanged prefix and suffix and the middle
+        goes to the commit, so a rewritten sentence is marked in full even
+        where letters coincide.</li>
+      <li>The <code>P+</code> fonts carry marked variants for 188
+        characters: printable Latin-1, U+0021 to U+00FF, without the soft
+        hyphen. Anything else an agent wrote (Greek, Cyrillic, icons, arrows
+        such as U+2192) is still emitted as base + U+E0101, but no font
+        has that sequence, so every renderer draws the plain glyph:
+        unmarked, never tofu. Text the face cannot shape at all falls back
+        to another font, as stock Agave does.</li>
+      <li>The selector carries provenance only: U+E0100 human, U+E0101
+        agent, U+E0102 unknown. Width (Mono, Propo, proportional) is a
+        separate <code>P+</code> face, never a selector, and the PUA-B
+        mirror exists for the agent variant only.</li>
+      <li>WebKit ignores the selector, so there the page falls back to
+        PUA-B display, and text selected and copied by hand in that display
+        carries PUA-B code points rather than U+E0101.</li>
+    </ul>
+  </div>
+
+  <div class="content limits">
+    <h2>Quirks and Quarks</h2>
+    <p class="muted">Odd behaviour found by hand-testing, not by spec.</p>
+    <ul>
+      <li>It's CoreText, not just WebKit: any macOS app that shapes text
+        with CoreText drops U+E0101 the same way Safari and Orion do,
+        browser or not. Paste the <strong>Copy marked text</strong> output
+        (VS18) into the <a href="https://zed.dev">Zed</a> editor and it
+        renders unmarked; switch this page to <strong>PUA-B</strong> first,
+        or hand-select and copy from that display, and Zed shows the marks.
+        A paste target that renders through a different stack can show
+        VS18 marked with no such swap — worth checking before assuming a
+        copy is broken.</li>
     </ul>
   </div>
 
@@ -472,20 +609,107 @@ T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i�
       var base = doc.getAttribute('data-commit-base');
       var MODES = ['marks', 'colour', 'plain'];
       var MARK = '\u{e0101}';
+      // The document as generated, U+E0101 after every agent character.
+      // Taken before any display transform so Copy is byte-identical
+      // whatever the page currently shows.
+      var VS_TEXT = doc.textContent;
+
+      // --- VS18 <-> PUA-B, the fork's two encodings of the same mark ---
+      // Mirrors bin/nfprov-mapping.json (vendored from delano/nerd-fonts#15)
+      // and nfprov.mark_span(text, 'pua'): the P+ fonts carry a PUA-B
+      // mirror (U+100000 + code point) for U+0021..U+00FF minus
+      // U+007F..U+00A0 and U+00AD, 188 glyphs. Only those bases convert;
+      // any other base keeps its selector, exactly as the marker does.
+      var PUA_BASE = 0x100000;
+      var VS_PAIR = /([\u0021-\u007e\u00a1-\u00ac\u00ae-\u00ff])\u{e0101}/gu;
+      var PUA_CHAR = /[\u{100021}-\u{10007e}\u{1000a1}-\u{1000ac}\u{1000ae}-\u{1000ff}]/gu;
+      function vsToPua(s) {
+        return s.replace(VS_PAIR, function (pair, c) {
+          return String.fromCodePoint(PUA_BASE + c.charCodeAt(0));
+        });
+      }
+      function puaToVs(s) {
+        return s.replace(PUA_CHAR, function (c) {
+          return String.fromCharCode(c.codePointAt(0) - PUA_BASE) + MARK;
+        });
+      }
+      window.__prov = { vsToPua: vsToPua, puaToVs: puaToVs };
+
+      // Rewrite text nodes in place so the .prov spans (hover attribution)
+      // survive; never replace doc.textContent wholesale. The legend's
+      // .sample spans carry the same marks, so they follow the document.
+      function transformDoc(fn) {
+        var roots = [doc].concat(Array.prototype.slice.call(document.querySelectorAll('.sample')));
+        var nodes = [];
+        for (var r = 0; r < roots.length; r++) {
+          var walker = document.createTreeWalker(roots[r], NodeFilter.SHOW_TEXT, null, false);
+          while (walker.nextNode()) nodes.push(walker.currentNode);
+        }
+        for (var i = 0; i < nodes.length; i++) {
+          var before = nodes[i].nodeValue;
+          var after = fn(before);
+          if (after !== before) nodes[i].nodeValue = after;
+        }
+      }
+
+      // --- does this engine draw the selector? ---
+      // Renders 'a' and 'a'+U+E0101 in the P+ face and compares pixels.
+      // Identical means the selector was dropped (WebKit); every failure
+      // path resolves false so Chrome and Firefox keep the VS text.
+      var FACE = "'Agave Nerd Font Mono P+'";
+      async function detectVsIgnored() {
+        try {
+          if (!document.fonts || !document.fonts.load || !document.createElement('canvas').getContext) return false;
+          var spec = '32px ' + FACE;
+          await document.fonts.load(spec, 'a' + MARK);
+          await document.fonts.ready;
+          if (!document.fonts.check(spec)) return false;
+          var canvas = document.createElement('canvas');
+          canvas.width = 48;
+          canvas.height = 48;
+          var ctx = canvas.getContext('2d');
+          if (!ctx) return false;
+          ctx.font = spec;
+          ctx.textBaseline = 'top';
+          var draw = function (text) {
+            ctx.clearRect(0, 0, 48, 48);
+            ctx.fillText(text, 4, 4);
+            return ctx.getImageData(0, 0, 48, 48).data;
+          };
+          var plain = draw('a');
+          var marked = draw('a' + MARK);
+          var ink = false;
+          for (var i = 0; i < plain.length; i++) {
+            if (plain[i] !== marked[i]) return false;
+            if (plain[i]) ink = true;
+          }
+          return ink;
+        } catch (e) {
+          return false;
+        }
+      }
 
       // --- display mode: data-mode on <html>, CSS does the rest ---
+      // Plain drops the P+ face, and the fallback fonts have no PUA-B
+      // glyphs, so plain always shows the VS18 form: applyEncoding() runs
+      // after every mode change once the encoding state exists.
+      var encodingReady = false;
       function setMode(mode, persist) {
         if (MODES.indexOf(mode) < 0) mode = 'marks';
         root.setAttribute('data-mode', mode);
         if (mode === 'plain') root.setAttribute('data-provenance', 'off');
         else root.removeAttribute('data-provenance');
-        var btns = document.querySelectorAll('.seg-btn');
-        for (var i = 0; i < btns.length; i++) {
-          var on = btns[i].getAttribute('data-mode') === mode;
-          btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
-        }
+        pressButtons('modes', 'data-mode', mode);
         if (persist) {
           try { localStorage.setItem('prov-mode', mode); } catch (e) { /* private mode */ }
+        }
+        if (encodingReady) applyEncoding();
+      }
+      function pressButtons(groupId, attr, value) {
+        var btns = document.getElementById(groupId).querySelectorAll('.seg-btn');
+        for (var i = 0; i < btns.length; i++) {
+          var on = btns[i].getAttribute(attr) === value;
+          btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
         }
       }
       var saved = null;
@@ -496,25 +720,86 @@ T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i�
         if (b) setMode(b.getAttribute('data-mode'), true);
       });
 
-      // --- copy marked text ---
+      // --- mark encoding: auto follows detection, vs/pua force ---
+      var ENCODINGS = ['auto', 'vs', 'pua'];
+      var detected = 'vs';   // what detectVsIgnored() decides, vs until it has
+      var choice = 'auto';   // the user's pick
+      var current = 'vs';    // what the DOM holds right now
+      var encNote = document.createElement('span');
+      encNote.id = 'encnote';
+      caption.appendChild(document.createTextNode(' '));
+      caption.appendChild(encNote);
+      function isPlain() { return root.getAttribute('data-provenance') === 'off'; }
+      function effectiveEncoding() {
+        if (isPlain()) return 'vs';
+        return choice === 'auto' ? detected : choice;
+      }
+      function describeEncoding() {
+        if (isPlain()) return 'Plain: marks stay in the DOM as VS18 (U+E0101 after each glyph).';
+        var eff = effectiveEncoding();
+        var how = eff === 'pua' ? 'PUA-B (U+100000 + code point)' : 'VS18 (U+E0101 after each glyph)';
+        var why = choice !== 'auto' ? 'forced' : (detected === 'pua' ? 'auto: this engine drops U+E0101' : 'auto');
+        return 'Marks shown as ' + how + ', ' + why + '.';
+      }
+      function updateEncodingNote() {
+        if (!encNote.parentNode) {
+          caption.appendChild(document.createTextNode(' '));
+          caption.appendChild(encNote);
+        }
+        encNote.textContent = describeEncoding();
+      }
+      function applyEncoding() {
+        var want = effectiveEncoding();
+        if (want !== current) {
+          transformDoc(want === 'pua' ? vsToPua : puaToVs);
+          current = want;
+        }
+        updateEncodingNote();
+      }
+      function setEncoding(enc, persist) {
+        if (ENCODINGS.indexOf(enc) < 0) enc = 'auto';
+        choice = enc;
+        pressButtons('encodings', 'data-encoding', enc);
+        applyEncoding();
+        if (persist) {
+          try { localStorage.setItem('prov-encoding', enc); } catch (e) { /* private mode */ }
+        }
+      }
+      var savedEnc = null;
+      try { savedEnc = localStorage.getItem('prov-encoding'); } catch (e) { /* ignore */ }
+      encodingReady = true;
+      setEncoding(savedEnc || 'auto', false);
+      document.getElementById('encodings').addEventListener('click', function (ev) {
+        var b = ev.target.closest('.seg-btn');
+        if (b) setEncoding(b.getAttribute('data-encoding'), true);
+      });
+      detectVsIgnored().then(function (ignored) {
+        detected = ignored ? 'pua' : 'vs';
+        applyEncoding();
+      });
+
+      // --- copy marked text: always the VS18 snapshot, never the display ---
       function say(msg) { caption.textContent = msg; }
       document.getElementById('copy').addEventListener('click', function () {
-        var text = doc.textContent;
+        var text = VS_TEXT;
         var marks = text.split(MARK).length - 1;
         var chars = Array.from(text).length - marks;
         var done = function () { say('Copied ' + chars + ' characters, ' + marks + ' provenance marks.'); };
-        var fail = function () { say('Copy failed. Select the text and copy it manually; the marks come along.'); };
+        var fail = function () { say('Copy failed. Download the marked file instead; hand-selected text carries whichever encoding is on screen.'); };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(done, fail);
         } else {
           try {
-            var range = document.createRange();
-            range.selectNodeContents(doc);
-            var sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            document.execCommand('copy') ? done() : fail();
-            sel.removeAllRanges();
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            ok ? done() : fail();
           } catch (e) { fail(); }
         }
       });

@@ -1,0 +1,265 @@
+#!/bin/bash
+# test-prov-encoding: Prove docs/provenance.html's VS<->PUA transform matches nfprov
+#
+# Usage:
+#   bin/test-prov-encoding [--html FILE] [--keep]
+#   bin/test-prov-encoding -h | --help
+#
+# Options:
+#   --html FILE   Page to test instead of docs/provenance.html
+#   --keep        Leave the throwaway directory behind (path printed)
+#
+# Exit codes:
+#   0  PASS
+#   1  FAIL (diff printed)
+#   2  cannot run: page missing or without vsToPua/puaToVs, or no node
+#
+# The provenance page defines `function vsToPua(s)` and `function puaToVs(s)`
+# inside its IIFE (exposed as window.__prov). This harness lifts those two
+# function bodies (plus `var MARK = ...` and any sibling helpers they call)
+# out of the generated HTML with python3, runs them under node, and checks
+# them byte for byte against the vendored reference encoder: `bin/nfprov.py
+# mark-added` in vs and pua mode over one fixture line (ASCII, Latin-1, a
+# combining sequence, an arrow, CJK, DEL, SOFT HYPHEN, NBSP). The rule is the fork's
+# (delano/nerd-fonts#15, bin/nfprov-mapping.json): a base followed by U+E0101
+# becomes U+100000 + base with the selector dropped only when the base is in
+# the 188-entry PUA table (U+0021..U+00FF minus U+007F..U+00A0 and U+00AD);
+# every other base keeps its selector. Also asserts, as the issue does, that
+# `nfprov-upstream.py inspect` counts the same ai_vs + ai_pua total for both
+# encodings. node comes from the host or the container image (node:20).
+
+set -e
+
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+HTML="$REPO_ROOT/docs/provenance.html"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --html)
+      [[ $# -ge 2 ]] || { echo "test-prov-encoding: --html needs a path" >&2; exit 2; }
+      HTML="$2"
+      shift
+      ;;
+    --keep)
+      KEEP=1
+      ;;
+    *)
+      echo "test-prov-encoding: unknown argument '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+for tool in python3 node; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "SKIP: test-prov-encoding needs $tool on PATH (run via bin/zociety for the container's node)" >&2
+    exit 2
+  fi
+done
+
+if [[ ! -f "$HTML" ]]; then
+  echo "SKIP: $HTML does not exist (run bin/zsite-generate first)" >&2
+  exit 2
+fi
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/prov-test.XXXXXX")
+
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then
+    echo "Kept: $TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+#############################################
+# 1. Lift the functions out of the page
+#############################################
+
+# A function starts at a line matching `<indent>function NAME(` and ends at
+# the first later line that is exactly `<indent>}`. Sibling functions and
+# one-line `var NAME = ...;` declarations at the same indentation (the IIFE's
+# MARK constant, any table helper) are lifted too when the two functions
+# reference them, transitively, so a page may factor the table into a helper
+# without the harness having to know its name.
+if ! python3 - "$HTML" "$TMP/page.js" <<'EOF'
+import re
+import sys
+
+html_path, out_path = sys.argv[1], sys.argv[2]
+lines = open(html_path, encoding="utf-8").read().split("\n")
+
+def find_function(name, indent=None):
+    pat = re.compile(r"(\s*)function\s+%s\s*\(" % re.escape(name))
+    for i, line in enumerate(lines):
+        m = pat.match(line)
+        if m and (indent is None or m.group(1) == indent):
+            end = next((j for j in range(i + 1, len(lines)) if lines[j] == m.group(1) + "}"), None)
+            if end is None:
+                sys.stderr.write(f"SKIP: {name} in {html_path} has no closing brace at its indentation\n")
+                sys.exit(2)
+            return m.group(1), "\n".join(lines[i:end + 1])
+    return None, None
+
+def find_var(name, indent):
+    pat = re.compile(r"%s(var|let|const)\s+%s\s*=.*;\s*$" % (re.escape(indent), re.escape(name)))
+    return next((l for l in lines if pat.match(l)), None)
+
+missing = [n for n in ("vsToPua", "puaToVs") if find_function(n)[0] is None]
+if missing:
+    sys.stderr.write(f"SKIP: {html_path} does not define {', '.join(missing)}\n")
+    sys.exit(2)
+
+indent, _ = find_function("vsToPua")
+chunks = {}
+queue = ["vsToPua", "puaToVs"]
+while queue:
+    name = queue.pop(0)
+    if name in chunks:
+        continue
+    _, body = find_function(name, indent)
+    if body is None:
+        body = find_var(name, indent)
+    if body is None:
+        continue  # a global (Array, String, ...) or something node provides
+    chunks[name] = body
+    for ident in set(re.findall(r"\b[A-Za-z_$][A-Za-z0-9_$]*\b", body)):
+        if ident not in chunks:
+            queue.append(ident)
+
+# Declarations before functions, in page order, so `var` helpers are initialised.
+ordered = sorted(chunks.values(), key=lambda body: lines.index(body.split("\n")[0]))
+if "MARK" not in chunks:
+    ordered.insert(0, "var MARK = '\\u{e0101}';")
+open(out_path, "w", encoding="utf-8").write("\n".join(ordered) + "\n")
+EOF
+then
+  exit 2
+fi
+
+#############################################
+# 2. Fixture: nfprov's own output in both modes
+#############################################
+
+# One line, base empty so the whole line is a marked span. Whitespace is never
+# marked; DEL, SOFT HYPHEN and the combining acute keep their selector in pua
+# mode; the arrow and CJK base are outside the table and keep theirs too.
+printf 'ab \xc3\xa9 e\xcc\x81 \xe2\x86\x92 \xe6\x97\xa5 x\x7fy\xc2\xad \xc2\xa0z\n' > "$TMP/fixture.md"
+
+python3 "$BIN_DIR/nfprov.py" mark-added --mode=vs "$TMP/fixture.md" > "$TMP/expect-vs.txt"
+python3 "$BIN_DIR/nfprov.py" mark-added --mode=pua "$TMP/fixture.md" > "$TMP/expect-pua.txt"
+
+if cmp -s "$TMP/expect-vs.txt" "$TMP/expect-pua.txt"; then
+  echo "FAIL: nfprov produced identical vs and pua output; fixture does not exercise the table" >&2
+  exit 1
+fi
+
+#############################################
+# 3. Run the page's functions under node
+#############################################
+
+cat > "$TMP/run.js" <<'EOF'
+'use strict';
+var fs = require('fs');
+var dir = process.argv[2];
+var read = function (name) { return fs.readFileSync(dir + '/' + name, 'utf8'); };
+var write = function (name, text) { fs.writeFileSync(dir + '/' + name, text, 'utf8'); };
+var vs = read('expect-vs.txt');
+var pua = read('expect-pua.txt');
+write('got-pua.txt', vsToPua(vs));
+write('got-vs.txt', puaToVs(pua));
+write('got-pua-idem.txt', vsToPua(pua));
+write('got-vs-idem.txt', puaToVs(vs));
+EOF
+cat "$TMP/page.js" "$TMP/run.js" > "$TMP/harness.js"
+
+if ! node "$TMP/harness.js" "$TMP" > "$TMP/node.out" 2> "$TMP/node.err"; then
+  echo "FAIL: node could not run the page's functions:" >&2
+  cat "$TMP/node.err" >&2
+  exit 1
+fi
+
+#############################################
+# 4. Compare
+#############################################
+
+PASSED=0
+FAILED=0
+
+# show_diff <expected> <got>: codepoint-level unified diff
+show_diff() {
+  python3 - "$1" "$2" <<'EOF'
+import difflib
+import sys
+import unicodedata
+
+def rows(path):
+    out = []
+    for ch in open(path, encoding="utf-8").read():
+        cp = ord(ch)
+        try:
+            name = unicodedata.name(ch)
+        except ValueError:
+            name = "<unnamed>"
+        out.append(f"U+{cp:04X} {name}")
+    return out
+
+a, b = rows(sys.argv[1]), rows(sys.argv[2])
+sys.stdout.writelines(
+    l + "\n" for l in difflib.unified_diff(a, b, "expected", "got", lineterm="", n=1)
+)
+EOF
+}
+
+# check <label> <expected> <got>
+check() {
+  if cmp -s "$2" "$3"; then
+    echo "  ok   $1"
+    PASSED=$((PASSED + 1))
+  else
+    echo "  FAIL $1"
+    show_diff "$2" "$3" | sed 's/^/       /'
+    FAILED=$((FAILED + 1))
+  fi
+}
+
+check "vsToPua(vs) == nfprov pua" "$TMP/expect-pua.txt" "$TMP/got-pua.txt"
+check "puaToVs(pua) == nfprov vs" "$TMP/expect-vs.txt" "$TMP/got-vs.txt"
+check "vsToPua(pua) is a no-op" "$TMP/expect-pua.txt" "$TMP/got-pua-idem.txt"
+check "puaToVs(vs) is a no-op" "$TMP/expect-vs.txt" "$TMP/got-vs-idem.txt"
+
+# ai_count <file>: ai_vs + ai_pua from the vendored inspect report
+ai_count() {
+  python3 "$BIN_DIR/nfprov-upstream.py" inspect "$1" \
+    | awk -F': ' '$1 == "ai_vs" || $1 == "ai_pua" { n += $2 } END { print n + 0 }'
+}
+
+VS_AI=$(ai_count "$TMP/expect-vs.txt")
+PUA_AI=$(ai_count "$TMP/expect-pua.txt")
+if [[ "$VS_AI" == "$PUA_AI" && "$VS_AI" -gt 0 ]]; then
+  echo "  ok   inspect ai_vs+ai_pua: vs=$VS_AI pua=$PUA_AI"
+  PASSED=$((PASSED + 1))
+else
+  echo "  FAIL inspect ai_vs+ai_pua: vs=$VS_AI pua=$PUA_AI"
+  FAILED=$((FAILED + 1))
+fi
+
+if [[ $FAILED -eq 0 ]]; then
+  echo "PASS: test-prov-encoding $PASSED/$((PASSED + FAILED)) checks against $HTML"
+  exit 0
+fi
+echo "FAIL: test-prov-encoding $FAILED of $((PASSED + FAILED)) checks failed against $HTML"
+exit 1
