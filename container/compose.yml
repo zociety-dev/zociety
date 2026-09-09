@@ -19,6 +19,7 @@ services:
       dockerfile: Containerfile
     image: localhost/zociety:latest
     container_name: zociety-sandbox
+    init: true
 
     # Security: read-only root filesystem
     read_only: true
