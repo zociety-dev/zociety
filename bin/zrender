@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# zrender - Render a claude stream-json event stream as compact progress lines
+#
+# Usage:
+#   claude --print --verbose --output-format stream-json ... | bin/zrender
+#   bin/zrender < events.jsonl
+#
+# Reads one JSON event per line on stdin. Writes a compact render to stderr
+# and the final `result` text to stdout, so `bin/zloop > out.txt` still leaves
+# only the agent's answer in the file. Text deltas are never shown; do not
+# feed it --include-partial-messages output (harmless, just wasted parsing).
+#
+#   [0:00] claude claude-fable-5-1           session init (model)
+#   [0:42] Bash   git log --oneline -5       one line per tool call
+#   [1:03] Edit   stuff/index.md
+#   [1:10] ✗ Bash  error: first line          tool_result with is_error
+#   [1:12] · first line of assistant text     dimmed
+#   … thinking 25s                            heartbeat after ZRENDER_HEARTBEAT
+#                                             seconds without an event
+#   duration 4m58s · turns 17 · $0.83         footer from the result event
+#
+# Environment:
+#   ZRENDER_HEARTBEAT=10   Seconds of silence before a heartbeat (0 disables)
+#   ZRENDER_METRICS=path   Append "duration_ms turns cost is_error" per result
+#                          event; bin/zloop sums these at the end of a run
+#   NO_COLOR               Disable colour (also off when stderr is not a TTY)
+#   COLUMNS                Width for truncation (default: tput cols, else 120)
+#
+# Always exits 0 once stdin closes; the producer's exit status is the caller's
+# business (bin/zagent runs the pipe with pipefail).
+
+set -uo pipefail
+export LC_NUMERIC=C
+
+HEARTBEAT="${ZRENDER_HEARTBEAT:-10}"
+METRICS="${ZRENDER_METRICS:-}"
+
+[[ "$HEARTBEAT" =~ ^[0-9]+$ ]] || {
+  echo "zrender: ZRENDER_HEARTBEAT expects a non-negative integer, got '$HEARTBEAT'" >&2
+  exit 2
+}
+
+if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
+  TTY=1
+  DIM=$'\e[2m' BOLD=$'\e[1m' RED=$'\e[31m' RESET=$'\e[0m'
+else
+  TTY=0
+  DIM="" BOLD="" RED="" RESET=""
+fi
+
+WIDTH="${COLUMNS:-}"
+if [[ -z "$WIDTH" && $TTY -eq 1 ]]; then
+  WIDTH=$(tput cols 2>/dev/null || true)
+fi
+[[ "$WIDTH" =~ ^[0-9]+$ && $WIDTH -gt 20 ]] || WIDTH=120
+
+START=$SECONDS
+LAST=$SECONDS
+HEARTBEAT_SHOWN=0
+
+# One jq program classifies an event into tab-separated records, one per
+# content block: tool <name> <arg>, toolerr <text>, text <line>,
+# init <model>, result <duration_ms> <turns> <cost> <is_error>.
+read -r -d '' JQ_CLASSIFY <<'JQ' || true
+def firstline: tostring | split("\n")[0];
+def arg:
+  (.command // .file_path // .path // .pattern // .query // .url // .prompt
+   // .description // .skill
+   // (to_entries | if length > 0 then .[0].value else "" end))
+  | firstline;
+def blocktext:
+  if type == "string" then .
+  elif type == "array" then map(.text // "") | join(" ")
+  else tostring end;
+if .type == "system" and .subtype == "init" then
+  ["init", (.model // "")]
+elif .type == "assistant" then
+  (.message.content // [])[]
+  | if .type == "tool_use" then ["tool", .name, ((.input // {}) | arg)]
+    elif .type == "text" then ["text", (.text | firstline)]
+    else empty end
+elif .type == "user" then
+  (.message.content // [])[]
+  | select(type == "object" and .type == "tool_result" and .is_error == true)
+  | ["toolerr", ((.content // "") | blocktext | firstline)]
+elif .type == "result" then
+  ["result", (.duration_ms // 0), (.num_turns // 0), (.total_cost_usd // 0),
+   (.is_error // false)]
+else empty end
+| @tsv
+JQ
+
+stamp() {
+  local s=$((SECONDS - START))
+  printf '%d:%02d' $((s / 60)) $((s % 60))
+}
+
+# truncate <max> <text>: cut to max characters with a trailing ellipsis
+truncate() {
+  local max="$1" text="$2"
+  if [[ ${#text} -gt $max ]]; then
+    printf '%s…' "${text:0:max-1}"
+  else
+    printf '%s' "$text"
+  fi
+}
+
+# On a TTY the heartbeat is a single rewritten line; wipe it before any
+# real output. Elsewhere it is a plain line and nothing needs clearing.
+clear_heartbeat() {
+  if [[ $HEARTBEAT_SHOWN -eq 1 ]]; then
+    [[ $TTY -eq 1 ]] && printf '\r\033[K' >&2
+    HEARTBEAT_SHOWN=0
+  fi
+}
+
+heartbeat() {
+  local idle=$((SECONDS - LAST))
+  if [[ $TTY -eq 1 ]]; then
+    printf '\r\033[K%s… thinking %ds%s' "$DIM" "$idle" "$RESET" >&2
+  else
+    printf '… thinking %ds\n' "$idle" >&2
+  fi
+  HEARTBEAT_SHOWN=1
+}
+
+line_init() {
+  clear_heartbeat
+  printf '%s[%s] claude %s%s\n' "$DIM" "$(stamp)" "$1" "$RESET" >&2
+}
+
+line_tool() {
+  clear_heartbeat
+  printf '%s[%s]%s %s%-8s%s %s\n' "$DIM" "$(stamp)" "$RESET" "$BOLD" "$1" "$RESET" \
+    "$(truncate $((WIDTH - 17)) "$2")" >&2
+}
+
+line_toolerr() {
+  clear_heartbeat
+  printf '%s[%s]%s %s✗ error%s  %s\n' "$DIM" "$(stamp)" "$RESET" "$RED" "$RESET" \
+    "$(truncate $((WIDTH - 17)) "$1")" >&2
+}
+
+line_text() {
+  local text="$1"
+  [[ -n "${text//[[:space:]]/}" ]] || return 0
+  clear_heartbeat
+  printf '%s[%s] · %s%s\n' "$DIM" "$(stamp)" "$(truncate $((WIDTH - 10)) "$text")" "$RESET" >&2
+}
+
+# fmt_duration <ms>: 4m58s or 6s
+fmt_duration() {
+  local s=$(($1 / 1000))
+  if [[ $s -ge 60 ]]; then
+    printf '%dm%02ds' $((s / 60)) $((s % 60))
+  else
+    printf '%ds' "$s"
+  fi
+}
+
+line_result() {
+  local ms="$1" turns="$2" cost="$3" is_error="$4" tail=""
+  clear_heartbeat
+  [[ "$is_error" == "true" ]] && tail=" · ${RED}error${RESET}"
+  printf '%sduration %s · turns %s · $%.2f%s%s\n' "$DIM" "$(fmt_duration "$ms")" "$turns" \
+    "$cost" "$tail" "$RESET" >&2
+  if [[ -n "$METRICS" ]]; then
+    printf '%s %s %s %s\n' "$ms" "$turns" "$cost" "$is_error" >> "$METRICS"
+  fi
+}
+
+handle() {
+  local line="$1" kind a b c d
+  [[ "$line" == \{* ]] || return 0
+  LAST=$SECONDS
+  while IFS=$'\t' read -r kind a b c d; do
+    case "$kind" in
+      init)    line_init "$a" ;;
+      tool)    line_tool "$a" "$b" ;;
+      toolerr) line_toolerr "$a" ;;
+      text)    line_text "$a" ;;
+      result)  line_result "$a" "$b" "$c" "$d" ;;
+    esac
+  done < <(printf '%s\n' "$line" | jq -r "$JQ_CLASSIFY" 2>/dev/null)
+  if [[ "$line" == *'"type":"result"'* ]]; then
+    printf '%s\n' "$line" | jq -r 'select(.type == "result") | .result // empty' 2>/dev/null
+  fi
+}
+
+# read -t returns >128 on timeout and 1 on EOF (possibly with a final
+# unterminated line still in $line).
+while true; do
+  if [[ $HEARTBEAT -gt 0 ]]; then
+    IFS= read -r -t "$HEARTBEAT" line && rc=0 || rc=$?
+  else
+    IFS= read -r line && rc=0 || rc=$?
+  fi
+  if [[ $rc -eq 0 ]]; then
+    handle "$line"
+  elif [[ $rc -gt 128 ]]; then
+    heartbeat
+  else
+    [[ -n "${line:-}" ]] && handle "$line"
+    break
+  fi
+done
+clear_heartbeat
+exit 0

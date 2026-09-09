@@ -7,19 +7,28 @@
 # Options:
 #   -c, --client CLIENT    Specify AI CLI client: claude or gemini (default: $ZOCIETY_AGENT_CLIENT or claude)
 #   -m, --model MODEL      Specify the LLM model to use
-#   -v, --verbose          Enable verbose output streaming
+#   -r, --render MODE      Output rendering: text (default; the client's
+#                          buffered result), compact (stream-json rendered
+#                          live by bin/zrender: tool lines and a cost footer
+#                          on stderr, result text on stdout), or raw
+#                          (stream-json passthrough incl. partial messages)
+#   -v, --verbose          Same as --render raw
 #   -h, --help             Show this help
 #
 # Environment:
 #   ZOCIETY_AGENT_CLIENT   Defaults to "claude" if not specified.
 #   ANTHROPIC_MODEL        Passed to Claude if specified.
 #   GEMINI_MODEL           Passed to Gemini CLI if specified.
+#
+# compact is claude-only: bin/zrender reads claude's event schema. For gemini
+# it falls back to text with a note on stderr.
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLIENT="${ZOCIETY_AGENT_CLIENT:-claude}"
 MODEL=""
-VERBOSE=0
+RENDER="text"
 PROMPT=""
 
 usage() {
@@ -42,8 +51,16 @@ while [[ $# -gt 0 ]]; do
       MODEL="$2"
       shift
       ;;
+    -r|--render)
+      [[ $# -ge 2 ]] || { echo "Error: $1 requires a value" >&2; exit 2; }
+      case "$2" in
+        text|compact|raw) RENDER="$2" ;;
+        *) echo "Error: --render expects text, compact or raw, got '$2'" >&2; exit 2 ;;
+      esac
+      shift
+      ;;
     -v|--verbose)
-      VERBOSE=1
+      RENDER="raw"
       ;;
     -*)
       echo "Error: Unknown option '$1'" >&2
@@ -77,11 +94,21 @@ case "$CLIENT" in
     if [[ -n "$MODEL" ]]; then
       CLAUDE_ARGS+=(--model "$MODEL")
     fi
-    if [[ "$VERBOSE" == "1" ]]; then
-      CLAUDE_ARGS+=(--verbose --output-format stream-json --include-partial-messages)
-    fi
+    # --print needs --verbose for stream-json output. raw adds the partial
+    # (delta) messages; compact leaves them out and pipes through bin/zrender.
+    case "$RENDER" in
+      raw)     CLAUDE_ARGS+=(--verbose --output-format stream-json --include-partial-messages) ;;
+      compact) CLAUDE_ARGS+=(--verbose --output-format stream-json) ;;
+    esac
     CLAUDE_ARGS+=("$PROMPT")
-    
+
+    if [[ "$RENDER" == "compact" ]]; then
+      # pipefail: the pipeline fails when claude fails. `&& exit 0` keeps
+      # errexit out of the way so claude's own status (PIPESTATUS[0]), not the
+      # rightmost non-zero one, is what the caller sees.
+      claude "${CLAUDE_ARGS[@]}" | "$SCRIPT_DIR/zrender" && exit 0
+      exit "${PIPESTATUS[0]}"
+    fi
     exec claude "${CLAUDE_ARGS[@]}"
     ;;
 
@@ -94,11 +121,16 @@ case "$CLIENT" in
     if [[ -n "$MODEL" ]]; then
       GEMINI_ARGS+=(-m "$MODEL")
     fi
-    if [[ "$VERBOSE" == "1" ]]; then
-      # Gemini's streaming output mode is stream-json
-      GEMINI_ARGS+=(-o stream-json)
-    fi
-    
+    case "$RENDER" in
+      raw)
+        # Gemini's streaming output mode is stream-json
+        GEMINI_ARGS+=(-o stream-json)
+        ;;
+      compact)
+        echo "zagent: --render compact is claude-only; running gemini with text output" >&2
+        ;;
+    esac
+
     exec gemini "${GEMINI_ARGS[@]}"
     ;;
 
