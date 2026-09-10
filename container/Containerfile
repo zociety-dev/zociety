@@ -6,6 +6,12 @@ FROM docker.io/library/node:20-trixie-slim
 LABEL org.opencontainers.image.title="zociety"
 LABEL org.opencontainers.image.description="Fully containerized Claude Code environment for zociety agent loops"
 
+# apt hardening: deb.debian.org's CDN sometimes answers pipelined requests out
+# of order, which apt reports as "Hash Sum mismatch" (a tiny metapackage
+# arriving as a multi-MB body). Disable pipelining and retry transient fetches.
+RUN printf 'Acquire::http::Pipeline-Depth "0";\nAcquire::Retries "3";\n' \
+    > /etc/apt/apt.conf.d/99zociety-no-pipeline
+
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
