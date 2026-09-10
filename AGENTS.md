@@ -145,8 +145,10 @@ All state is derived from git history. No mutable state files.
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
 | `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode) |
-| `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
+| `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
+| `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
+| `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host |
 | `bin/zpromise` | Output completion promise |
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |

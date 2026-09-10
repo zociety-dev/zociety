@@ -1,9 +1,14 @@
 #!/bin/bash
-# zpr: Open (and optionally merge) a pull request for a completed cycle
+# zpr-flow: Open (and optionally merge) a pull request for a completed cycle
+#
+# A workflow command (invoked by bin/zheap-death), not a host convenience: it
+# runs as zociety-dev inside the container, where gh is present and
+# authenticated via GH_TOKEN. On the host, bin/zgh/bin/zgit route its gh/git
+# calls into the container, so it needs no gh-availability guards of its own.
 #
 # Usage:
-#   bin/zpr <head_branch> [base_branch] [title]
-#   bin/zpr -h | --help
+#   bin/zpr-flow <head_branch> [base_branch] [title]
+#   bin/zpr-flow -h | --help
 #
 # Arguments:
 #   head_branch  Branch to merge FROM (e.g. cycle/rev35-attempt1). Required.
@@ -17,9 +22,7 @@
 #                        of merging immediately.
 #   ZPR_DRAFT=1          Open the PR as a draft.
 #
-# Requires the `gh` CLI, authenticated. If gh is missing or unauthenticated,
-# exits non-zero with a clear message; callers that treat the PR as optional
-# should guard the call with `|| true`.
+# Callers that treat the PR as optional should guard the call with `|| true`.
 #
 # Not an event: this is a GitHub side-effect utility (like zlog/zcheck). It does
 # not write a zevent and does not touch git-derived state.
@@ -50,28 +53,18 @@ if [[ -z "$HEAD_BRANCH" ]]; then
 fi
 
 if [[ "$HEAD_BRANCH" == "$BASE_BRANCH" ]]; then
-  echo "zpr: head and base are both '$HEAD_BRANCH'; nothing to open" >&2
+  echo "zpr-flow: head and base are both '$HEAD_BRANCH'; nothing to open" >&2
   exit 1
 fi
 
-if ! command -v gh &>/dev/null; then
-  echo "zpr: gh CLI not found; install it or guard this call with || true" >&2
-  exit 2
-fi
-
-if ! gh auth status &>/dev/null; then
-  echo "zpr: gh is not authenticated; run 'gh auth login'" >&2
-  exit 2
-fi
-
 if ! git remote get-url origin &>/dev/null; then
-  echo "zpr: no 'origin' remote; cannot open a PR" >&2
+  echo "zpr-flow: no 'origin' remote; cannot open a PR" >&2
   exit 2
 fi
 
 # Ensure the head branch is on origin so gh can open the PR against it.
 git push origin "$HEAD_BRANCH" --quiet 2>/dev/null || {
-  echo "zpr: failed to push $HEAD_BRANCH to origin" >&2
+  echo "zpr-flow: failed to push $HEAD_BRANCH to origin" >&2
   exit 3
 }
 
@@ -84,7 +77,7 @@ for ref in "origin/$BASE_BRANCH" "$BASE_BRANCH"; do
   fi
 done
 if [[ "$COMMITS" -eq 0 ]]; then
-  echo "zpr: no commits between $BASE_BRANCH and $HEAD_BRANCH; nothing to open"
+  echo "zpr-flow: no commits between $BASE_BRANCH and $HEAD_BRANCH; nothing to open"
   exit 0
 fi
 
@@ -94,7 +87,7 @@ EXISTING=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" \
 
 if [[ -n "$EXISTING" ]]; then
   PR_NUM="$EXISTING"
-  echo "zpr: reusing open PR #$PR_NUM for $HEAD_BRANCH -> $BASE_BRANCH"
+  echo "zpr-flow: reusing open PR #$PR_NUM for $HEAD_BRANCH -> $BASE_BRANCH"
 else
   if [[ -z "$TITLE" ]]; then
     SUBJECT=$(git log -1 --format='%s' "$HEAD_BRANCH" 2>/dev/null || echo "")
@@ -117,12 +110,12 @@ else
     "" \
     "${HEAP:+Heap-death: $HEAP}" \
     "" \
-    "Opened by bin/zpr.")
+    "Opened by bin/zpr-flow.")
 
   DRAFT_FLAG=()
   [[ "${ZPR_DRAFT:-0}" == "1" ]] && DRAFT_FLAG=(--draft)
 
-  echo "zpr: opening PR $HEAD_BRANCH -> $BASE_BRANCH ..."
+  echo "zpr-flow: opening PR $HEAD_BRANCH -> $BASE_BRANCH ..."
   gh pr create \
     --head "$HEAD_BRANCH" \
     --base "$BASE_BRANCH" \
@@ -134,7 +127,7 @@ else
     --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
 fi
 
-echo "zpr: PR ready${PR_NUM:+ (#$PR_NUM)}"
+echo "zpr-flow: PR ready${PR_NUM:+ (#$PR_NUM)}"
 
 # Merge only when explicitly requested.
 if [[ "$MERGE" == "1" && -n "$PR_NUM" ]]; then
@@ -147,7 +140,7 @@ if [[ "$MERGE" == "1" && -n "$PR_NUM" ]]; then
   AUTO_FLAG=()
   [[ "${ZPR_AUTO:-0}" == "1" ]] && AUTO_FLAG=(--auto)
 
-  echo "zpr: merging PR #$PR_NUM ($MERGE_METHOD${ZPR_AUTO:+, auto})..."
+  echo "zpr-flow: merging PR #$PR_NUM ($MERGE_METHOD${ZPR_AUTO:+, auto})..."
   gh pr merge "$PR_NUM" "$METHOD_FLAG" "${AUTO_FLAG[@]}" \
     || echo "  (merge not completed - PR left open for #$PR_NUM)"
 fi
