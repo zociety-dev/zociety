@@ -12,7 +12,7 @@
 #   - docs/archive.html + docs/archive/<tag>.html (every rev* tag's
 #     stuff/*.md, read with `git show <tag>:<path>`)
 #   - docs/PROMPT.md (current prompt)
-#   - docs/provenance.html + docs/CLAUDE.marked.md + docs/fonts/
+#   - docs/provenance.html + docs/AGENTS.marked.md + docs/fonts/
 #     (P+ provenance demo via bin/nfprov-blame.py; fonts from site/fonts/)
 
 set -euo pipefail
@@ -796,6 +796,9 @@ if [[ -n "$PROVENANCE_BLAME_JSON" ]]; then
     PROV_MARKED_NAME="$(basename "${PROV_FILE%.md}").marked.md"
 
     # The marked text is a real file: open it in VS Code with a P+ font.
+    # Drop any earlier run's marked file first (the source file was renamed
+    # once already, CLAUDE.md -> AGENTS.md) so only the current one ships.
+    rm -f "$DOCS_DIR"/*.marked.md
     prov_jq -j '.marked' > "$DOCS_DIR/$PROV_MARKED_NAME"
 
     # Eight distinct hues at low alpha on the dark background, assigned to

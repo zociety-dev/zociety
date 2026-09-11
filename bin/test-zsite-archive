@@ -1,0 +1,133 @@
+#!/bin/bash
+# test-zsite-archive: Prove the site archive (docs/archive.html and
+# docs/archive/<tag>.html) is a pure function of the rev* tags
+#
+# Usage:
+#   bin/test-zsite-archive [--keep]
+#   bin/test-zsite-archive -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway copy behind (path printed) for inspection
+#
+# Copies this repo (working tree and .git) under mktemp and runs
+# bin/zsite-generate there with the provenance demo switched off
+# (NFPROV_BLAME_JSON_FILE pointed at a missing file), so nothing here
+# touches the real docs/ and no event is committed. Cases:
+#   1. every rev* tag whose tree holds stuff/*.md gets one page, listed on
+#      archive.html, and no other tag does
+#   2. the newest such tag's page holds one artifact per stuff/*.md in the
+#      tag, each with the file's first h1 as its title
+#   3. deleting stuff/ from the working tree changes no archive byte
+#   4. running the generator twice changes no archive byte
+#   5. deleting the newest tag removes its page and its index entry
+
+set -e
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep) KEEP=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+PASS=0
+FAIL=0
+ok()   { PASS=$((PASS + 1)); echo "  ✓ $*"; }
+fail() { FAIL=$((FAIL + 1)); echo "  ✗ $*" >&2; }
+check() { # check <description> <command...>
+  local desc="$1"; shift
+  if "$@" >/dev/null 2>&1; then ok "$desc"; else fail "$desc"; fi
+}
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zsite-archive.XXXXXX")
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then
+    echo "kept: $TMP"
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+echo "Copying repo to $TMP/repo..."
+cp -R "$REPO" "$TMP/repo"
+cd "$TMP/repo"
+
+# The generator is silent about the archive only when nothing changes; keep
+# its own chatter out of the way and fail loudly on a non-zero exit.
+generate() {
+  NFPROV_BLAME_JSON_FILE="$TMP/no-such-blame.json" bin/zsite-generate >"$TMP/generate.log" 2>&1 \
+    || { echo "bin/zsite-generate failed:" >&2; tail -20 "$TMP/generate.log" >&2; exit 1; }
+}
+
+# Tags with top-level stuff/*.md, version order; the newest is the subject
+# of the content checks.
+tags_with_stuff() {
+  local t
+  for t in $(git tag | grep '^rev' | sort -V); do
+    if git ls-tree --name-only "$t" stuff/ 2>/dev/null | grep -q '\.md$'; then
+      echo "$t"
+    fi
+  done
+}
+EXPECTED_TAGS=$(tags_with_stuff)
+EXPECTED_COUNT=$(printf '%s\n' "$EXPECTED_TAGS" | grep -c . || true)
+NEWEST=$(printf '%s\n' "$EXPECTED_TAGS" | tail -1)
+if [[ "$EXPECTED_COUNT" -eq 0 ]]; then
+  echo "no rev* tag holds stuff/*.md; nothing to test" >&2
+  exit 2
+fi
+
+echo "Case 1: one page per tag with stuff ($EXPECTED_COUNT tags)"
+generate
+check "archive.html exists" test -f docs/archive.html
+PAGES=$(ls docs/archive 2>/dev/null | sed 's/\.html$//' | sort -V)
+check "page set equals tag set" test "$PAGES" = "$EXPECTED_TAGS"
+LISTED=$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | sed 's#.*/##; s/\.html"//' | sort -u | sort -V)
+check "index lists exactly those tags" test "$LISTED" = "$EXPECTED_TAGS"
+
+echo "Case 2: $NEWEST page content"
+PAGE="docs/archive/$NEWEST.html"
+NFILES=$(git ls-tree --name-only "$NEWEST" stuff/ | grep -c '\.md$')
+NARTIFACTS=$(grep -c 'class="artifact"' "$PAGE" || true)
+check "one artifact per stuff/*.md ($NFILES)" test "$NARTIFACTS" -eq "$NFILES"
+while IFS= read -r f; do
+  base=$(basename "$f" .md)
+  title=$(git show "$NEWEST:$f" | grep -m1 '^# ' | sed 's/^# //')
+  [[ -z "$title" ]] && title="$base.md"
+  check "artifact-$base is anchored" grep -q "id=\"artifact-$base\"" "$PAGE"
+  check "artifact-$base titled '$title'" grep -qF ">$title</a>" "$PAGE"
+done < <(git ls-tree --name-only "$NEWEST" stuff/ | grep '\.md$')
+
+echo "Case 3: working tree stuff/ is not consulted"
+cp -R docs/archive "$TMP/archive.before"
+cp docs/archive.html "$TMP/archive.html.before"
+rm -rf stuff
+generate
+check "archive/ unchanged without stuff/" diff -r "$TMP/archive.before" docs/archive
+check "archive.html unchanged without stuff/" diff "$TMP/archive.html.before" docs/archive.html
+
+echo "Case 4: regeneration is byte-stable"
+generate
+check "archive/ unchanged on rerun" diff -r "$TMP/archive.before" docs/archive
+check "archive.html unchanged on rerun" diff "$TMP/archive.html.before" docs/archive.html
+
+echo "Case 5: a page exists exactly as long as its tag"
+git tag -d "$NEWEST" >/dev/null
+generate
+check "page removed with tag" test ! -e "$PAGE"
+check "index entry removed with tag" bash -c "! grep -q 'archive/$NEWEST.html' docs/archive.html"
+check "other pages intact" test "$(ls docs/archive | wc -l | tr -d ' ')" -eq $((EXPECTED_COUNT - 1))
+
+echo
+echo "passed $PASS, failed $FAIL"
+[[ $FAIL -eq 0 ]]
