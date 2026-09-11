@@ -289,6 +289,77 @@ assert_out '^=== Max Iterations Reached ===$'
 assert_claude_runs 2
 echo ""
 
+echo "=== Case 8: the context block is regenerated per iteration, with commands and thresholds ==="
+fresh_repo prompt-per-iteration
+cat > "$TMP/joining.sh" <<'EOF'
+#!/bin/bash
+set -e
+echo "fake claude ran"
+echo "$(date +%s) $*" | tr '\n' ' ' >> "$FAKE_CLAUDE_LOG"
+echo >> "$FAKE_CLAUDE_LOG"
+# One join per turn, so the next iteration's bin/zstate differs from this one's.
+bin/zevent join fake "synthetic join" '{"role":"tester"}' >> "$FAKE_CLAUDE_LOG.err" 2>&1
+exit 0
+EOF
+chmod +x "$TMP/joining.sh"
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+cp "$TMP/joining.sh" "$FAKEBIN/claude"
+run env ZLOOP_INTERVAL=0 bin/zga-loop 3 fake-model
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+assert_rc 0
+assert_claude_runs 3
+assert_eq "every iteration got a context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 3
+assert_eq "iteration 1 prompt has 0 members" "$(sed -n 1p "$FAKE_LOG" | grep -c '\"members\":0')" 1
+assert_eq "iteration 3 prompt has 2 members" "$(sed -n 3p "$FAKE_LOG" | grep -c '\"members\":2')" 1
+assert_eq "prompt carries command usage, not just names" "$(grep -c 'bin/zjoin \[name\] \[role\] \[greeting\] - Join the zociety' "$FAKE_LOG")" 3
+assert_eq "prompt carries the genesis thresholds" "$(grep -c 'Genesis completes at 3+ members' "$FAKE_LOG")" 3
+echo ""
+
+# A CI run that fails to seal every iteration leaves the cycle with nothing to
+# reveal at heap-death. Same escalation as bin/zloop, same threshold.
+echo "=== Case 9: consecutive zblind seal failures abort the run (exit 4) ==="
+fresh_repo seal-abort
+printf '#!/bin/bash\necho "zblind: synthetic seal failure" >&2\nexit 1\n' > bin/zblind
+chmod +x bin/zblind
+run env ZLOOP_INTERVAL=0 ZLOOP_MAX_SEAL_FAILURES=2 bin/zga-loop 5 fake-model
+assert_rc 4
+assert_out '^WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(1 consecutive\); those commits carry no provenance note$'
+assert_out '^WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(2 consecutive\); those commits carry no provenance note$'
+assert_out '^=== Loop Aborted ===$'
+assert_out '^2 consecutive zblind seal failures; the run has no provenance record at all'
+assert_claude_runs 2
+echo ""
+
+echo "=== Case 10: ZLOOP_MAX_SEAL_FAILURES=0 warns forever and never aborts ==="
+fresh_repo seal-noabort
+printf '#!/bin/bash\nexit 1\n' > bin/zblind
+chmod +x bin/zblind
+run env ZLOOP_INTERVAL=0 ZLOOP_MAX_SEAL_FAILURES=0 bin/zga-loop 2 fake-model
+assert_rc 0
+assert_out '\(2 consecutive\); those commits carry no provenance note$'
+assert_no_out '^=== Loop Aborted ===$'
+assert_claude_runs 2
+echo ""
+
+# The default local/CI-without-secret setup: bin/zblind exits 0 and says it
+# skipped. Not a failure, must never trip the abort.
+echo "=== Case 11: a seal skipped for a missing ZOCIETY_BLIND_KEY is not a failure ==="
+fresh_repo seal-skipped
+run env -u ZOCIETY_BLIND_KEY ZLOOP_INTERVAL=0 ZLOOP_MAX_SEAL_FAILURES=1 bin/zga-loop 2 fake-model
+assert_rc 0
+assert_no_out 'zblind seal failed'
+assert_no_out '^=== Loop Aborted ===$'
+assert_claude_runs 2
+echo ""
+
+echo "=== Case 12: a non-integer ZLOOP_MAX_SEAL_FAILURES is a usage error ==="
+fresh_repo bad-seal-knob
+run env ZLOOP_MAX_SEAL_FAILURES=never bin/zga-loop 1 fake-model
+assert_rc 2
+assert_out "^zga-loop: MAX_SEAL_FAILURES expects a non-negative integer, got 'never'$"
+assert_claude_runs 0
+echo ""
+
 #############################################
 # Summary
 #############################################
