@@ -975,16 +975,26 @@ echo ""
 # unenforced rather than silently losing its only backstop against a hung agent.
 echo "=== Case 35k: no timeout(1) on PATH warns and runs unbounded ==="
 fresh_repo no-timeout-cmd
-# Drop only the PATH entries that provide timeout(1) (homebrew coreutils on
-# macOS, /usr/bin on Linux) rather than whitelisting a minimal PATH: zloop
-# shells out to git, jq and claude, and a hand-built PATH starves them.
+# Drop only the PATH entries that provide timeout(1) rather than
+# whitelisting a minimal PATH: zloop shells out to git, jq and claude, and a
+# hand-built PATH starves them. On a merged-/usr Linux (the container) that
+# is /usr/bin, which also holds bash, git and jq -- so every dropped dir is
+# mirrored into a symlink farm with timeout(1) alone left out. On macOS the
+# dropped dir is usually just homebrew coreutils and the farm is nearly empty.
 notimeout_path=""
+notimeout_bin="$TMP/notimeout-bin"
+rm -rf "$notimeout_bin"
+mkdir -p "$notimeout_bin"
 while IFS= read -r d; do
-  if [[ -z "$d" || -x "$d/timeout" ]]; then
+  [[ -z "$d" ]] && continue
+  if [[ -x "$d/timeout" ]]; then
+    ln -s "$d"/* "$notimeout_bin/" 2>/dev/null || true
     continue
   fi
   notimeout_path="${notimeout_path:+$notimeout_path:}$d"
 done < <(printf '%s\n' "${PATH//:/$'\n'}")
+rm -f "$notimeout_bin/timeout"
+notimeout_path="$notimeout_bin${notimeout_path:+:$notimeout_path}"
 if PATH="$notimeout_path" command -v timeout >/dev/null 2>&1; then
   fail "could not build a PATH without timeout(1); skipping"
 else
@@ -1033,10 +1043,23 @@ prompt=$(bin/zprompt --budget 30)
 assert_eq "prompt opens with PROMPT.md" "$(printf '%s\n' "$prompt" | head -n1)" "Read PROMPT.md and follow its instructions."
 assert_eq "prompt has the context header" "$(printf '%s\n' "$prompt" | grep -c '^## Where things stand')" 1
 assert_eq "prompt carries zstate action" "$(printf '%s\n' "$prompt" | grep -c '^bin/zstate: .*"action":"contribute"')" 1
+# PROMPT.md tells the agent to obey .next, so the block names the short leg
+# instead of leaving it inside the one-line JSON blob above.
+assert_eq "prompt names the short genesis leg" "$(printf '%s\n' "$prompt" | grep -c '^Do this: contribute:member (still needed: 3 member(s), 2 passed rule(s), 3 stuff)$')" 1
 assert_eq "prompt carries the latest direction" "$(printf '%s\n' "$prompt" | grep -c '^Latest direction: \[direction\] tester: Cycle 1 asked: does the harness prove anything?$')" 1
 assert_eq "prompt carries the latest heap-death" "$(printf '%s\n' "$prompt" | grep -c '^Latest heap-death: \[heap-death\] tester: synthetic heap-death$')" 1
 assert_eq "prompt carries the branch" "$(printf '%s\n' "$prompt" | grep -c '^Branch: main$')" 1
-assert_eq "prompt lists the agent commands" "$(printf '%s\n' "$prompt" | grep -c '^Commands: .*bin/zjoin .*bin/zstuff .*bin/zvote .*(each takes --help)$')" 1
+assert_eq "prompt heads the command block" "$(printf '%s\n' "$prompt" | grep -c '^Commands (each also takes --help')" 1
+# Usage, not just a name: the turns that prompted this fix spent two or three
+# calls on `bin/z* --help` before they could invoke anything.
+assert_eq "prompt gives zjoin's usage and purpose" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zjoin \[name\] \[role\] \[greeting\] - Join the zociety$')" 1
+assert_eq "prompt gives zstuff's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zstuff <agent> <file> \[traversal\] - Record stuff creation$')" 1
+assert_eq "prompt gives zvote's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zvote <agent> <rule_number> <yes|no> \[reason\] - Vote on a rule$')" 1
+assert_eq "prompt gives zheap-death's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death \[--done\] <agent> <question> \[batch_size\] - ')" 1
+# zcomplete/zpromise have no Usage: line in their headers; the name alone is
+# the usage, and the block must still list them rather than drop them.
+assert_eq "prompt lists the argument-free commands" "$(printf '%s\n' "$prompt" | grep -c -e '^  bin/zcomplete - ' -e '^  bin/zpromise - ')" 2
+assert_eq "prompt carries the genesis thresholds" "$(printf '%s\n' "$prompt" | grep -c '^Genesis completes at 3+ members, 2+ passed rules, 3+ stuff items')" 1
 assert_eq "prompt does not list the loop plumbing" "$(printf '%s\n' "$prompt" | grep -c 'bin/zloop\|bin/zstop-\|bin/zprompt')" 0
 assert_eq "prompt carries the recent log" "$(printf '%s\n' "$prompt" | grep -c '^  [0-9a-f]\{7,\} \[direction\] tester:')" 1
 assert_eq "prompt ends with the budget" "$(printf '%s\n' "$prompt" | grep -c 'about 30 seconds of wall-clock time')" 1
@@ -1056,6 +1079,36 @@ assert_rc 2
 assert_err "^zprompt: --budget expects a non-negative integer, got 'x'$"
 echo ""
 
+# Orientation, the other half: a prompt built once per run hands iteration 5
+# iteration 1's world, so the turn re-derives state anyway and the context
+# block is worse than useless (it is stale). bin/zloop regenerates it before
+# every iteration.
+echo "=== Case 35o: bin/zloop regenerates the context block every iteration ==="
+fresh_repo prompt-per-iteration
+cat > "$TMP/joining.sh" <<'EOF'
+#!/bin/bash
+set -e
+echo "fake claude ran"
+echo "$(date +%s) $*" | tr '\n' ' ' >> "$FAKE_CLAUDE_LOG"
+echo >> "$FAKE_CLAUDE_LOG"
+# One join per turn, so the next iteration's bin/zstate differs from this one's.
+bin/zevent join fake "synthetic join" '{"role":"tester"}' >> "$FAKE_CLAUDE_LOG.err" 2>&1
+exit 0
+EOF
+chmod +x "$TMP/joining.sh"
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+cp "$TMP/joining.sh" "$FAKEBIN/claude"
+run bin/zloop --budget 30 --max 3
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+assert_rc 1
+assert_claude_runs 3
+# Iteration 1 sees no members; 2 and 3 see the joins the earlier turns made.
+assert_eq "iteration 1 prompt has 0 members" "$(sed -n 1p "$FAKE_LOG" | grep -c '"members":0')" 1
+assert_eq "iteration 2 prompt has 1 member" "$(sed -n 2p "$FAKE_LOG" | grep -c '"members":1')" 1
+assert_eq "iteration 3 prompt has 2 members" "$(sed -n 3p "$FAKE_LOG" | grep -c '"members":2')" 1
+assert_eq "every iteration got a context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 3
+echo ""
+
 echo "=== Case 36: bin/zrender heartbeat, error footer and metrics file ==="
 slow_stream() {
   echo '{"type":"system","subtype":"init","model":"claude-fake"}'
@@ -1071,6 +1124,173 @@ assert_eq "stdout" "$(cat "$OUT")" "partial answer"
 assert_err '^… thinking [12]s$'
 assert_err '^duration 1m05s · turns 7 · [$]1\.50 · error$'
 assert_eq "metrics" "$(cat "$metrics")" "65000 7 1.5 true"
+echo ""
+
+# An undifferentiated action="contribute" let iterations pile onto the
+# cheapest command (bin/zjoin) while rules never started: a real 5-iteration
+# run ended at 4 members / 0 rules / 1 stuff. bin/zstate now reports the
+# remaining genesis legs (needs) and a deficit-qualified next.
+echo "=== Case 36b: bin/zstate needs/next name the short genesis leg ==="
+fresh_repo zstate-needs
+
+# zev <type>: record a genesis event via bin/zevent, quietly
+zev() {
+  bin/zevent "$1" tester "fixture $1" '{}' >/dev/null 2>&1
+}
+
+# No events at all: the initial state carries the full requirement.
+assert_eq "initial action" "$(bin/zstate | jq -r .action)" join
+assert_eq "initial next" "$(bin/zstate | jq -r .next)" join
+assert_eq "initial needs" "$(bin/zstate | jq -c .needs)" '{"members":3,"rules":2,"stuff":3}'
+
+# Members are the first priority while short.
+zev join
+assert_eq "one member action" "$(bin/zstate | jq -r .action)" contribute
+assert_eq "one member next" "$(bin/zstate | jq -r .next)" contribute:member
+assert_eq "one member needs" "$(bin/zstate | jq -c .needs)" '{"members":2,"rules":2,"stuff":3}'
+
+# Stuff alone does not change the priority: members still come first.
+zev stuff
+assert_eq "stuff does not outrank members" "$(bin/zstate | jq -r .next)" contribute:member
+assert_eq "needs after one stuff" "$(bin/zstate | jq -c .needs)" '{"members":2,"rules":2,"stuff":2}'
+
+# Members satisfied (and then overshot): rules are next, and the overshot
+# leg reports 0 rather than a negative count.
+zev join
+zev join
+zev join
+assert_eq "overshot members report 0" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":2,"stuff":2}'
+assert_eq "genesis members" "$(bin/zstate | jq -r .genesis.members)" 4
+assert_eq "rules are next" "$(bin/zstate | jq -r .next)" contribute:rule
+assert_eq "action stays stable" "$(bin/zstate | jq -r .action)" contribute
+
+# Rules satisfied: stuff is next.
+zev pass
+zev pass
+assert_eq "stuff is next" "$(bin/zstate | jq -r .next)" contribute:stuff
+assert_eq "needs after rules" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":0,"stuff":2}'
+
+# A [heap-death] mid-batch still recommends contribute, now qualified.
+heap_death '{"batch_remaining":1}'
+assert_eq "mid-batch action" "$(bin/zstate | jq -r .action)" contribute
+assert_eq "mid-batch next" "$(bin/zstate | jq -r .next)" contribute:stuff
+
+# Special cases are unchanged, and next mirrors action for all of them.
+heap_death '{"batch_remaining":0}'
+assert_eq "heap-death batch 0 action" "$(bin/zstate | jq -r .action)" promise
+assert_eq "heap-death batch 0 next" "$(bin/zstate | jq -r .next)" promise
+
+zev stuff
+zev stuff
+assert_eq "genesis complete" "$(bin/zstate | jq -r .genesis.complete)" true
+assert_eq "complete action" "$(bin/zstate | jq -r .action)" complete
+assert_eq "complete next" "$(bin/zstate | jq -r .next)" complete
+assert_eq "complete needs are zero" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":0,"stuff":0}'
+
+bin/zevent complete tester "fixture complete" '{}' >/dev/null 2>&1
+assert_eq "after complete action" "$(bin/zstate | jq -r .action)" heap-death
+assert_eq "after complete next" "$(bin/zstate | jq -r .next)" heap-death
+
+bin/zevent promise tester "fixture promise" '{"terminal":true}' >/dev/null 2>&1
+assert_eq "after promise action" "$(bin/zstate | jq -r .action)" stop
+assert_eq "after promise next" "$(bin/zstate | jq -r .next)" stop
+# The stop predicate keeps matching on the unqualified action.
+run bin/zstop-action
+assert_rc 0
+assert_eq "zstop-action verdict" "$(cat "$OUT")" "STOP: action action=stop"
+echo ""
+
+
+# A seal that fails on every iteration means the whole run has no provenance.
+# Before this it printed "(continuing)" five times out of five and the loop
+# shrugged. Same shape as the hard-kill streak: warn, then abort.
+echo "=== Case 38: consecutive zblind seal failures abort the run (exit 4) ==="
+fresh_repo seal-abort
+printf '#!/bin/bash\necho "zblind: synthetic seal failure" >&2\nexit 1\n' > bin/zblind
+chmod +x bin/zblind
+run env ZLOOP_MAX_SEAL_FAILURES=2 bin/zloop --budget 30 --max 5
+assert_rc 4
+assert_err '^\[zloop\] WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(1 consecutive\)$'
+assert_err '^\[zloop\] WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(2 consecutive\)$'
+assert_err '^=== Loop Aborted ===$'
+assert_err '^2 consecutive zblind seal failures\.$'
+assert_err 'ZLOOP_MAX_SEAL_FAILURES=0 to accept an unsealed run'
+assert_claude_runs 2
+assert_absent .claude/zloop.state
+echo ""
+
+echo "=== Case 38b: ZLOOP_MAX_SEAL_FAILURES=0 warns forever and never aborts ==="
+fresh_repo seal-noabort
+printf '#!/bin/bash\nexit 1\n' > bin/zblind
+chmod +x bin/zblind
+run env ZLOOP_MAX_SEAL_FAILURES=0 bin/zloop --budget 30 --max 3
+assert_rc 1
+assert_err '^\[zloop\] WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(3 consecutive\)$'
+assert_no_err '^=== Loop Aborted ==='
+assert_claude_runs 3
+echo ""
+
+echo "=== Case 38c: one seal failure between successes does not abort (streak resets) ==="
+fresh_repo seal-streak-reset
+# shellcheck disable=SC2016  # the single quotes are the point: printf emits shell
+printf '#!/bin/bash\n[[ "$1" == "seal" ]] || exit 0\nn=$(cat "%s" 2>/dev/null || echo 0)\nn=$((n + 1))\necho "$n" > "%s"\n[[ $n -eq 2 ]] && exit 1\nexit 0\n' \
+  "$TMP/sealcount" "$TMP/sealcount" > bin/zblind
+chmod +x bin/zblind
+rm -f "$TMP/sealcount"
+run env ZLOOP_MAX_SEAL_FAILURES=2 bin/zloop --budget 30 --max 4
+assert_rc 1
+assert_err '\(1 consecutive\)$'
+assert_no_err '\(2 consecutive\)'
+assert_no_err '^=== Loop Aborted ==='
+assert_claude_runs 4
+echo ""
+
+# bin/zblind deliberately exits 0 with a "seal skipped" message when no key is
+# configured. That is the default local setup, not a failure, and must never
+# count toward the abort.
+echo "=== Case 38d: a seal skipped for a missing ZOCIETY_BLIND_KEY is not a failure ==="
+fresh_repo seal-skipped
+run env -u ZOCIETY_BLIND_KEY ZLOOP_MAX_SEAL_FAILURES=1 bin/zloop --budget 30 --max 2
+assert_rc 1
+assert_no_err 'zblind seal failed'
+assert_no_err '^=== Loop Aborted ==='
+assert_claude_runs 2
+echo ""
+
+# Every case above stubs bin/zblind. The failure path that actually shipped
+# broken (a seal that exits 1 because gpg could not run) was never driven
+# through the real script, so nothing proved zloop reacts to zblind itself
+# rather than to a stub with the right exit code.
+echo "=== Case 38e: a REAL bin/zblind seal failure drives the escalation (exit 4) ==="
+fresh_repo seal-real-failure
+# Two conditions make the real seal fail rather than skip or no-op:
+#   1. ZOCIETY_BLIND_KEY is set, so the seal is attempted (unset = skip, 38d).
+#   2. GNUPGHOME is a regular file, so gpg --symmetric cannot run at all.
+# And the fake claude must commit: seal returns 0 on an empty from..to range
+# and would never reach gpg. $TMP/joining.sh (Case 35o) makes one [join] a turn.
+: > "$TMP/not-a-gnupghome"
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+cp "$TMP/joining.sh" "$FAKEBIN/claude"
+run env ZOCIETY_BLIND_KEY=fixture-passphrase GNUPGHOME="$TMP/not-a-gnupghome" \
+  ZLOOP_MAX_SEAL_FAILURES=2 bin/zloop --budget 30 --max 5
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+assert_rc 4
+# The diagnosis is zblind's own, naming gpg and the commit: this is the real
+# script failing, not a stub chosen to exit 1.
+assert_err '^zblind: seal: gpg --symmetric failed on [0-9a-f]{7} '
+# ... and the loop counted it, warned with the running total, then aborted.
+assert_err '^\[zloop\] WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(1 consecutive\)$'
+assert_err '^\[zloop\] WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(2 consecutive\)$'
+assert_err '^=== Loop Aborted ===$'
+assert_err '^2 consecutive zblind seal failures\.$'
+assert_claude_runs 2
+assert_absent .claude/zloop.state
+# The seal got past git notes and died at gpg: the plaintext marker is there,
+# the encrypted note is not. That is exactly the state the abort exists for.
+assert_eq "agent marker written before the gpg failure" \
+  "$(git notes --ref=agent show HEAD 2>/dev/null | head -n1)" "kind: ai"
+assert_eq "no blind note for that commit" \
+  "$(git notes --ref=blind show HEAD 2>/dev/null | wc -l | tr -d ' ')" "0"
 echo ""
 
 #############################################

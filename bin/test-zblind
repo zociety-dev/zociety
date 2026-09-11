@@ -16,6 +16,10 @@
 # sealing disjoint ranges and one reveal yielding the union, scoped to the
 # previous rev*-attempt* tag; seal without ZOCIETY_BLIND_KEY writes only the
 # agent note and exits 0; reveal without the key (or the wrong one) fails;
+# seal and reveal over a git that refuses stdin-reading forms the way
+# bin/zgit does (the container route: `git notes -F -` there exited before
+# reading, killing gpg with SIGPIPE); a failing seal naming gpg or git notes
+# and the commit rather than "gpg or git notes failed";
 # bin/zjoin assigns member-1, member-2 and emits no model field; bin/zagent
 # passes the model as a flag and scrubs ANTHROPIC_MODEL, GEMINI_MODEL, MODEL,
 # ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY from the client's environment;
@@ -348,6 +352,84 @@ cd "$TMP/repo-reveal"
 run env ZOCIETY_BLIND_KEY="not-the-key" bin/zblind reveal "$H"
 assert_rc 1
 assert_err '^zblind: reveal: cannot decrypt refs/notes/blind on [0-9a-f]{7} \(wrong ZOCIETY_BLIND_KEY\?\)$'
+echo ""
+
+echo "=== Case 4b: seal never feeds git notes on stdin (container git route) ==="
+# Regression: seal used to be `gpg ... | git notes add -F - <sha>`. In the
+# real repo git is bin/shims/git -> bin/zgit, whose stdin does not reach the
+# container, so bin/zgit refuses -F - and exits before reading a byte; gpg
+# then died of SIGPIPE and seal reported the ambiguous "gpg or git notes
+# failed". STDINGIT below is a stand-in for that route: it refuses the same
+# stdin-reading forms bin/zgit refuses and otherwise is the real git.
+mkdir -p "$TMP/stdingit"
+REAL_GIT=$(command -v git)
+printf '%s\n' '#!/bin/bash' \
+  'prev=""' \
+  'for arg in "$@"; do' \
+  '  case "$arg" in' \
+  '    --stdin|--file=-)' \
+  '      echo "zgit: '"'"'$arg'"'"' reads stdin, which does not reach the container" >&2; exit 1 ;;' \
+  '    -)' \
+  '      if [[ "$prev" == "-F" || "$prev" == "--file" ]]; then' \
+  '        echo "zgit: '"'"'$prev -'"'"' reads stdin, which does not reach the container" >&2; exit 1' \
+  '      fi ;;' \
+  '  esac' \
+  '  prev="$arg"' \
+  'done' \
+  "exec $REAL_GIT \"\$@\"" > "$TMP/stdingit/git"
+chmod +x "$TMP/stdingit/git"
+
+fresh_repo stdin
+ROOT=$(git rev-parse HEAD)
+A=$(commit "one")
+B=$(commit "two")
+run env PATH="$TMP/stdingit:$PATH" ZOCIETY_BLIND_KEY="$KEY" \
+  bin/zblind seal "$ROOT" "$B" claude-opus-4-5 claude local
+assert_rc 0
+assert_no_err 'Broken pipe'
+assert_no_err 'does not reach the container'
+assert_err '^zblind: sealed 2 commit\(s\) as local$'
+for sha in "$A" "$B"; do
+  assert_eq "agent note ${sha:0:7}" "$(note agent "$sha")" $'kind: ai\nrunner: local'
+  assert_has "blind note ${sha:0:7}" "$(note blind "$sha")" '^-----BEGIN PGP MESSAGE-----$'
+done
+assert_eq "decrypted model via stdin-refusing git" "$(decrypt "$B" | jq -r .model)" claude-opus-4-5
+# ... and reveal round-trips over the same route.
+git commit -q --allow-empty -m "[heap-death] member-1: what next"
+H=$(git rev-parse HEAD)
+run env PATH="$TMP/stdingit:$PATH" ZOCIETY_BLIND_KEY="$KEY" \
+  bin/zblind seal "$B" "$H" claude-opus-4-5 claude local
+assert_rc 0
+run env PATH="$TMP/stdingit:$PATH" ZOCIETY_BLIND_KEY="$KEY" bin/zblind reveal "$H"
+assert_rc 0
+assert_no_err 'Broken pipe'
+assert_has "cycle note" "$(note commits "$H")" '^models: claude-opus-4-5$'
+assert_has "agent note B" "$(note agent "$B")" '^model: claude-opus-4-5$'
+echo ""
+
+echo "=== Case 4c: a failing seal names gpg or git notes, and the commit ==="
+# gpg cannot work without a GNUPGHOME it may use: point it at a file so
+# --symmetric fails, and check the message is specific, not "gpg or git
+# notes failed".
+C=$(commit "three")
+: > "$TMP/not-a-gnupghome"
+run env GNUPGHOME="$TMP/not-a-gnupghome" ZOCIETY_BLIND_KEY="$KEY" \
+  bin/zblind seal "$H" "$C" claude-opus-4-5 claude local
+assert_rc 1
+assert_err "^zblind: seal: gpg --symmetric failed on ${C:0:7} "
+assert_no_err 'gpg or git notes failed'
+# A git notes failure names git notes and the ref, not gpg.
+mkdir -p "$TMP/badgit"
+printf '%s\n' '#!/bin/bash' \
+  'for arg in "$@"; do' \
+  '  [[ "$arg" == "--ref=blind" ]] && { echo "fatal: refusing refs/notes/blind" >&2; exit 1; }' \
+  'done' \
+  "exec $REAL_GIT \"\$@\"" > "$TMP/badgit/git"
+chmod +x "$TMP/badgit/git"
+run env PATH="$TMP/badgit:$PATH" ZOCIETY_BLIND_KEY="$KEY" \
+  bin/zblind seal "$H" "$C" claude-opus-4-5 claude local
+assert_rc 1
+assert_err "^zblind: seal: git notes --ref=blind add failed on ${C:0:7}: fatal: refusing refs/notes/blind$"
 echo ""
 
 #############################################

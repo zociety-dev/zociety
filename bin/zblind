@@ -30,6 +30,11 @@
 #             blind note (human commits, turns before the blind existed) are
 #             skipped, not failed.
 #
+# Every note is written with `git notes ... -m`, never `-F -`: git here is
+# the bin/shims/git -> bin/zgit container route, whose stdin does not reach
+# the container, so a `gpg | git notes -F -` pipeline had git exit first and
+# killed gpg with SIGPIPE ("write error: Broken pipe") on every seal.
+#
 # Both commands push refs/notes/blind and refs/notes/agent (reveal also
 # refs/notes/commits) to origin when a remote exists; a failed push is
 # reported and ignored, as bin/zheap-death does.
@@ -85,21 +90,31 @@ cmd_seal() {
   git rev-parse --verify -q "${from}^{commit}" >/dev/null || die "seal: '$from' is not a commit"
   git rev-parse --verify -q "${to}^{commit}" >/dev/null || die "seal: '$to' is not a commit"
 
-  local shas sha n=0 sealed=0 payload
+  local shas sha n=0 sealed=0 payload cipher err
   shas=$(git rev-list --reverse "${from}..${to}")
   [[ -n "$shas" ]] || return 0
 
   for sha in $shas; do
     n=$((n + 1))
-    git notes --ref=agent add -f -m "kind: ai
-runner: $runner" "$sha" >/dev/null 2>&1
+    err=$(git notes --ref=agent add -f -m "kind: ai
+runner: $runner" "$sha" 2>&1 >/dev/null) \
+      || die "seal: git notes --ref=agent add failed on ${sha:0:7}: ${err:-no error output}"
     [[ -n "${ZOCIETY_BLIND_KEY:-}" ]] || continue
     payload=$(jq -nc --arg model "$model" --arg client "$client" --arg runner "$runner" \
-      '{model: $model, client: $client, runner: $runner, ts: (now | todate)}')
-    printf '%s' "$payload" \
-      | gpg_with_key --symmetric --armor --yes --output - \
-      | git notes --ref=blind add -f -F - "$sha" >/dev/null 2>&1 \
-      || die "seal: gpg or git notes failed on ${sha:0:7}"
+      '{model: $model, client: $client, runner: $runner, ts: (now | todate)}') \
+      || die "seal: jq could not build the payload for ${sha:0:7}"
+
+    # gpg and git notes are two steps, never one pipeline. git's stdin does
+    # not reach the container the repo's git shim routes writes through
+    # (bin/zgit refuses -F -), so `git notes add -F -` exits before reading a
+    # byte and gpg dies of SIGPIPE mid-write - which is how this looked like
+    # a gpg failure. The armored ciphertext is small, so pass it as -m.
+    cipher=$(printf '%s' "$payload" | gpg_with_key --symmetric --armor --yes --output -) \
+      || die "seal: gpg --symmetric failed on ${sha:0:7} (gpg's own error is above; wrong ZOCIETY_BLIND_KEY or no gpg-agent?)"
+    [[ "$cipher" == *"BEGIN PGP MESSAGE"* ]] \
+      || die "seal: gpg produced no PGP message for ${sha:0:7} (got ${#cipher} byte(s))"
+    err=$(git notes --ref=blind add -f -m "$cipher" "$sha" 2>&1 >/dev/null) \
+      || die "seal: git notes --ref=blind add failed on ${sha:0:7}: ${err:-no error output}"
     sealed=$((sealed + 1))
   done
 
@@ -129,7 +144,7 @@ cmd_reveal() {
     range="$death"
   fi
 
-  local sha cipher plain model client runner sealed=0
+  local sha cipher plain model client runner err sealed=0
   local models="" runners=""
   for sha in $(git rev-list --reverse "$range"); do
     cipher=$(git notes --ref=blind show "$sha" 2>/dev/null) || continue
@@ -145,13 +160,15 @@ cmd_reveal() {
     # Per-commit agent note: add the plaintext model once.
     if ! git notes --ref=agent show "$sha" 2>/dev/null | grep -q '^model:'; then
       if git notes --ref=agent show "$sha" >/dev/null 2>&1; then
-        git notes --ref=agent append -m "model: $model
-client: $client" "$sha" >/dev/null 2>&1
+        err=$(git notes --ref=agent append -m "model: $model
+client: $client" "$sha" 2>&1 >/dev/null) \
+          || die "reveal: git notes --ref=agent append failed on ${sha:0:7}: ${err:-no error output}"
       else
-        git notes --ref=agent add -m "kind: ai
+        err=$(git notes --ref=agent add -m "kind: ai
 runner: $runner
 model: $model
-client: $client" "$sha" >/dev/null 2>&1
+client: $client" "$sha" 2>&1 >/dev/null) \
+          || die "reveal: git notes --ref=agent add failed on ${sha:0:7}: ${err:-no error output}"
       fi
     fi
   done
@@ -165,8 +182,9 @@ client: $client" "$sha" >/dev/null 2>&1
   if git notes show "$death" 2>/dev/null | grep -q '^models:'; then
     echo "zblind: ${death:0:7} already carries a models: line; cycle note left as is" >&2
   else
-    git notes append -m "models: $model_list
-runners: $runner_list" "$death" >/dev/null 2>&1
+    err=$(git notes append -m "models: $model_list
+runners: $runner_list" "$death" 2>&1 >/dev/null) \
+      || die "reveal: git notes append (cycle note) failed on ${death:0:7}: ${err:-no error output}"
   fi
   echo "zblind: revealed $sealed sealed commit(s) in $range: models=$model_list runners=$runner_list" >&2
   push_notes refs/notes/blind refs/notes/agent refs/notes/commits

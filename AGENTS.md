@@ -66,6 +66,11 @@ Zociety's own loop with dynamic completion checking:
   is reported as a WARNING, not as a normal turn, and `ZLOOP_MAX_TIMEOUTS`
   consecutive kills abort the run (exit 3) rather than let a misconfigured loop
   burn iterations that can never finish
+- A failed `bin/zblind seal` after an iteration is a WARNING carrying the running
+  failure count, and `ZLOOP_MAX_SEAL_FAILURES` consecutive failures abort the run
+  (exit 4) rather than let a whole run accumulate commits with no provenance
+  notes. A seal *skipped* because `ZOCIETY_BLIND_KEY` is unset exits 0 and never
+  counts toward the streak; the streak resets on the next successful seal
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
 - Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message
 - Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
@@ -79,13 +84,13 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: "read PROMPT.md", then a generated block with `bin/zstate`, the branch, the latest `[direction]`/`[heap-death]`, the recent log and the agent commands so a turn does not spend its first minute re-deriving them, then the working budget |
+| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: "read PROMPT.md", then a generated block with `bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds, then the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
 | `bin/test-zcycle-id` | Dry-run harness for cycle identity: `zcycle-id`, the heap-death successor checkout, the zloop preflight |
-| `bin/test-zga-loop` | Dry-run harness for `bin/zga-loop`: throwaway bare origin + clone + fake `claude`; budget delivery, hard kill and abort, push after commit, knob validation |
+| `bin/test-zga-loop` | Dry-run harness for `bin/zga-loop`: throwaway bare origin + clone + fake `claude`; budget delivery, hard kill and abort, per-iteration prompt, seal-failure abort, push after commit, knob validation |
 
 ### Stop Modes
 
@@ -130,6 +135,7 @@ archive a cycle into a feature branch.
 | `ZLOOP_INTERVAL` | 1 | Seconds of quiet between iterations (cadence, as `watch -n` means it). Bounds no work |
 | `ZLOOP_TIMEOUT` | 2x budget | Hard kill: `timeout` SIGTERMs the agent mid-token and uncommitted work is lost. A backstop for a hung process, not the working budget. Must exceed `ZLOOP_BUDGET` |
 | `ZLOOP_MAX_TIMEOUTS` | 3 | Consecutive hard kills that abort the run with exit 3 (0 = never abort) |
+| `ZLOOP_MAX_SEAL_FAILURES` | 3 | Consecutive `bin/zblind seal` failures that abort the run with exit 4 (0 = never abort). A skipped seal (`ZOCIETY_BLIND_KEY` unset) exits 0 and does not count |
 | `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_QUIET` | 0 | Same as `--quiet`: buffered result only, no live render (1 = on) |
@@ -323,12 +329,35 @@ Check with: `bin/zstate | jq .genesis`
 ```
 bin/zstate → action field tells you what to do:
 
-  "contribute" → Join, make stuff, vote on rules
+  "contribute" → Join, make stuff, vote on rules (see next/needs below)
   "complete"   → Run bin/zcomplete
   "heap-death" → Run bin/zheap-death
   "promise"    → Run bin/zpromise and STOP
   "stop"       → Do nothing, exit cleanly
 ```
+
+### `needs` and `next`
+
+`action` is the stable vocabulary the stop predicates match on
+(`join|contribute|complete|heap-death|promise|stop`); it never carries a
+qualifier. Two extra fields say what is actually missing:
+
+- `needs`: `{"members":N,"rules":N,"stuff":N}` — counts still REMAINING to
+  reach genesis (3 members, 2 passed rules, 3 stuff), never negative. A leg
+  that has been overshot reports `0`. All three are `0` once
+  `genesis.complete` is true.
+- `next`: the deficit-qualified action. Equal to `action` except when `action`
+  is `contribute`, where it becomes `contribute:member`, `contribute:rule` or
+  `contribute:stuff`. Priority when several legs are short is deterministic:
+  **members, then rules, then stuff** — members gate rule voting, rules are
+  the scarcest leg, stuff is always available as a fallback.
+
+```json
+{"action":"contribute","needs":{"members":0,"rules":2,"stuff":2},"next":"contribute:rule"}
+```
+
+This exists because an undifferentiated `"contribute"` let loop iterations
+pile onto the cheapest command (`bin/zjoin`) while rules never started.
 
 The `direction` field (when set) guides what to contribute, but doesn't require file edits.
 
