@@ -30,6 +30,12 @@
 # prior tree would class those as modified and undercount. Stops when all
 # ZSTOP_PATIENCE compared cycles are trivial. Fewer than ZSTOP_PATIENCE+1
 # branches: continue.
+#
+# The checked-out cycle/* branch is the live cycle (bin/zloop's preflight and
+# bin/zheap-death's successor checkout put the run on it at birth) and never
+# part of the window: it is not archived yet and starts with an empty stuff/,
+# so counting it would make it a guaranteed trivial cycle and cut the
+# effective patience by one.
 
 set -e
 
@@ -57,6 +63,12 @@ esac
 
 NEED=$((PATIENCE + 1))
 
+# The live cycle: the checked-out cycle/* branch, by cycle name (so its
+# origin/ counterpart is dropped too). Empty when HEAD is elsewhere.
+LIVE=""
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || true)
+[[ "$CURRENT_BRANCH" == cycle/* ]] && LIVE="${CURRENT_BRANCH#cycle/}"
+
 # "<cycle name>\t<ref>" per line, local refs first so awk's first-seen rule
 # keeps the local one; then version-sorted on the cycle name alone.
 TAB=$(printf '\t')
@@ -67,7 +79,7 @@ done < <(
   {
     git for-each-ref --format="%(refname:lstrip=3)${TAB}%(refname:short)" 'refs/heads/cycle/*'
     git for-each-ref --format="%(refname:lstrip=4)${TAB}%(refname:short)" 'refs/remotes/origin/cycle/*'
-  } | awk -F "$TAB" '!seen[$1]++' | sort -t "$TAB" -k1,1V
+  } | awk -F "$TAB" -v live="$LIVE" '$1 != live && !seen[$1]++' | sort -t "$TAB" -k1,1V
 )
 
 if [[ ${#BRANCHES[@]} -lt $NEED ]]; then

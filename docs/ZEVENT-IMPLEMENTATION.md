@@ -121,7 +121,7 @@ All data fields from design spec examples:
 
 **join**: `role`, `greeting`
 ```bash
-bin/zjoin alice builder "greeting"
+bin/zjoin - builder "greeting"   # name assigned: member-{N}
 ```
 
 **vote**: `rule`, `vote`, `reason`

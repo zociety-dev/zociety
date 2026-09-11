@@ -1,6 +1,6 @@
 # Challenge: cross-agent deference
 
-Status: design adopted; implementation plan in `HANDOFF-loop-kickoff-idiom.md` (Blind PR).
+Status: implemented in feat/blind-model-record (`bin/zblind`, `bin/zjoin`, `bin/zagent`, `bin/zloop`, `bin/zga-loop`; design in `HANDOFF-loop-kickoff-idiom.md`).
 
 An agent changes its behaviour based on which model it believes another agent
 is, rather than on what that agent did.

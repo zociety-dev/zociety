@@ -1,0 +1,521 @@
+#!/bin/bash
+# test-zblind: Dry-run harness for the blind model record
+#
+# Usage:
+#   bin/test-zblind [--keep]
+#   bin/test-zblind -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway directory behind (path printed) for inspection
+#
+# Builds throwaway git repos under mktemp with a copy of this repo's bin/ and
+# .githooks/, a private GNUPGHOME, and a fake `claude` on PATH that records
+# its arguments and environment, as bin/test-zstop-modes does. Cases:
+# bin/zblind seal roundtrip (refs/notes/blind decrypts to the model,
+# refs/notes/agent carries kind/runner only); two runners with the same key
+# sealing disjoint ranges and one reveal yielding the union, scoped to the
+# previous rev*-attempt* tag; seal without ZOCIETY_BLIND_KEY writes only the
+# agent note and exits 0; reveal without the key (or the wrong one) fails;
+# bin/zjoin assigns member-1, member-2 and emits no model field; bin/zagent
+# passes the model as a flag and scrubs ANTHROPIC_MODEL, GEMINI_MODEL, MODEL,
+# ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY from the client's environment;
+# .githooks/prepare-commit-msg adds the Agent: trailer only when CLAUDECODE
+# is set and never on merges, over an existing trailer or on bin/zevent event
+# commits (and bin/zstate still finds an event even with a stray trailer
+# after its body); and bin/nfprov-blame.py classifies noted, trailer-only and
+# plain commits.
+# Needs gpg and python3: run it as bin/zociety bin/test-zblind.
+
+set -e
+
+SRC_BIN="$(cd "$(dirname "$0")" && pwd)"
+SRC_ROOT="$(dirname "$SRC_BIN")"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --keep)
+      KEEP=1
+      ;;
+    *)
+      echo "test-zblind: unknown argument '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+for tool in gpg jq python3; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "test-zblind: $tool not found; run via bin/zociety bin/test-zblind" >&2; exit 2; }
+done
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zblind-test.XXXXXX")
+OUT="$TMP/out"
+ERR="$TMP/err"
+FAKEBIN="$TMP/fakebin"
+FAKE_LOG="$TMP/claude-ran.log"
+export FAKE_CLAUDE_LOG="$FAKE_LOG"
+
+# Private keyring so the fixture never touches the user's; the agent gpg
+# starts for it is stopped on exit.
+export GNUPGHOME="$TMP/gnupg"
+mkdir -p "$GNUPGHOME"
+chmod 700 "$GNUPGHOME"
+export GIT_PAGER=cat
+
+# Test passphrase, shared by every "runner" in the cases below.
+KEY="zblind-fixture-passphrase" # gitleaks:allow
+
+# Isolation: this harness may itself run from a Claude Code shell
+# (CLAUDECODE=1) with a model or key exported; every case sets what it needs.
+unset CLAUDECODE ANTHROPIC_MODEL GEMINI_MODEL MODEL ZOCIETY_AGENT_CLIENT ZOCIETY_BLIND_KEY
+
+cleanup() {
+  gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+  if [[ $KEEP -eq 1 ]]; then
+    echo "Kept: $TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+PASSED=0
+FAILED=0
+RC=0
+
+#############################################
+# Fixtures
+#############################################
+
+# Fake claude: one line on stdout (a stream-json result event when asked for
+# stream-json, so --render compact has something to render), and a record of
+# its argv plus the blind-relevant environment in FAKE_CLAUDE_LOG.
+mkdir -p "$FAKEBIN" "$TMP/nohooks" "$TMP/hooks"
+printf '%s\n' '#!/bin/bash' \
+  'stream=0' \
+  'for a in "$@"; do [[ "$a" == "stream-json" ]] && stream=1; done' \
+  'if [[ $stream -eq 1 ]]; then' \
+  '  echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"duration_ms\":1,\"num_turns\":1,\"total_cost_usd\":0,\"result\":\"fake claude ran\"}"' \
+  'else' \
+  '  echo "fake claude ran"' \
+  'fi' \
+  '{ echo "args: $*"; env | grep -E "^(ANTHROPIC_MODEL|GEMINI_MODEL|MODEL|ZOCIETY_AGENT_CLIENT|ZOCIETY_BLIND_KEY)=" | sed "s/^/env: /"; } > "$FAKE_CLAUDE_LOG"' \
+  'exit 0' > "$FAKEBIN/claude"
+chmod +x "$FAKEBIN/claude"
+export PATH="$FAKEBIN:$PATH"
+
+# The hook under test, alone in its own hooks dir (no pre-commit, so the
+# no-main-commits check does not get in the way of a fixture on main).
+cp "$SRC_ROOT/.githooks/prepare-commit-msg" "$TMP/hooks/prepare-commit-msg"
+chmod +x "$TMP/hooks/prepare-commit-msg"
+
+# fresh_repo <name>: new throwaway repo with bin/ copied in, one genesis
+# commit on main, cwd moved into it. See bin/test-zstop-modes fresh_repo.
+# Signing is off for commits and tags: the fixture GNUPGHOME has no key.
+fresh_repo() {
+  REPO="$TMP/repo-$1"
+  mkdir -p "$REPO/bin" "$REPO/.claude"
+  cp -R "$SRC_BIN/." "$REPO/bin/"
+  cd "$REPO"
+  git init -q .
+  git symbolic-ref HEAD refs/heads/main
+  git config user.name tester
+  git config user.email tester@example.com
+  git config commit.gpgsign false
+  git config tag.gpgSign false
+  git config core.hooksPath "$TMP/nohooks"
+  echo "# fixture prompt" > PROMPT.md
+  printf '.claude/\n' > .gitignore
+  git add .gitignore PROMPT.md
+  git commit -q -m "genesis fixture"
+  rm -f "$FAKE_LOG"
+}
+
+# commit <subject> [extra git commit args...]: append a line to doc.md and
+# commit it; prints the new sha.
+commit() {
+  local subject="$1"
+  shift
+  echo "$subject" >> doc.md
+  git add doc.md
+  git commit -q -m "$subject" "$@"
+  git rev-parse HEAD
+}
+
+# decrypt <sha>: plaintext of the refs/notes/blind note with $KEY
+decrypt() {
+  git notes --ref=blind show "$1" \
+    | gpg --batch --quiet --no-tty --pinentry-mode loopback --passphrase-fd 3 --decrypt 3< <(printf '%s\n' "$KEY")
+}
+
+#############################################
+# Assertions
+#############################################
+
+run() {
+  RC=0
+  "$@" >"$OUT" 2>"$ERR" || RC=$?
+}
+
+pass() {
+  echo "  ✓ $1"
+  PASSED=$((PASSED + 1))
+}
+
+fail() {
+  echo "  ✗ $1"
+  FAILED=$((FAILED + 1))
+}
+
+assert_rc() {
+  if [[ "$RC" -eq "$1" ]]; then
+    pass "exit $RC"
+  else
+    fail "exit $RC (want $1)"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+# assert_err <ere>: stderr has a line matching; print the first match
+assert_err() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$ERR"); then
+    pass "stderr: $line"
+  else
+    fail "stderr lacks /$1/"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+assert_no_err() {
+  if grep -E -q -- "$1" "$ERR"; then
+    fail "stderr unexpectedly matches /$1/"
+  else
+    pass "stderr has no /$1/"
+  fi
+}
+
+# assert_eq <label> <got> <want>
+assert_eq() {
+  if [[ "$2" == "$3" ]]; then
+    pass "$1: $2"
+  else
+    fail "$1: '$2' (want '$3')"
+  fi
+}
+
+# assert_has <label> <text> <ere>: text has a line matching
+assert_has() {
+  local line
+  if line=$(printf '%s\n' "$2" | grep -E -m1 -- "$3"); then
+    pass "$1: $line"
+  else
+    fail "$1 lacks /$3/"
+    printf '%s\n' "$2" | sed 's/^/    text: /'
+  fi
+}
+
+# assert_lacks <label> <text> <ere>: no line of text matches
+assert_lacks() {
+  if printf '%s\n' "$2" | grep -E -q -- "$3"; then
+    fail "$1 unexpectedly matches /$3/"
+    printf '%s\n' "$2" | sed 's/^/    text: /'
+  else
+    pass "$1 has no /$3/"
+  fi
+}
+
+# assert_count <label> <text> <ere> <n>: exactly n lines match
+assert_count() {
+  local n
+  n=$(printf '%s\n' "$2" | grep -E -c -- "$3" || true)
+  if [[ "$n" -eq "$4" ]]; then
+    pass "$1: $n line(s) match /$3/"
+  else
+    fail "$1: $n line(s) match /$3/ (want $4)"
+    printf '%s\n' "$2" | sed 's/^/    text: /'
+  fi
+}
+
+# note <ref> <sha>: the note, or "" when absent
+note() {
+  git notes --ref="$1" show "$2" 2>/dev/null || true
+}
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety Blind Model Record Harness    ║"
+echo "╚════════════════════════════════════════╝"
+echo "Throwaway: $TMP"
+echo ""
+
+#############################################
+# Cases: bin/zblind seal
+#############################################
+
+echo "=== Case 1: seal roundtrip with a key ==="
+fresh_repo seal
+ROOT=$(git rev-parse HEAD)
+A=$(commit "one")
+B=$(commit "two")
+C=$(commit "three")
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$ROOT" "$C" claude-opus-4-5 claude local
+assert_rc 0
+assert_err '^zblind: sealed 3 commit\(s\) as local$'
+for sha in "$A" "$B" "$C"; do
+  assert_eq "agent note ${sha:0:7}" "$(note agent "$sha")" $'kind: ai\nrunner: local'
+  assert_has "blind note ${sha:0:7}" "$(note blind "$sha")" '^-----BEGIN PGP MESSAGE-----$'
+done
+PLAIN=$(decrypt "$C")
+assert_eq "decrypted model" "$(printf '%s' "$PLAIN" | jq -r .model)" claude-opus-4-5
+assert_eq "decrypted client" "$(printf '%s' "$PLAIN" | jq -r .client)" claude
+assert_eq "decrypted runner" "$(printf '%s' "$PLAIN" | jq -r .runner)" local
+assert_has "decrypted ts" "$PLAIN" '"ts":"20[0-9]{2}-'
+assert_lacks "agent note" "$(note agent "$C")" 'model|client|opus'
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$C" "$C" claude-opus-4-5 claude local
+assert_rc 0
+assert_eq "empty range stderr" "$(cat "$ERR")" ""
+echo ""
+
+echo "=== Case 2: two runners, one key, one reveal yields the union ==="
+fresh_repo reveal
+ROOT=$(git rev-parse HEAD)
+P=$(commit "previous cycle")
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$ROOT" "$P" old-model claude local
+assert_rc 0
+git tag rev1-attempt1-iterations1of1 -m "previous cycle"
+A=$(commit "ci one")
+B=$(commit "ci two")
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$P" "$B" claude-haiku-4-5 claude github-actions
+assert_rc 0
+C=$(commit "local three")
+D=$(commit "local four")
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$B" "$D" claude-opus-4-5 claude local
+assert_rc 0
+git commit -q --allow-empty -m "[heap-death] member-1: what next"
+H=$(git rev-parse HEAD)
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$D" "$H" claude-opus-4-5 claude local
+assert_rc 0
+git notes add -m "cycle: rev1 attempt2" "$H"
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind reveal "$H"
+assert_rc 0
+assert_err '^zblind: revealed 5 sealed commit\(s\) in rev1-attempt1-iterations1of1\.\.'
+CYCLE_NOTE=$(note commits "$H")
+assert_has "cycle note" "$CYCLE_NOTE" '^cycle: rev1 attempt2$'
+assert_has "cycle note" "$CYCLE_NOTE" '^models: claude-haiku-4-5,claude-opus-4-5$'
+assert_has "cycle note" "$CYCLE_NOTE" '^runners: github-actions,local$'
+assert_lacks "cycle note" "$CYCLE_NOTE" 'old-model'
+assert_has "agent note A" "$(note agent "$A")" '^model: claude-haiku-4-5$'
+assert_has "agent note A" "$(note agent "$A")" '^client: claude$'
+assert_has "agent note A" "$(note agent "$A")" '^runner: github-actions$'
+assert_has "agent note D" "$(note agent "$D")" '^model: claude-opus-4-5$'
+assert_has "agent note H" "$(note agent "$H")" '^model: claude-opus-4-5$'
+assert_lacks "agent note P (outside range)" "$(note agent "$P")" '^model:'
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind reveal "$H"
+assert_rc 0
+assert_err 'already carries a models: line'
+assert_count "cycle note after re-reveal" "$(note commits "$H")" '^models:' 1
+assert_count "agent note A after re-reveal" "$(note agent "$A")" '^model:' 1
+echo ""
+
+echo "=== Case 3: seal without a key writes only refs/notes/agent, exit 0 ==="
+fresh_repo nokey
+ROOT=$(git rev-parse HEAD)
+A=$(commit "one")
+B=$(commit "two")
+run env -u ZOCIETY_BLIND_KEY bin/zblind seal "$ROOT" "$B" claude-opus-4-5 claude github-actions
+assert_rc 0
+assert_err '^zblind: ZOCIETY_BLIND_KEY unset; seal skipped for 2 commit\(s\) \(refs/notes/agent written, runner github-actions\)$'
+assert_eq "refs/notes/blind absent" "$(git show-ref refs/notes/blind | wc -l | tr -d ' ')" 0
+assert_eq "agent note ${A:0:7}" "$(note agent "$A")" $'kind: ai\nrunner: github-actions'
+assert_eq "agent note ${B:0:7}" "$(note agent "$B")" $'kind: ai\nrunner: github-actions'
+echo ""
+
+echo "=== Case 4: reveal without the key, or with the wrong one, fails ==="
+run env -u ZOCIETY_BLIND_KEY bin/zblind reveal "$B"
+assert_rc 1
+assert_err '^zblind: reveal: ZOCIETY_BLIND_KEY unset; cannot decrypt refs/notes/blind$'
+cd "$TMP/repo-reveal"
+run env ZOCIETY_BLIND_KEY="not-the-key" bin/zblind reveal "$H"
+assert_rc 1
+assert_err '^zblind: reveal: cannot decrypt refs/notes/blind on [0-9a-f]{7} \(wrong ZOCIETY_BLIND_KEY\?\)$'
+echo ""
+
+#############################################
+# Cases: bin/zjoin
+#############################################
+
+echo "=== Case 5: zjoin assigns member-{N} and records no model ==="
+fresh_repo join
+run env ANTHROPIC_MODEL=claude-opus-4-5 bin/zjoin
+assert_rc 0
+assert_eq "subject" "$(git log -1 --format=%s)" "[join] member-1: joining cycle"
+JOIN1=$(git log -1 --format=%b | jq -c .)
+assert_eq "data" "$(printf '%s' "$JOIN1" | jq -c .data)" '{"role":"agent","greeting":"joining cycle"}'
+assert_eq "no model anywhere" "$(printf '%s' "$JOIN1" | grep -c model || true)" 0
+run bin/zjoin alice builder "hello there"
+assert_rc 0
+assert_err "^zjoin: name 'alice' ignored; members are named by the harness \(member-\{N\}\)$"
+assert_eq "subject" "$(git log -1 --format=%s)" "[join] member-2: hello there"
+assert_eq "data" "$(git log -1 --format=%b | jq -c .data)" '{"role":"builder","greeting":"hello there"}'
+run bin/zjoin - voter
+assert_rc 0
+assert_no_err 'ignored'
+assert_eq "subject" "$(git log -1 --format=%s)" "[join] member-3: joining cycle"
+echo ""
+
+#############################################
+# Cases: bin/zagent env scrub
+#############################################
+
+echo "=== Case 6: zagent passes the model as a flag and scrubs the env ==="
+fresh_repo agent
+# MODEL is the CI step variable (.github/workflows/autonomous-loop.yml) that
+# bin/zga-loop and its children inherit; it must not reach the agent either.
+run env ANTHROPIC_MODEL=claude-test-1 GEMINI_MODEL=gemini-test MODEL=claude-ci ZOCIETY_AGENT_CLIENT=claude ZOCIETY_BLIND_KEY="$KEY" \
+  bin/zagent --render text "say hi"
+assert_rc 0
+assert_eq "stdout" "$(cat "$OUT")" "fake claude ran"
+LOG=$(cat "$FAKE_LOG")
+assert_has "argv" "$LOG" '\-\-model claude-test-1'
+assert_lacks "env" "$LOG" '^env: '
+assert_lacks "env (MODEL)" "$LOG" 'claude-ci'
+run env ANTHROPIC_MODEL=claude-test-1 MODEL=claude-ci ZOCIETY_BLIND_KEY="$KEY" bin/zagent --model claude-flag --render compact "say hi"
+assert_rc 0
+LOG=$(cat "$FAKE_LOG")
+assert_has "argv (flag wins)" "$LOG" '\-\-model claude-flag'
+assert_lacks "argv (env model not passed)" "$LOG" 'claude-test-1'
+assert_lacks "env (compact path)" "$LOG" '^env: '
+run bin/zagent --render text "say hi"
+assert_rc 0
+assert_lacks "argv (no model at all)" "$(cat "$FAKE_LOG")" '\-\-model'
+echo ""
+
+#############################################
+# Cases: .githooks/prepare-commit-msg
+#############################################
+
+echo "=== Case 7: Agent: trailer from the prepare-commit-msg hook ==="
+fresh_repo hook
+git config core.hooksPath "$TMP/hooks"
+run env CLAUDECODE=1 git commit -q --allow-empty -m "dev change from claude code"
+assert_rc 0
+BODY=$(git log -1 --format=%B)
+assert_has "trailer" "$BODY" '^Agent: claude-code$'
+assert_eq "trailer parses" "$(git log -1 --format=%B | git interpret-trailers --parse)" "Agent: claude-code"
+run env CLAUDECODE=1 ANTHROPIC_MODEL=claude-opus-4-5 git commit -q --allow-empty -m "dev change with model"
+assert_rc 0
+assert_has "trailer with model" "$(git log -1 --format=%B)" '^Agent: claude-code/claude-opus-4-5$'
+run git commit -q --allow-empty -m "plain human commit"
+assert_rc 0
+assert_lacks "no CLAUDECODE" "$(git log -1 --format=%B)" '^Agent:'
+run env CLAUDECODE=1 git commit -q --allow-empty -m "attributed upstream" -m "Agent: other-tool"
+assert_rc 0
+assert_count "existing trailer kept" "$(git log -1 --format=%B)" '^Agent:' 1
+assert_has "existing trailer value" "$(git log -1 --format=%B)" '^Agent: other-tool$'
+git checkout -q -b side
+run env CLAUDECODE=1 git commit -q --allow-empty -m "side work"
+assert_rc 0
+git checkout -q main
+run env CLAUDECODE=1 git merge -q --no-ff -m "merge side" side
+assert_rc 0
+assert_eq "merge subject" "$(git log -1 --format=%s)" "merge side"
+assert_lacks "merge commit" "$(git log -1 --format=%B)" '^Agent:'
+echo ""
+
+echo "=== Case 7b: event commits get no trailer; zstate ignores a stray one ==="
+# Same fixture and hooks dir as case 7. A bin/zevent commit made from a Claude
+# Code shell (CLAUDECODE=1; --no-verify does not skip prepare-commit-msg) must
+# keep its JSON body as the last thing in the message, or bin/zstate cannot
+# see it: this is how every loop member ended up named member-1.
+run env CLAUDECODE=1 bin/zevent join member-1 "joining cycle" '{"role":"agent","greeting":"joining cycle"}'
+assert_rc 0
+assert_eq "event subject" "$(git log -1 --format=%s)" "[join] member-1: joining cycle"
+assert_lacks "event commit" "$(git log -1 --format=%B)" '^Agent:'
+assert_has "event body intact" "$(git log -1 --format=%b)" '^\{"z":1,'
+run bin/zstate
+assert_rc 0
+assert_eq "zstate last_event" "$(jq -r .last_event "$OUT")" join
+assert_eq "zstate members" "$(jq -r .genesis.members "$OUT")" 1
+run env CLAUDECODE=1 git commit -q --allow-empty -m "plain commit between events"
+assert_rc 0
+assert_has "plain commit still attributed" "$(git log -1 --format=%B)" '^Agent: claude-code$'
+# Stray trailers after the envelope (what the hook used to do), on a compact
+# and on a pretty-printed body: zstate reads only the JSON object.
+EV2=$(jq -nc '{z:1,event:"join",cycle:1,seq:2,agent:"member-2",ts:"2026-09-10T00:00:00Z",runtime:{env:"test",id:"t"},state:{members:2,rules:0,stuff:0,complete:false},data:{role:"agent"}}')
+run git commit -q --allow-empty -m "[join] member-2: joining cycle" -m "$EV2" -m "Agent: claude-code"
+assert_rc 0
+assert_has "compact body carries trailer" "$(git log -1 --format=%b)" '^Agent: claude-code$'
+run bin/zstate
+assert_rc 0
+assert_eq "zstate sees member-2 past a trailer" "$(jq -r .last_agent "$OUT")" member-2
+assert_eq "zstate members" "$(jq -r .genesis.members "$OUT")" 2
+EV3=$(printf '%s' "$EV2" | jq '.seq = 3 | .agent = "member-3" | .state.members = 3')
+run git commit -q --allow-empty -m "[join] member-3: joining cycle" -m "$EV3" -m "Agent: claude-code"
+assert_rc 0
+assert_has "pretty body is multi-line" "$(git log -1 --format=%b)" '^  "z": 1,$'
+run bin/zstate
+assert_rc 0
+assert_eq "zstate sees member-3 past a trailer" "$(jq -r .last_agent "$OUT")" member-3
+assert_eq "zstate members" "$(jq -r .genesis.members "$OUT")" 3
+echo ""
+
+#############################################
+# Cases: bin/nfprov-blame.py
+#############################################
+
+echo "=== Case 8: nfprov-blame.py attribution rungs on a fixture file ==="
+fresh_repo blame
+ROOT=$(git rev-parse HEAD)
+git config core.hooksPath "$TMP/hooks"
+commit "one" >/dev/null
+H2=$(CLAUDECODE=1 commit "two")
+commit "three" >/dev/null
+echo "four" >> doc.md
+git add doc.md
+git commit -q -m "[heap-death] member-1: four"
+H4=$(git rev-parse HEAD)
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$H2" "$H4" claude-opus-4-5 claude local
+assert_rc 0
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind reveal "$H4"
+assert_rc 0
+H5=$(commit "five")
+run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$H4" "$H5" claude-opus-4-5 claude local
+assert_rc 0
+assert_lacks "H2 has no note (trailer only)" "$(note agent "$H2")" '.'
+assert_has "H2 trailer" "$(git log -1 --format=%B "$H2")" '^Agent: claude-code$'
+run python3 bin/nfprov-blame.py --format json doc.md
+assert_rc 0
+AGENTS=$(jq -r '.agents[] | "\(.name):\(.kind):\(.chars)"' "$OUT" | sort)
+assert_eq "agents" "$AGENTS" $'claude-code:ai:3\nclaude-opus-4-5:ai:9\nhuman:human:3\nsealed:ai:4'
+assert_eq "commits" "$(jq -r .commits "$OUT")" 5
+assert_eq "ai chars" "$(jq -r .chars.ai "$OUT")" 16
+for pair in "one:human" "two:claude-code" "three:claude-opus-4-5" "four:claude-opus-4-5" "five:sealed"; do
+  word="${pair%%:*}"
+  want="${pair##*:}"
+  got=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); i=d["marked"].replace("\U000e0101","").index(sys.argv[2]); print(next(s["agent"] for s in d["spans"] if s["start"]<=i<s["end"]))' "$OUT" "$word")
+  assert_eq "span '$word'" "$got" "$want"
+done
+run python3 bin/nfprov-blame.py --selftest
+assert_rc 0
+assert_eq "selftest" "$(cat "$OUT")" "ok: nfprov-blame selftest passed (5-commit repo with agent notes x 2 modes + classify rungs)"
+echo ""
+
+#############################################
+# Summary
+#############################################
+
+echo "=== Results: $PASSED passed, $FAILED failed ==="
+if [[ $FAILED -gt 0 ]]; then
+  exit 1
+fi
+echo "All blind model record cases passed."

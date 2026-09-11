@@ -31,6 +31,12 @@ bin/zociety bin/zloop --stop budget,file 60
 ```
 
 Zociety's own loop with dynamic completion checking:
+- Identity at birth: started on any branch that is not `cycle/*`, the run
+  names its first cycle (`bin/zcycle-id current`: last tag, attempt+1, or
+  rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
+  before the first iteration. Cut no branch by hand; that step also
+  satisfies the no-main-commits hook. `ZLOOP_BRANCH=0` opts out (runs on
+  the current branch, as before). Already on a `cycle/*` branch: unchanged
 - Before each iteration `bin/zloop-complete` dispatches the stop predicates
   (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
@@ -63,9 +69,11 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
+| `bin/test-zcycle-id` | Dry-run harness for cycle identity: `zcycle-id`, the heap-death successor checkout, the zloop preflight |
 
 ### Stop Modes
 
@@ -98,9 +106,9 @@ marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
 
 In `budget` mode `bin/zheap-death` defaults `batch_size` to
 `ZSTOP_BUDGET - <heap-deaths so far>` so its event data agrees with the loop.
-`bin/zheap-death` refuses to run off `main` (override with
-`ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot archive a cycle into a
-feature branch.
+`bin/zheap-death` refuses to run off `main` or a `cycle/rev{N}-attempt{M}`
+branch (override with `ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot
+archive a cycle into a feature branch.
 
 ### zloop Environment Variables
 
@@ -113,6 +121,7 @@ feature branch.
 | `ZLOOP_VERBOSE` | 0 | Same as `--verbose`: raw stream-json events (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
+| `ZLOOP_BRANCH` | 1 | 0 skips the cycle-branch preflight: run on whatever branch is checked out (`main` then needs `ALLOW_MAIN=1`) |
 
 ### ZSTOP Environment Variables
 
@@ -139,12 +148,14 @@ All state is derived from git history. No mutable state files.
 | Script | Purpose |
 |--------|---------|
 | `bin/zstate` | Get current state and next action (JSON output) |
-| `bin/zjoin` | Join as a member |
+| `bin/zjoin` | Join as a member (name assigned: `member-{N}`; no model in the event) |
+| `bin/zblind` | Seal each loop turn's model under `refs/notes/blind` (`seal`), mark it `kind: ai` under `refs/notes/agent`, and decrypt a cycle's models at heap-death (`reveal`) |
 | `bin/zstuff` | Record stuff creation |
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode) |
+| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event |
+| `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
@@ -160,6 +171,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
+| `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
@@ -191,11 +203,59 @@ PUA-B pastes in marked. `bin/nfprov.py` and
 `bin/nfprov-mapping.json` are vendored verbatim from the fork (`bin/nfprov.py`
 is the fork's reference encoder; `bin/nfprov-diff.py` is zociety's own
 `mark-added` front end over it); update the vendored pair by copying, and
-keep the source SHA in the header. Attribution is by
-commit convention: `[event]` commits are agents (name from the zevent
-envelope), everything else is the human. Over-marking is the accepted
-failure direction. `docs/provenance.html` shows `AGENTS.md` because
-`PROMPT.md` is nine lines since rev66.
+keep the source SHA in the header.
+
+Attribution is harness-written, not inferred from commit conventions.
+`bin/nfprov-blame.py` reads, in order: the `refs/notes/agent` note
+`bin/zblind seal` attaches to every loop turn (`kind: ai`; the name is the
+note's `model:` line once `bin/zblind reveal` has added it, else `sealed`);
+the `Agent:` trailer `.githooks/prepare-commit-msg` appends to commits made
+from a Claude Code shell (`claude-code`, or `claude-code/<model>`); a
+`Co-Authored-By: Claude` trailer; then, as a legacy fallback only, the
+`[event]` subject prefix (name from the zevent envelope); everything else
+is the human. Inside a live cycle the model is sealed, so the page shows
+agent turns as `sealed` until the cycle's heap-death reveals them; the
+reveal appends `model:` to each turn's note and the page resolves on the
+next `bin/zsite-generate`. Over-marking is the accepted failure direction.
+`docs/provenance.html` shows `AGENTS.md` because `PROMPT.md` is nine lines
+since rev66. It read 0% agent input before this scheme because every
+commit that ever touched `AGENTS.md` was a plain-subject dev-session
+commit: written with a coding agent, but carrying no `[event]` prefix, no
+`Co-Authored-By` trailer and no note, so the convention-only rule had
+nothing to key on. The `Agent:` trailer closes that gap for new commits;
+history before it stays human-attributed.
+
+### Blind model record
+
+Agents must not learn which model another member is, or which model they
+are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
+
+- `[join]` events carry `{role, greeting}` and no model; `bin/zjoin` assigns
+  the member name `member-{N}` (member count + 1) and ignores a requested one.
+- `bin/zagent` passes the model to the client as a flag and starts it with
+  `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `ZOCIETY_AGENT_CLIENT` and
+  `ZOCIETY_BLIND_KEY` removed from the environment.
+- The loop, never the agent, records the model. After every iteration
+  `bin/zloop` (runner `local`) and `bin/zga-loop` (runner `github-actions`)
+  run `bin/zblind seal <prev-head> HEAD <model> <client> <runner>`: each new
+  commit gets `{model, client, runner, ts}` encrypted with
+  `gpg --symmetric` under `refs/notes/blind`, plus a plaintext
+  `refs/notes/agent` note of `kind: ai` and `runner:` only.
+- Whichever runner observes a `[heap-death]` commit runs `bin/zblind reveal
+  <sha>`: it decrypts the cycle's notes (previous `rev*-attempt*` tag to the
+  heap-death), appends `model:`/`client:` to each turn's `refs/notes/agent`
+  note and `models: a,b` / `runners: ...` to the heap-death's cycle note
+  (`refs/notes/commits`). Notes refs are pushed when origin exists.
+- Models for a cycle derive from that reveal, never from join events.
+
+`ZOCIETY_BLIND_KEY` is the shared passphrase. Locally put it in `.env`
+(gitignored; `.envrc` loads it and `bin/zociety` forwards it into the
+container). In CI add it as the repository secret `ZOCIETY_BLIND_KEY`
+(`.github/workflows/autonomous-loop.yml` passes it to `bin/zga-loop`). Both
+sides must hold the same value or a reveal fails loudly. Without the key a
+seal still writes the `refs/notes/agent` marker and warns; a reveal exits 1.
+Notes refs from two runners that sealed the same commits do not merge on
+push; the rejected side is reported and the loop continues.
 
 ### Structured Commits
 
@@ -220,8 +280,15 @@ bin/zstate | jq .                       # current state
 
 ### Branches
 
-- `main` - current cycle
-- `cycle/rev{N}-attempt{N}` - archived cycles
+- `main` - current cycle in CI (`bin/zga-loop`); advances via cycle PRs
+- `cycle/rev{N}-attempt{N}` - one branch per cycle, live and archived. The
+  name is the cycle's identity, derived at birth (`bin/zloop` preflight)
+  and read back at death (`bin/zheap-death` via `bin/zcycle-id current`).
+  Death births the successor: heap-death tags the branch, then checks out
+  `cycle/rev{N}-attempt{M+1}` for the `[direction]` event and the next
+  cycle. The machine only ever bumps `attempt`; to bump `rev` (after a
+  `PROMPT.md` change), check out `cycle/rev{N+1}-attempt1` yourself before
+  starting the loop
 - `learnings` - orphan branch with accumulated insights
 
 ## Genesis Thresholds
@@ -280,15 +347,33 @@ To maintain a clean, stable, and traceable commit history, use a standard
 Before proposing any changes, verify correctness using:
 - `shellcheck <script>` for shell script validation.
 - `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
-- `bin/test-zevent-system` to test the git-native event sourcing system.
+- `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
+  heap-death successor checkout and the zloop preflight.
+- `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to
+  verify the blind model record: `bin/zblind` seal/reveal, `bin/zjoin`
+  naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and the
+  `bin/nfprov-blame.py` attribution rungs.
+- `bin/test-zevent-system` to test the git-native event sourcing system. It
+  is not a throwaway-fixture test: it commits real [join]/[stuff]/[vote]/[pass]
+  events onto the current branch of the repo it runs in (`git add -A` sweeps
+  staged work into them). Run it only in a throwaway copy of the repo.
 
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes
 - Secret detection (gitleaks; `.gitleaks.toml`, inline `# gitleaks:allow` for exemptions)
 - Shell script validation (shellcheck)
 - State validation
+- Dev-session attribution: `.githooks/prepare-commit-msg` appends an
+  `Agent: claude-code[/<model>]` trailer when `CLAUDECODE` is set (Claude
+  Code exports `CLAUDECODE=1` into its shells; verified with `env`, which
+  shows no model variable, so the suffix comes from `ANTHROPIC_MODEL` when
+  exported). Event commits (`bin/zevent`: `[type]` subject, `{"z":1` body)
+  are exempt, since a trailer after the JSON body would hide the event from
+  `bin/zstate`; loop turns are attributed by `refs/notes/agent` instead.
+  `core.hooksPath` is not used: the hook runs through the pre-commit
+  framework's `prepare-commit-msg` stage (which `--no-verify` does not skip).
 
-Install with: `pre-commit install`. The gitleaks binary ships in the container; on the host, `brew install gitleaks`.
+Install with: `pre-commit install --hook-type pre-commit --hook-type prepare-commit-msg` (`bin/setup` does this). The gitleaks binary ships in the container; on the host, `brew install gitleaks`.
 
 ## Files
 
@@ -305,8 +390,12 @@ Install with: `pre-commit install`. The gitleaks binary ships in the container; 
 - `stuff/` - Things made this cycle
 
 ### Git-based (permanent)
-- Tags: `rev{N}-attempt{N}-iterations{N}of{N}`
-- Branches: `cycle/rev{N}-attempt{N}`
+- Tags: `rev{N}-attempt{N}-iterations{N}of{N}` - written by `bin/zheap-death`
+  at the cycle's last commit; the id comes from `bin/zcycle-id current`
+  (the branch name when on `cycle/*`, else the last tag with attempt+1, or
+  rev+1 if `PROMPT.md` changed)
+- Branches: `cycle/rev{N}-attempt{N}` - the cycle's identity, named at
+  birth; heap-death checks out attempt+1 as its successor (see Branches)
 - Orphan branch: `learnings`
 
 ---

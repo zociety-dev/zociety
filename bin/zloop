@@ -24,7 +24,26 @@
 #   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
 #   ZLOOP_KILL_GRACE=10     Seconds to wait for the agent to exit on Ctrl-C
 #                           before it is killed outright
+#   ZLOOP_BRANCH=0          Skip the cycle-branch preflight and run on whatever
+#                           branch is checked out (main needs ALLOW_MAIN=1)
 #   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
+#
+# Identity at birth: unless ZLOOP_BRANCH=0, a run started on a branch that is
+# not cycle/* derives its first cycle's name (bin/zcycle-id current: last tag,
+# attempt+1, or rev+1 if PROMPT.md changed) and checks out
+# cycle/rev{N}-attempt{M} before the first iteration. Cut no branch by hand;
+# the run names itself. bin/zheap-death births each later cycle's branch
+# (attempt+1) at death, so this covers only the first cycle of a run. To bump
+# rev, check out cycle/rev{N+1}-attempt1 yourself before starting.
+#
+# Blind model record: the model (ANTHROPIC_MODEL, or GEMINI_MODEL for the
+# gemini client; "unknown" when neither is set) and client are captured once
+# at start. After every iteration `bin/zblind seal <prev-head> HEAD <model>
+# <client> local` seals them per new commit under refs/notes/blind (needs
+# ZOCIETY_BLIND_KEY; without it only the plaintext refs/notes/agent marker is
+# written) and `bin/zblind reveal <sha>` runs for every [heap-death] commit
+# the iteration produced. bin/zagent strips the model variables and the key
+# from the agent's environment. See docs/challenges/cross-agent-deference.md.
 #
 # Output discipline:
 #   stdout  claude's result only (safe to redirect to a file)
@@ -144,10 +163,36 @@ for _mode in ${STOP_MODES//,/ }; do
   [[ -x "bin/zstop-$_mode" ]] || die "unknown stop mode '$_mode' (no executable bin/zstop-$_mode)"
 done
 
+# Identity at birth (see header): name the first cycle and check out its
+# branch when not already on a cycle branch. Satisfies the no-main-commits
+# hook by the naming step. A successor that already exists is an operator
+# decision (resume it, or delete it), not something to guess at.
+if [[ "${ZLOOP_BRANCH:-1}" != "0" ]]; then
+  current_branch=$(git branch --show-current)
+  if [[ ! "$current_branch" =~ ^cycle/ ]]; then
+    cycle_branch=$(bin/zcycle-id --branch current) || die "bin/zcycle-id failed"
+    if git show-ref --verify --quiet "refs/heads/$cycle_branch"; then
+      die "$cycle_branch already exists; check it out to resume it, delete it, or set ZLOOP_BRANCH=0"
+    fi
+    git checkout -b "$cycle_branch" --quiet
+    log "[zloop] Branch: $cycle_branch (from ${current_branch:-detached HEAD})"
+  fi
+fi
+
 # Captured once so predicates can scope their queries to this run
 # (e.g. heap-deaths in start..HEAD). Rewritten into zloop.state every
 # iteration because zheap-death deletes the file when it archives.
 START_SHA=$(git rev-parse HEAD)
+
+# Blind model record (see header): what bin/zblind seals after each
+# iteration. Captured here, before any agent runs; the agent never sees it.
+CLIENT="${ZOCIETY_AGENT_CLIENT:-claude}"
+case "$CLIENT" in
+  gemini) MODEL="${GEMINI_MODEL:-${ANTHROPIC_MODEL:-unknown}}" ;;
+  *)      MODEL="${ANTHROPIC_MODEL:-${GEMINI_MODEL:-unknown}}" ;;
+esac
+[[ -n "${ZOCIETY_BLIND_KEY:-}" ]] \
+  || log "[zloop] ZOCIETY_BLIND_KEY unset: turns will be marked as agent turns but no model is sealed"
 
 # Per-iteration metrics from bin/zrender's result footer (compact mode only),
 # summed into the run totals on every exit path.
@@ -318,12 +363,23 @@ EOF
   # Background + wait rather than a foreground child: see on_signal above.
   exit_code=0
   [[ ${#TIMEOUT_CMD[@]} -gt 0 ]] && debug "Using timeout wrapper (${TIMEOUT_SECS}s)"
+  PREV_HEAD=$(git rev-parse HEAD)
   ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" </dev/null &
   AGENT_PID=$!
   wait "$AGENT_PID" || exit_code=$?
   AGENT_PID=""
 
   log "[zloop] Iteration $ITERATION finished in $((SECONDS - iter_start))s (exit $exit_code)"
+
+  # Blind model record: seal every commit this iteration made, then reveal
+  # the cycle for every heap-death among them. Neither failure ends the loop.
+  CUR_HEAD=$(git rev-parse HEAD)
+  bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "$CLIENT" local \
+    || log "[zloop] zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7} (continuing)"
+  for death_sha in $(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}"); do
+    bin/zblind reveal "$death_sha" \
+      || log "[zloop] zblind reveal failed for ${death_sha:0:7} (continuing)"
+  done
 
   # Fixed 1s pause on success. On consecutive non-zero exits (rate limits,
   # transient API errors) back off exponentially instead of hammering every

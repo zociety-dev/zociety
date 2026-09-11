@@ -449,6 +449,22 @@ assert_rc 1
 assert_err '^CONTINUE: converge cycles=2 need=3$'
 echo ""
 
+echo "=== Case 13b: converge ignores the checked-out live cycle branch (identical archived cycles + live branch -> continue) ==="
+fresh_repo converge-live
+cycle_branch rev1-attempt1 a.md
+cycle_branch rev1-attempt2 a.md
+git checkout -q -b cycle/rev1-attempt3
+run bin/zloop-complete converge
+assert_rc 1
+assert_err '^CONTINUE: converge cycles=2 need=3$'
+# attempt3 is left behind as an archived cycle (same tree as attempt2); the
+# live branch is now attempt4 and the window is attempt1..3.
+git checkout -q -b cycle/rev1-attempt4
+run bin/zloop-complete converge
+assert_rc 0
+assert_err '^STOP: converge trivial=2/2 min_stuff=1 rev1-attempt2:trivial\(added=1\) rev1-attempt3:trivial\(added=1\)$'
+echo ""
+
 echo "=== Case 14: feedback stop (done:true on heap-death, [direction] follows) ==="
 fresh_repo feedback-stop
 START=$(git rev-parse HEAD)

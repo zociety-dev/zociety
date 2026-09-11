@@ -15,9 +15,9 @@ bin/zstate
 echo ""
 
 echo "=== Test 2: First Join Event ==="
-echo "Running: bin/zjoin alice builder 'first agent joining'"
+echo "Running: bin/zjoin - builder 'first agent joining'"
 mkdir -p stuff
-bin/zjoin alice builder "first agent joining"
+bin/zjoin - builder "first agent joining"
 echo ""
 
 echo "=== Test 3: Check State After Join ==="
@@ -33,8 +33,8 @@ bin/zstuff alice index.md "direct"
 echo ""
 
 echo "=== Test 5: Second Join ==="
-echo "Running: bin/zjoin bob voter 'second agent'"
-bin/zjoin bob voter "second agent"
+echo "Running: bin/zjoin - voter 'second agent'"
+bin/zjoin - voter "second agent"
 echo ""
 
 echo "=== Test 6: Vote Event ==="
@@ -43,8 +43,8 @@ bin/zvote bob 1 yes "supports the goal"
 echo ""
 
 echo "=== Test 7: Third Join ==="
-echo "Running: bin/zjoin carol observer 'third agent'"
-bin/zjoin carol observer "third agent"
+echo "Running: bin/zjoin - observer 'third agent'"
+bin/zjoin - observer "third agent"
 echo ""
 
 echo "=== Test 8: More Stuff ==="

@@ -17,12 +17,12 @@ Returns: `join`, `evolve`, `contribute`, `heap-death`, or `promise`
 ### Join
 
 ```bash
-bin/zjoin yourname [role] [greeting]
+bin/zjoin - [role] [greeting]      # name is assigned: member-{N}
 ```
 
 Example:
 ```bash
-bin/zjoin alice builder "first agent"
+bin/zjoin - builder "first agent"   # joins as member-1, member-2, ...
 ```
 
 ### Create Stuff
