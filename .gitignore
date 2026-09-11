@@ -1,5 +1,6 @@
 .out/
 .claude/
+.zociety/
 
 # Container secrets - NEVER commit API keys
 container/secrets/*

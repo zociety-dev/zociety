@@ -55,16 +55,17 @@ still builds. New capabilities can wire into the site the same way — render if
 you can, no-op if you can't — so the generator never hard-fails on a partial
 checkout.
 
-## A known gap (stated honestly, per the transparency rule)
+## A gap that closed (stated honestly, per the transparency rule)
 
-The prose in `index.md` says the site is rendered by "collect[ing] the `stuff/`
-artifacts of the current cycle and lay[ing] them out." Today's generator does
-**not** do that — it renders stats, the cycle timeline, learnings, and the
-`.well-known` descriptors, but the per-cycle `stuff/` markdown (including this
-very file) is not yet published to `docs/`. Closing that gap — walking the
-current cycle's `[stuff]` events and rendering each artifact into the site — is
-the natural next contribution, and it would make these three documents visible
-on zociety.dev itself rather than only in the repository.
+An earlier revision of this page noted that the prose in `index.md` promised
+the site would "collect the `stuff/` artifacts of the current cycle and lay
+them out", while the generator did not yet do so. That gap is now closed:
+`bin/zsite-generate` walks `stuff/*.md` for the current cycle, renders each
+through `bin/zmd2html` (a dependency-free Markdown converter that is itself a
+`[stuff]` artifact), and emits **`stuff.html`** with a table of contents and a
+nav link. The page appears only when the cycle has artifacts, per the additive
+rendering principle above, and disappears again after heap-death clears
+`stuff/`. Every claim on this page is now something the generator does.
 
 ## Verify it yourself
 
