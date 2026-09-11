@@ -81,7 +81,9 @@ ensure_image() {
 }
 
 # Determine if we need interactive mode (-i flag)
-# Note: -t (TTY) is always used for colored output
+# Note: no TTY for non-interactive runs. With -t but no -i, gh/git terminal
+# queries (OSC 11, CSI 6n) reach the host terminal and its replies echo into
+# the host shell as garbage because nothing in the container reads stdin.
 # -i enables signal forwarding (ctrl-C) and is needed for long-running scripts
 needs_interactive() {
     local cmd="$1"
@@ -198,7 +200,7 @@ run_container() {
     if needs_interactive "${cmd[0]}"; then
         interactive_args=(-it)
     else
-        interactive_args=(-t)  # just allocate TTY for color output
+        interactive_args=()  # no TTY: see note above; set GH_FORCE_TTY=1 for colour
     fi
 
     podman run --rm "${interactive_args[@]}" \
