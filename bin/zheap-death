@@ -26,10 +26,11 @@
 # Environment:
 #   ZEVENT_NO_VERIFY=1   Commit with --no-verify (skip pre-commit hooks)
 #   ZHEAP_DEATH_ANY_BRANCH=1
-#                        Allow running off main. By default zheap-death refuses
-#                        on any other branch (or detached HEAD): a by-hand test
-#                        run would otherwise commit a live [heap-death] into a
-#                        feature branch and push cycle/* refs and tags to origin.
+#                        Allow running off main or a cycle/rev{N}-attempt{M}
+#                        branch. By default zheap-death refuses on any other
+#                        branch (or detached HEAD): a by-hand test run would
+#                        otherwise commit a live [heap-death] into a feature
+#                        branch and push cycle/* refs and tags to origin.
 #   ZSTOP_BUDGET=3       Heap-deaths per loop run; drives the batch_size default
 #   ZSTOP_*              Every ZSTOP_* variable present is recorded under
 #                        data.zstop in the heap-death and direction events
@@ -39,17 +40,25 @@
 # " stop=<list>". Without the state file no stop_mode key or tag suffix.
 #
 # What it does, in order:
-#   1. Derives the next tag from existing tags: rev bumps if PROMPT.md
-#      changed since the last tag, otherwise attempt bumps.
+#   1. Names the cycle that just ended via bin/zcycle-id current: the branch
+#      name when on cycle/rev{N}-attempt{M} (identity derived at birth by
+#      bin/zloop), otherwise the last tag with rev bumped if PROMPT.md
+#      changed since it, else attempt bumped.
 #   2. Saves new PROMPT.md lines to the learnings branch (bin/save-learning).
 #   3. Records a [heap-death] event commit via bin/zevent.
-#   4. Creates branch cycle/rev{N}-attempt{N}, tag
-#      rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
-#   5. Pushes HEAD, tag, branch, and notes to origin if a remote exists.
+#   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
+#      it), tag rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
+#   5. Pushes HEAD, tag, branch, and notes to origin if a remote exists, and
+#      opens a PR for the cycle branch via bin/zpr-flow.
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
 #      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
 #      (gitignored) .claude/zloop.state.
-#   7. If remaining > 0, commits a [direction] event for the next cycle.
+#   7. Death births the successor: when on a cycle branch, checks out
+#      cycle/$(bin/zcycle-id next) (attempt+1) so everything after this
+#      point, the [direction] event included, lands on the next cycle's
+#      branch and the archived branch stays at the tag. On any other branch
+#      (main in CI, a feature branch) it stays put, as before.
+#   8. If remaining > 0, commits a [direction] event for the next cycle.
 #
 # Run this when bin/zstate reports action "heap-death".
 
@@ -97,11 +106,14 @@ if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
   exit 1
 fi
 
-# Refuse to archive a cycle from anywhere but main unless told otherwise. Every
-# step below writes history (event commit, cycle branch, tag, pushes), so a
-# stray run on a feature branch leaks a heap-death into that branch's PR.
+# Refuse to archive a cycle from anywhere but main or a cycle branch unless
+# told otherwise. Every step below writes history (event commit, cycle branch,
+# tag, pushes), so a stray run on a feature branch leaks a heap-death into
+# that branch's PR.
 CURRENT_BRANCH=$(git branch --show-current)
-if [[ "$CURRENT_BRANCH" != "main" && "${ZHEAP_DEATH_ANY_BRANCH:-0}" != "1" ]]; then
+ON_CYCLE_BRANCH=0
+[[ "$CURRENT_BRANCH" =~ ^cycle/rev[0-9]+-attempt[0-9]+$ ]] && ON_CYCLE_BRANCH=1
+if [[ "$CURRENT_BRANCH" != "main" && "$ON_CYCLE_BRANCH" -eq 0 && "${ZHEAP_DEATH_ANY_BRANCH:-0}" != "1" ]]; then
   echo "zheap-death: refusing to run on '${CURRENT_BRANCH:-detached HEAD}' (not main); set ZHEAP_DEATH_ANY_BRANCH=1 to override" >&2
   exit 1
 fi
@@ -182,26 +194,20 @@ bin/zlog zheap-death "Starting heap-death" \
 ORIGINAL_BRANCH=$(git branch --show-current)
 
 #############################################
-# 1. Parse existing tags to find next rev/attempt
+# 1. Name the cycle that just ended
 #############################################
+#
+# bin/zcycle-id current: the branch name on a cycle branch, else derived from
+# the last tag (rev bump if PROMPT.md changed since it, attempt bump if not).
 
+CYCLE_ID=$(bin/zcycle-id current)
+[[ "$CYCLE_ID" =~ ^rev([0-9]+)-attempt([0-9]+)$ ]] \
+  || { echo "zheap-death: bin/zcycle-id returned '$CYCLE_ID'" >&2; exit 1; }
+REV="${BASH_REMATCH[1]}"
+ATTEMPT="${BASH_REMATCH[2]}"
+
+# Still needed by step 2 (new PROMPT.md lines since the last tag).
 LAST_TAG=$(git tag --sort=-version:refname | head -1)
-
-if [[ -z "$LAST_TAG" ]]; then
-  REV=1
-  ATTEMPT=1
-else
-  REV=$(echo "$LAST_TAG" | sed -n 's/rev\([0-9]*\).*/\1/p')
-  ATTEMPT=$(echo "$LAST_TAG" | sed -n 's/.*attempt\([0-9]*\).*/\1/p')
-
-  # Check if PROMPT.md changed since last tag - if so, new rev
-  if git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/null; then
-    ATTEMPT=$((ATTEMPT + 1))
-  else
-    REV=$((REV + 1))
-    ATTEMPT=1
-  fi
-fi
 
 # Get iteration count from zloop state or estimate from commits
 if [[ -f "$STATE_FILE" ]]; then
@@ -281,9 +287,17 @@ bin/zevent heap-death "$AGENT" "$QUESTION" "$DATA"
 # 5. Create cycle branch and tag
 #############################################
 
-echo "Creating cycle branch: $CYCLE_BRANCH"
-git checkout -b "$CYCLE_BRANCH" 2>/dev/null || git checkout "$CYCLE_BRANCH"
-git checkout - --quiet
+# A pointer at HEAD, created without switching: HEAD stays where it is (main,
+# or the cycle branch itself) for the pushes and the [direction] commit below.
+# An existing branch is left where it points.
+if [[ "$CURRENT_BRANCH" == "$CYCLE_BRANCH" ]]; then
+  echo "On cycle branch: $CYCLE_BRANCH"
+elif git show-ref --verify --quiet "refs/heads/$CYCLE_BRANCH"; then
+  echo "Cycle branch exists: $CYCLE_BRANCH (left as is)"
+else
+  echo "Creating cycle branch: $CYCLE_BRANCH"
+  git branch "$CYCLE_BRANCH"
+fi
 
 echo "Tagging: $TAG"
 git tag "$TAG" -m "$QUESTION${STOP_MODE:+ stop=$STOP_MODE}"
@@ -340,6 +354,28 @@ done
 # State directories are gitignored, so the state files are never tracked and `git rm`
 # would be a no-op. Plain rm: bin/zloop rewrites it on its next iteration.
 rm -f .zociety/zloop.state .claude/zloop.state
+
+#############################################
+# 7b. Death births the successor (cycle branches only)
+#############################################
+#
+# On a cycle branch the branch name is the identity record, so the next cycle
+# needs its own branch before anything is committed for it: the [direction]
+# event below and every event of the next cycle land on attempt+1, and the
+# archived branch stays at the tag. Unconditional on batch_remaining: with the
+# batch exhausted the next loop run would otherwise start on a branch whose
+# cycle already died (tag exists) and zheap-death would name it again. Not on
+# a cycle branch (main in CI, a feature branch): stay put, as before.
+
+if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
+  NEXT_BRANCH=$(bin/zcycle-id --branch next)
+  if git show-ref --verify --quiet "refs/heads/$NEXT_BRANCH"; then
+    echo "zheap-death: successor branch $NEXT_BRANCH already exists; check it out or delete it, then continue by hand" >&2
+    exit 1
+  fi
+  echo "Birthing successor branch: $NEXT_BRANCH"
+  git checkout -b "$NEXT_BRANCH" --quiet
+fi
 
 #############################################
 # 8. Commit direction event for next cycle (only if batch remains)

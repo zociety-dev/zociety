@@ -1,0 +1,95 @@
+#!/bin/bash
+# zcycle-id: Name the running cycle (rev{N}-attempt{M}) or its successor
+#
+# Usage:
+#   bin/zcycle-id [--branch] current
+#   bin/zcycle-id [--branch] next
+#   bin/zcycle-id -h | --help
+#
+# Commands:
+#   current   The running cycle's id. On a cycle/rev{N}-attempt{M} branch the
+#             branch name is the answer: identity is derived at birth and the
+#             branch is the record. Anywhere else (main, a feature branch,
+#             detached HEAD) it is derived from the last tag the way
+#             bin/zheap-death always has: no tags -> rev1-attempt1; PROMPT.md
+#             differs from the last tag -> rev{N+1}-attempt1; else attempt+1.
+#   next      The successor of current: attempt+1. The machine never bumps
+#             rev; an operator who changes PROMPT.md names the next branch
+#             cycle/rev{N+1}-attempt1 by hand.
+#
+# Options:
+#   --branch  Print the branch name (cycle/rev{N}-attempt{M}) instead of the
+#             bare id.
+#
+# Used by bin/zloop (first-cycle preflight: derive and check out the branch)
+# and bin/zheap-death (name the cycle that just ended; birth the successor).
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zcycle-id: $*" >&2
+  exit 1
+}
+
+PREFIX=""
+CMD=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --branch)
+      PREFIX="cycle/"
+      ;;
+    current|next)
+      [[ -z "$CMD" ]] || die "unexpected argument '$1'"
+      CMD="$1"
+      ;;
+    *)
+      usage >&2
+      die "unknown argument '$1'"
+      ;;
+  esac
+  shift
+done
+
+if [[ -z "$CMD" ]]; then
+  usage >&2
+  exit 1
+fi
+
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || true)
+
+if [[ "$CURRENT_BRANCH" =~ ^cycle/rev([0-9]+)-attempt([0-9]+)$ ]]; then
+  REV="${BASH_REMATCH[1]}"
+  ATTEMPT="${BASH_REMATCH[2]}"
+else
+  LAST_TAG=$(git tag --sort=-version:refname | head -1)
+  if [[ -z "$LAST_TAG" ]]; then
+    REV=1
+    ATTEMPT=1
+  else
+    [[ "$LAST_TAG" =~ ^rev([0-9]+)-attempt([0-9]+) ]] \
+      || die "last tag '$LAST_TAG' is not rev{N}-attempt{M}-..."
+    REV="${BASH_REMATCH[1]}"
+    ATTEMPT="${BASH_REMATCH[2]}"
+    # PROMPT.md changed since the last tag: new rev. Otherwise next attempt.
+    if git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/null; then
+      ATTEMPT=$((ATTEMPT + 1))
+    else
+      REV=$((REV + 1))
+      ATTEMPT=1
+    fi
+  fi
+fi
+
+if [[ "$CMD" == "next" ]]; then
+  ATTEMPT=$((ATTEMPT + 1))
+fi
+
+echo "${PREFIX}rev${REV}-attempt${ATTEMPT}"

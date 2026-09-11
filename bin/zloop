@@ -24,7 +24,17 @@
 #   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
 #   ZLOOP_KILL_GRACE=10     Seconds to wait for the agent to exit on Ctrl-C
 #                           before it is killed outright
+#   ZLOOP_BRANCH=0          Skip the cycle-branch preflight and run on whatever
+#                           branch is checked out (main needs ALLOW_MAIN=1)
 #   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
+#
+# Identity at birth: unless ZLOOP_BRANCH=0, a run started on a branch that is
+# not cycle/* derives its first cycle's name (bin/zcycle-id current: last tag,
+# attempt+1, or rev+1 if PROMPT.md changed) and checks out
+# cycle/rev{N}-attempt{M} before the first iteration. Cut no branch by hand;
+# the run names itself. bin/zheap-death births each later cycle's branch
+# (attempt+1) at death, so this covers only the first cycle of a run. To bump
+# rev, check out cycle/rev{N+1}-attempt1 yourself before starting.
 #
 # Output discipline:
 #   stdout  claude's result only (safe to redirect to a file)
@@ -143,6 +153,22 @@ require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 for _mode in ${STOP_MODES//,/ }; do
   [[ -x "bin/zstop-$_mode" ]] || die "unknown stop mode '$_mode' (no executable bin/zstop-$_mode)"
 done
+
+# Identity at birth (see header): name the first cycle and check out its
+# branch when not already on a cycle branch. Satisfies the no-main-commits
+# hook by the naming step. A successor that already exists is an operator
+# decision (resume it, or delete it), not something to guess at.
+if [[ "${ZLOOP_BRANCH:-1}" != "0" ]]; then
+  current_branch=$(git branch --show-current)
+  if [[ ! "$current_branch" =~ ^cycle/ ]]; then
+    cycle_branch=$(bin/zcycle-id --branch current) || die "bin/zcycle-id failed"
+    if git show-ref --verify --quiet "refs/heads/$cycle_branch"; then
+      die "$cycle_branch already exists; check it out to resume it, delete it, or set ZLOOP_BRANCH=0"
+    fi
+    git checkout -b "$cycle_branch" --quiet
+    log "[zloop] Branch: $cycle_branch (from ${current_branch:-detached HEAD})"
+  fi
+fi
 
 # Captured once so predicates can scope their queries to this run
 # (e.g. heap-deaths in start..HEAD). Rewritten into zloop.state every

@@ -1,0 +1,487 @@
+#!/bin/bash
+# test-zcycle-id: Dry-run harness for cycle identity (bin/zcycle-id, the
+# zheap-death successor checkout and the zloop preflight)
+#
+# Usage:
+#   bin/test-zcycle-id [--keep]
+#   bin/test-zcycle-id -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway directory behind (path printed) for inspection
+#
+# Builds throwaway git repos under mktemp with a copy of this repo's bin/ and
+# a fake `claude` on PATH (one line, exit 0), as bin/test-zstop-modes does.
+# Cases: bin/zcycle-id current/next from no tags, from a tag with PROMPT.md
+# unchanged and changed, and on a cycle branch (the branch name wins);
+# bin/zheap-death on a cycle branch ends on the successor branch with the
+# [direction] event on it and the tag on the previous head, while on main it
+# behaves as before; bin/zloop checks out cycle/rev{N}-attempt{M} at birth
+# unless ZLOOP_BRANCH=0 or already on a cycle branch.
+
+set -e
+
+SRC_BIN="$(cd "$(dirname "$0")" && pwd)"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --keep)
+      KEEP=1
+      ;;
+    *)
+      echo "test-zcycle-id: unknown argument '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zcycle-test.XXXXXX")
+OUT="$TMP/out"
+ERR="$TMP/err"
+FAKEBIN="$TMP/fakebin"
+
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then
+    echo "Kept: $TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+PASSED=0
+FAILED=0
+RC=0
+
+#############################################
+# Fixtures
+#############################################
+
+# Fake claude: one line on stdout, exit 0. The zloop cases run --quiet, so no
+# stream-json is needed.
+mkdir -p "$FAKEBIN" "$TMP/nohooks"
+printf '#!/bin/bash\necho "fake claude ran"\n' > "$FAKEBIN/claude"
+chmod +x "$FAKEBIN/claude"
+export PATH="$FAKEBIN:$PATH"
+
+# fresh_repo <name>: new throwaway repo with bin/ copied in, one genesis
+# commit on main, cwd moved into it. See bin/test-zstop-modes fresh_repo.
+fresh_repo() {
+  REPO="$TMP/repo-$1"
+  mkdir -p "$REPO/bin" "$REPO/.claude"
+  cp -R "$SRC_BIN/." "$REPO/bin/"
+  cd "$REPO"
+  git init -q .
+  git symbolic-ref HEAD refs/heads/main
+  git config user.name tester
+  git config user.email tester@example.com
+  git config commit.gpgsign false
+  git config core.hooksPath "$TMP/nohooks"
+  echo "# fixture prompt" > PROMPT.md
+  printf '.claude/\n' > .gitignore
+  git add .gitignore PROMPT.md
+  git commit -q -m "genesis fixture"
+}
+
+# event <type>: one synthetic event commit via bin/zevent, quietly
+event() {
+  bin/zevent "$1" tester "synthetic $1" '{}' >/dev/null 2>&1
+}
+
+# change_prompt: commit a PROMPT.md edit (a rev bump for the tag derivation)
+change_prompt() {
+  echo "# changed" >> PROMPT.md
+  git add PROMPT.md
+  git commit -q -m "fixture prompt change"
+}
+
+#############################################
+# Assertions
+#############################################
+
+run() {
+  RC=0
+  "$@" >"$OUT" 2>"$ERR" || RC=$?
+}
+
+pass() {
+  echo "  ✓ $1"
+  PASSED=$((PASSED + 1))
+}
+
+fail() {
+  echo "  ✗ $1"
+  FAILED=$((FAILED + 1))
+}
+
+assert_rc() {
+  if [[ "$RC" -eq "$1" ]]; then
+    pass "exit $RC"
+  else
+    fail "exit $RC (want $1)"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+# assert_out <want>: stdout is exactly this one line
+assert_out() {
+  local got
+  got=$(cat "$OUT")
+  if [[ "$got" == "$1" ]]; then
+    pass "stdout: $got"
+  else
+    fail "stdout: '$got' (want '$1')"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+# assert_out_has <ere>: stdout has a line matching; print the first match
+assert_out_has() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$OUT"); then
+    pass "stdout: $line"
+  else
+    fail "stdout lacks /$1/"
+    sed 's/^/    stdout: /' "$OUT"
+  fi
+}
+
+assert_no_out() {
+  if grep -E -q -- "$1" "$OUT"; then
+    fail "stdout unexpectedly matches /$1/"
+  else
+    pass "stdout has no /$1/"
+  fi
+}
+
+# assert_err <ere>: stderr has a line matching; print the first match
+assert_err() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$ERR"); then
+    pass "stderr: $line"
+  else
+    fail "stderr lacks /$1/"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+assert_no_err() {
+  if grep -E -q -- "$1" "$ERR"; then
+    fail "stderr unexpectedly matches /$1/"
+  else
+    pass "stderr has no /$1/"
+  fi
+}
+
+# assert_eq <label> <got> <want>
+assert_eq() {
+  if [[ "$2" == "$3" ]]; then
+    pass "$1: $2"
+  else
+    fail "$1: $2 (want $3)"
+  fi
+}
+
+# assert_branch_at <branch> <sha>: the branch exists and points at sha
+assert_branch_at() {
+  local got
+  got=$(git rev-parse --verify -q "refs/heads/$1" || echo missing)
+  if [[ "$got" == "$2" ]]; then
+    pass "$1 at ${2:0:7}"
+  else
+    fail "$1 at ${got:0:7} (want ${2:0:7})"
+  fi
+}
+
+# assert_tag_at <glob> <sha>: exactly one tag matches glob and points at sha
+assert_tag_at() {
+  local tags n got
+  tags=$(git tag --list "$1")
+  n=$(echo "$tags" | grep -c . || true)
+  if [[ "$n" -ne 1 ]]; then
+    fail "tags matching $1: $n (want 1)"
+    return
+  fi
+  got=$(git rev-parse "$tags^{commit}")
+  if [[ "$got" == "$2" ]]; then
+    pass "tag $tags at ${2:0:7}"
+  else
+    fail "tag $tags at ${got:0:7} (want ${2:0:7})"
+  fi
+}
+
+#############################################
+# Cases: bin/zcycle-id
+#############################################
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety Cycle Identity Harness        ║"
+echo "╚════════════════════════════════════════╝"
+echo "Throwaway: $TMP"
+echo ""
+
+echo "=== Case 1: no tags -> rev1-attempt1; next -> rev1-attempt2 ==="
+fresh_repo notags
+run bin/zcycle-id current
+assert_rc 0
+assert_out rev1-attempt1
+run bin/zcycle-id next
+assert_rc 0
+assert_out rev1-attempt2
+run bin/zcycle-id --branch current
+assert_rc 0
+assert_out cycle/rev1-attempt1
+run bin/zcycle-id next --branch
+assert_rc 0
+assert_out cycle/rev1-attempt2
+echo ""
+
+echo "=== Case 2: tag + unchanged PROMPT.md -> attempt+1 ==="
+fresh_repo tag-same
+git tag rev3-attempt4-iterations5of60 -m "q"
+event join
+run bin/zcycle-id current
+assert_rc 0
+assert_out rev3-attempt5
+run bin/zcycle-id next
+assert_rc 0
+assert_out rev3-attempt6
+echo ""
+
+echo "=== Case 3: tag + changed PROMPT.md -> rev+1 attempt1 ==="
+fresh_repo tag-changed
+git tag rev3-attempt4-iterations5of60 -m "q"
+change_prompt
+run bin/zcycle-id current
+assert_rc 0
+assert_out rev4-attempt1
+run bin/zcycle-id next
+assert_rc 0
+assert_out rev4-attempt2
+echo ""
+
+echo "=== Case 3b: tags sort by version (rev1-attempt10 after rev1-attempt9) ==="
+fresh_repo tag-order
+git tag rev1-attempt9-iterations1of1 -m "q"
+git tag rev1-attempt10-iterations1of1 -m "q"
+run bin/zcycle-id current
+assert_rc 0
+assert_out rev1-attempt11
+echo ""
+
+echo "=== Case 4: on a cycle branch the branch name wins over the tag ==="
+fresh_repo branch-wins
+git tag rev3-attempt4-iterations5of60 -m "q"
+change_prompt
+git checkout -q -b cycle/rev7-attempt2
+run bin/zcycle-id current
+assert_rc 0
+assert_out rev7-attempt2
+run bin/zcycle-id --branch next
+assert_rc 0
+assert_out cycle/rev7-attempt3
+git checkout -q main
+run bin/zcycle-id current
+assert_rc 0
+assert_out rev4-attempt1
+echo ""
+
+echo "=== Case 5: usage errors ==="
+fresh_repo usage
+run bin/zcycle-id
+assert_rc 1
+run bin/zcycle-id later
+assert_rc 1
+assert_err "^zcycle-id: unknown argument 'later'$"
+run bin/zcycle-id current next
+assert_rc 1
+assert_err "^zcycle-id: unexpected argument 'next'$"
+git tag v1.0 -m "not a cycle tag"
+run bin/zcycle-id current
+assert_rc 1
+assert_err "^zcycle-id: last tag 'v1.0' is not rev"
+echo ""
+
+#############################################
+# Cases: bin/zheap-death
+#############################################
+
+echo "=== Case 6: heap-death on a cycle branch ends on the successor with [direction] on it ==="
+fresh_repo hd-cycle
+git checkout -q -b cycle/rev1-attempt1
+event join
+event stuff
+run bin/zheap-death tester "first question" 3
+assert_rc 0
+assert_out_has '^On cycle branch: cycle/rev1-attempt1$'
+assert_out_has '^Birthing successor branch: cycle/rev1-attempt2$'
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
+assert_eq "HEAD is [direction]" "$(git log -1 --format=%s | cut -c1-11)" "[direction]"
+assert_eq "[direction] parent is the heap-death" "$(git rev-parse HEAD^)" "$HD"
+assert_branch_at cycle/rev1-attempt1 "$HD"
+assert_tag_at 'rev1-attempt1-iterations*' "$HD"
+assert_eq "[direction] commits on cycle/rev1-attempt1" "$(git rev-list --count --grep='^\[direction\]' cycle/rev1-attempt1)" 0
+assert_eq "[direction] commits on cycle/rev1-attempt2" "$(git rev-list --count --grep='^\[direction\]' cycle/rev1-attempt2)" 1
+assert_eq "heap-death event branch" "$(git log -1 --format=%b "$HD" | jq -r '.data.branch')" cycle/rev1-attempt1
+assert_eq "note on the heap-death" "$(git notes show "$HD" | head -1)" "cycle: rev1 attempt1"
+assert_eq "action after heap-death" "$(bin/zstate | jq -r .action)" contribute
+assert_eq "stuff/ cleared" "$(git ls-files stuff | wc -l | tr -d ' ')" 0
+echo ""
+
+echo "=== Case 6b: a second heap-death chains: attempt2 dies, attempt3 is born ==="
+event join
+run bin/zheap-death tester "second question" 2
+assert_rc 0
+HD2=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt3
+assert_branch_at cycle/rev1-attempt2 "$HD2"
+assert_tag_at 'rev1-attempt2-iterations*' "$HD2"
+assert_eq "heap-death event tag" "$(git log -1 --format=%b "$HD2" | jq -r '.data.tag' | cut -d- -f1,2)" rev1-attempt2
+assert_eq "tags" "$(git tag | wc -l | tr -d ' ')" 2
+echo ""
+
+echo "=== Case 7: heap-death on a cycle branch with the batch exhausted still births the successor (no [direction]) ==="
+fresh_repo hd-exhausted
+git checkout -q -b cycle/rev1-attempt1
+event join
+run bin/zheap-death tester "last question" 1
+assert_rc 0
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
+assert_eq "HEAD is the heap-death" "$(git rev-parse HEAD)" "$HD"
+assert_branch_at cycle/rev1-attempt1 "$HD"
+assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 0
+assert_eq "action after heap-death" "$(bin/zstate | jq -r .action)" promise
+echo ""
+
+echo "=== Case 8: heap-death after save-learning's round trip does not land on learnings ==="
+fresh_repo hd-learning
+git tag rev1-attempt1-iterations1of1 -m "q"
+change_prompt
+git checkout -q -b cycle/rev2-attempt1
+event join
+run bin/zheap-death tester "learned question" 3
+assert_rc 0
+assert_out_has '^Saving insight to learnings branch'
+assert_eq "learnings branch exists" "$(git show-ref --verify --quiet refs/heads/learnings && echo yes)" yes
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev2-attempt2
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_branch_at cycle/rev2-attempt1 "$HD"
+assert_tag_at 'rev2-attempt1-iterations*' "$HD"
+assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 1
+echo ""
+
+echo "=== Case 9: heap-death on main keeps today's behaviour (stays on main, pointer branch, [direction] on main) ==="
+fresh_repo hd-main
+event join
+run bin/zheap-death tester "main question" 3
+assert_rc 0
+assert_out_has '^Creating cycle branch: cycle/rev1-attempt1$'
+assert_no_out 'Birthing successor'
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "current branch" "$(git branch --show-current)" main
+assert_branch_at cycle/rev1-attempt1 "$HD"
+assert_tag_at 'rev1-attempt1-iterations*' "$HD"
+assert_eq "[direction] commits on main" "$(git rev-list --count --grep='^\[direction\]' main)" 1
+assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 1
+echo ""
+
+echo "=== Case 9b: heap-death on main with the cycle branch already present leaves it alone ==="
+fresh_repo hd-main-existing
+event join
+OLD=$(git rev-parse HEAD)
+git branch cycle/rev1-attempt1
+event stuff
+run bin/zheap-death tester "main question" 3
+assert_rc 0
+assert_out_has '^Cycle branch exists: cycle/rev1-attempt1 \(left as is\)$'
+assert_branch_at cycle/rev1-attempt1 "$OLD"
+assert_eq "current branch" "$(git branch --show-current)" main
+echo ""
+
+echo "=== Case 10: heap-death refuses a feature branch, accepts a cycle branch without the override ==="
+fresh_repo hd-guard
+git checkout -q -b feat/scratch
+run bin/zheap-death tester "leaked question"
+assert_rc 1
+assert_err "^zheap-death: refusing to run on 'feat/scratch'"
+git checkout -q -b cycle/rev1-attempt1
+run env -u ZHEAP_DEATH_ANY_BRANCH bin/zheap-death tester "allowed question" 2
+assert_rc 0
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
+echo ""
+
+echo "=== Case 11: heap-death fails loud when the successor branch already exists ==="
+fresh_repo hd-successor-exists
+git checkout -q -b cycle/rev1-attempt1
+git branch cycle/rev1-attempt2
+event join
+run bin/zheap-death tester "blocked question" 3
+assert_rc 1
+assert_err '^zheap-death: successor branch cycle/rev1-attempt2 already exists'
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt1
+assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 0
+echo ""
+
+#############################################
+# Cases: bin/zloop preflight
+#############################################
+
+echo "=== Case 12: zloop on main checks out cycle/rev{N}-attempt{M} at birth ==="
+fresh_repo loop-main
+git tag rev5-attempt2-iterations1of1 -m "q"
+run bin/zloop --quiet --max 1
+assert_rc 1
+assert_err '^\[zloop\] Branch: cycle/rev5-attempt3 \(from main\)$'
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev5-attempt3
+assert_eq "main untouched" "$(git rev-parse main)" "$(git rev-parse cycle/rev5-attempt3)"
+echo ""
+
+echo "=== Case 13: zloop already on a cycle branch stays there ==="
+fresh_repo loop-cycle
+git checkout -q -b cycle/rev9-attempt9
+run bin/zloop --quiet --max 1
+assert_rc 1
+assert_no_err '^\[zloop\] Branch:'
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev9-attempt9
+assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 1
+echo ""
+
+echo "=== Case 14: ZLOOP_BRANCH=0 skips the preflight ==="
+fresh_repo loop-opt-out
+run env ZLOOP_BRANCH=0 bin/zloop --quiet --max 1
+assert_rc 1
+assert_no_err '^\[zloop\] Branch:'
+assert_eq "current branch" "$(git branch --show-current)" main
+assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 0
+echo ""
+
+echo "=== Case 15: zloop fails loud when the derived branch already exists ==="
+fresh_repo loop-exists
+git branch cycle/rev1-attempt1
+run bin/zloop --quiet --max 1
+assert_rc 2
+assert_err '^zloop: cycle/rev1-attempt1 already exists; check it out to resume it, delete it, or set ZLOOP_BRANCH=0$'
+assert_eq "current branch" "$(git branch --show-current)" main
+echo ""
+
+#############################################
+# Summary
+#############################################
+
+echo "=== Results: $PASSED passed, $FAILED failed ==="
+if [[ $FAILED -gt 0 ]]; then
+  exit 1
+fi
+echo "All cycle identity cases passed."
