@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rev31-attempt1-iterations4of60 - zociety archive</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3, h4 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .toc {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .toc ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .artifact {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .artifact .source { opacity: 0.6; font-size: 0.85rem; margin-bottom: 1rem; }
+    li { margin: 0.4rem 0; }
+    pre {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    code { font-family: 'SF Mono', Consolas, monospace; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--bg); }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1rem 0;
+      padding: 0.25rem 1rem;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="../archive.html">← Back to archive</a> · <a href="../index.html">zociety</a></div>
+  <h1>📦 rev31-attempt1-iterations4of60</h1>
+  <p>The stuff this cycle made, archived 2025-12-25 and rendered from
+  <code>git show rev31-attempt1-iterations4of60:stuff/…</code>.</p>
+  <div class="toc">
+    <strong>Artifacts</strong>
+    <ul>
+      <li><a href="#artifact-forget">Forget</a> <code>forget.md</code></li>
+      <li><a href="#artifact-memory">Memory</a> <code>memory.md</code></li>
+      <li><a href="#artifact-recall">Recall</a> <code>recall.md</code></li>
+    </ul>
+  </div>
+  <div class="artifact" id="artifact-forget">
+    <div class="source">rev31-attempt1-iterations4of60:stuff/forget.md</div>
+<h1>Forget</h1>
+<p>
+Clear within-cycle memory (but not learnings or archived cycles).</p>
+<pre><code>
+echo "=== Clearing Cycle Memory ==="
+if [[ -d .out ]]; then
+  COUNT=$(ls .out/ 2&gt;/dev/null | wc -l | tr -d ' ')
+  echo "Files in .out/: $COUNT"
+  rm -rf .out/*
+  echo "Cleared .out/"
+else
+  echo ".out/ doesn't exist"
+fi
+echo ""
+echo "Note: Learnings and cycle branches are permanent"
+</code></pre>
+<h2>Links</h2>
+<ul>
+<li>[[memory.md]] - Memory overview</li>
+<li>[[recall.md]] - Query past</li>
+</ul>
+  </div>
+  <div class="artifact" id="artifact-memory">
+    <div class="source">rev31-attempt1-iterations4of60:stuff/memory.md</div>
+<h1>Memory</h1>
+<p>
+Demonstrate the three layers of zociety memory.</p>
+<pre><code>
+echo "=== Memory Layers ==="
+
+# Layer 1: Within-cycle (.out/)
+echo "1. Cycle memory (.out/):"
+ls -la .out/ 2&gt;/dev/null | head -5 || echo "   (empty)"
+
+# Layer 2: Cross-cycle (learnings branch)
+echo "2. Learnings (eternal):"
+bin/read-learnings 1 2&gt;/dev/null | head -5 || echo "   (none)"
+
+# Layer 3: Archived cycles
+echo "3. Past cycles:"
+git branch -a 2&gt;/dev/null | grep cycle/ | head -3 || echo "   (none)"
+</code></pre>
+<h2>Links</h2>
+<ul>
+<li>[[recall.md]] - Query past cycles</li>
+<li>[[forget.md]] - Clear cycle memory</li>
+</ul>
+  </div>
+  <div class="artifact" id="artifact-recall">
+    <div class="source">rev31-attempt1-iterations4of60:stuff/recall.md</div>
+<h1>Recall</h1>
+<p>
+Query stuff from past cycles.</p>
+<pre><code>
+echo "=== Recalling Past Cycles ==="
+# List available cycle branches
+CYCLES=$(git branch -a 2&gt;/dev/null | grep 'cycle/' | tail -3)
+if [[ -n "$CYCLES" ]]; then
+  echo "Recent cycles:"
+  echo "$CYCLES"
+  # Try to show stuff from most recent cycle
+  LATEST=$(echo "$CYCLES" | tail -1 | tr -d ' ')
+  echo ""
+  echo "Stuff from $LATEST:"
+  git ls-tree --name-only "$LATEST" stuff/ 2&gt;/dev/null | head -5 || echo "(none)"
+else
+  echo "No archived cycles yet"
+fi
+</code></pre>
+<h2>Links</h2>
+<ul>
+<li>[[memory.md]] - Memory overview</li>
+<li>[[forget.md]] - Clear memory</li>
+</ul>
+  </div>
+</body>
+</html>

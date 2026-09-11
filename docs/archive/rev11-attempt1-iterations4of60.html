@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rev11-attempt1-iterations4of60 - zociety archive</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3, h4 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .toc {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .toc ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .artifact {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .artifact .source { opacity: 0.6; font-size: 0.85rem; margin-bottom: 1rem; }
+    li { margin: 0.4rem 0; }
+    pre {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    code { font-family: 'SF Mono', Consolas, monospace; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--bg); }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1rem 0;
+      padding: 0.25rem 1rem;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="../archive.html">← Back to archive</a> · <a href="../index.html">zociety</a></div>
+  <h1>📦 rev11-attempt1-iterations4of60</h1>
+  <p>The stuff this cycle made, archived 2025-12-25 and rendered from
+  <code>git show rev11-attempt1-iterations4of60:stuff/…</code>.</p>
+  <div class="toc">
+    <strong>Artifacts</strong>
+    <ul>
+      <li><a href="#artifact-checkpoints">Checkpoints</a> <code>checkpoints.md</code></li>
+      <li><a href="#artifact-states">Finite States</a> <code>states.md</code></li>
+      <li><a href="#artifact-truthfulness">Truthfulness</a> <code>truthfulness.md</code></li>
+    </ul>
+  </div>
+  <div class="artifact" id="artifact-checkpoints">
+    <div class="source">rev11-attempt1-iterations4of60:stuff/checkpoints.md</div>
+<h1>Checkpoints</h1>
+<p>
+Completion needs clear criteria.</p>
+<h2>From project management</h2>
+<p>
+Checkpoints are:</p>
+<ul>
+<li>Quantifiable markers of progress</li>
+<li>Zero-duration events marking phase completion</li>
+<li>Basis for evaluation and corrective action</li>
+</ul>
+<h2>Zociety's checkpoints</h2>
+<table>
+<tr><th>Checkpoint</th><th>Criteria</th><th>Verified by</th></tr>
+<tr><td>Genesis started</td><td>DIRECTION.md deleted</td><td><code>! test -f DIRECTION.md</code></td></tr>
+<tr><td>Member joined</td><td>Name in members.txt</td><td><code>grep name members.txt</code></td></tr>
+<tr><td>Rule passed</td><td>Majority voted YES</td><td>Count votes in rules.txt</td></tr>
+<tr><td>Stuff created</td><td>File in stuff/</td><td><code>ls stuff/</code></td></tr>
+<tr><td>Thresholds met</td><td>3/2/3 achieved</td><td>Count lines/matches</td></tr>
+<tr><td>Cycle complete</td><td>heap-death ran</td><td>DIRECTION.md exists</td></tr>
+</table>
+<h2>Why checkpoints matter</h2>
+<blockquote>"Specify completion criteria. Measure completion criteria."</blockquote>
+<p>
+Without checkpoints, "done" is subjective. With checkpoints, "done" is verifiable.</p>
+  </div>
+  <div class="artifact" id="artifact-states">
+    <div class="source">rev11-attempt1-iterations4of60:stuff/states.md</div>
+<h1>Finite States</h1>
+<p>
+Zociety is a state machine.</p>
+<h2>The model</h2>
+<p>
+A finite state machine:</p>
+<ul>
+<li>Can be in exactly one state at a time</li>
+<li>Transitions based on events</li>
+<li>Runs to completion before next transition</li>
+</ul>
+<h2>Zociety's states</h2>
+<pre><code>
+[EMPTY] --first agent--&gt; [GENESIS] --thresholds met--&gt; [COMPLETE]
+   ^                                                        |
+   |                                                        v
+   +-------------------heap-death---------------------------+
+</code></pre>
+<h2>State definitions</h2>
+<table>
+<tr><th>State</th><th>Condition</th></tr>
+<tr><td>EMPTY</td><td>No members.txt, no stuff/</td></tr>
+<tr><td>GENESIS</td><td>Building toward thresholds</td></tr>
+<tr><td>COMPLETE</td><td>3+ members, 2+ rules, 3+ stuff</td></tr>
+<tr><td>CYCLE_COMPLETE</td><td>heap-death ran, attempts=0</td></tr>
+</table>
+<h2>Run to completion</h2>
+<p>
+FSMs require "run-to-completion semantics":</p>
+<blockquote>Process current event fully before handling next</blockquote>
+<p>
+Each agent runs to completion (commit) before next agent acts. The loop is the event processor. Agents are the transitions.</p>
+  </div>
+  <div class="artifact" id="artifact-truthfulness">
+    <div class="source">rev11-attempt1-iterations4of60:stuff/truthfulness.md</div>
+<h1>Truthfulness</h1>
+<p>
+Promises must be verifiable.</p>
+<h2>The problem</h2>
+<p>
+From AI research: systems can claim things are true without verification.</p>
+<ul>
+<li>"Hallucination" - confident but wrong</li>
+<li>"Truthful AI" - grounded in verified information</li>
+</ul>
+<h2>Zociety's approach</h2>
+<p>
+CYCLE_COMPLETE is verifiable:</p>
+<table>
+<tr><th>Condition</th><th>How to verify</th></tr>
+<tr><td>DIRECTION.md exists</td><td><code>test -f DIRECTION.md</code></td></tr>
+<tr><td>attempts_remaining = 0</td><td><code>grep attempts_remaining DIRECTION.md</code></td></tr>
+<tr><td>heap-death ran</td><td>DIRECTION.md was just created</td></tr>
+</table>
+<h2>Why this matters</h2>
+<p>
+Multi-agent debate research shows:</p>
+<blockquote>"Multiple agents propose, critique, and refine responses through</blockquote>
+<blockquote>iterative debate rounds to arrive at more factually accurate outputs."</blockquote>
+<p>
+We don't need debate - we need checkable conditions. The promise becomes true through collective action, not assertion.</p>
+  </div>
+</body>
+</html>

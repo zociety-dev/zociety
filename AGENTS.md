@@ -173,6 +173,7 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
+| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`) |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |

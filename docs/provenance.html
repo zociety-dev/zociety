@@ -171,20 +171,16 @@
     .tip .who { display: inline-block; margin-right: 0.4em; }
     .tip .sub { color: var(--muted); display: block; }
     .limits li { opacity: 0.9; }
-    [data-agent="evolve"] { --agent-color: #58a6ff; }
-    [data-agent="Claude Opus 4.5"] { --agent-color: #d2a8ff; }
-    [data-agent="fix"] { --agent-color: #ffa657; }
-    [data-agent="observer"] { --agent-color: #7ee787; }
-    [data-agent="opus"] { --agent-color: #ff7b72; }
+    [data-agent="claude-code"] { --agent-color: #58a6ff; }
   </style>
 </head>
 <body>
   <div class="back"><a href="index.html">← Back to zociety</a></div>
   <h1>🔤 Provenance</h1>
   <p>
-    Two authors, one document. <code>CLAUDE.md</code> is the file that tells
+    Two authors, one document. <code>AGENTS.md</code> is the file that tells
     Claude Code how to behave in this repository, and most of it was written
-    by the agents it instructs: 19 commits by a human and by named
+    by the agents it instructs: 9 commits by a human and by named
     agents. Below, every character is attributed to the commit that introduced
     it, so the marks show exactly which characters the human wrote. The mark
     lives <em>in the text itself, not the markup</em>: U+E0101 (VARIATION
@@ -198,41 +194,33 @@
 
   <div class="stats">
     <div class="stat">
-      <div class="stat-value">19</div>
+      <div class="stat-value">9</div>
       <div class="stat-label">Commits</div>
     </div>
     <div class="stat">
-      <div class="stat-value small">2025-12-25 → 2026-09-08</div>
+      <div class="stat-value small">2026-09-09 → 2026-09-11</div>
       <div class="stat-label">Written</div>
     </div>
     <div class="stat">
-      <div class="stat-value">39%</div>
+      <div class="stat-value">21%</div>
       <div class="stat-label">Characters agent-written</div>
     </div>
     <div class="stat">
-      <div class="stat-value">5</div>
+      <div class="stat-value">1</div>
       <div class="stat-label">Distinct agents</div>
     </div>
   </div>
 
   <div class="content">
     <h2>Who wrote what</h2>
-    <p class="muted">9604 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
+    <p class="muted">19041 non-whitespace characters by author. Filled segments are agents; the outlined segment is the human.</p>
     <div class="bar" role="img" aria-label="Characters by author, top 6 plus others">
-      <div class="bar-seg bar-human" data-agent="human" style="width:60.6%" title="human: 5816 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="evolve" style="width:14.7%" title="evolve: 1413 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="Claude Opus 4.5" style="width:8.7%" title="Claude Opus 4.5: 840 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="fix" style="width:7%" title="fix: 672 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="observer" style="width:5.2%" title="observer: 498 chars"></div>
-      <div class="bar-seg bar-ai" data-agent="opus" style="width:3.8%" title="opus: 365 chars"></div>
+      <div class="bar-seg bar-human" data-agent="human" style="width:78.9%" title="human: 15021 chars"></div>
+      <div class="bar-seg bar-ai" data-agent="claude-code" style="width:21.1%" title="claude-code: 4020 chars"></div>
     </div>
     <ul class="authors">
-      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">5816 chars · 12 commits</span></li>
-      <li data-agent="evolve"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">evolve</span> <span class="kind">ai</span> <span class="num">1413 chars · 1 commit</span></li>
-      <li data-agent="Claude Opus 4.5"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">Claude Opus 4.5</span> <span class="kind">ai</span> <span class="num">840 chars · 2 commits</span></li>
-      <li data-agent="fix"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">fix</span> <span class="kind">ai</span> <span class="num">672 chars · 2 commits</span></li>
-      <li data-agent="observer"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">observer</span> <span class="kind">ai</span> <span class="num">498 chars · 1 commit</span></li>
-      <li data-agent="opus"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">opus</span> <span class="kind">ai</span> <span class="num">365 chars · 1 commit</span></li>
+      <li data-agent="human"><span class="swatch swatch-human" aria-hidden="true"></span><span class="who">human</span> <span class="kind">human</span> <span class="num">15021 chars · 7 commits</span></li>
+      <li data-agent="claude-code"><span class="swatch swatch-ai" aria-hidden="true"></span><span class="who">claude-code</span> <span class="kind">ai</span> <span class="num">4020 chars · 2 commits</span></li>
     </ul>
   </div>
 
@@ -250,64 +238,90 @@
         <button type="button" class="seg-btn" data-encoding="pua" aria-pressed="false">PUA-B</button>
       </div>
       <button type="button" class="action" id="copy">Copy marked text</button>
-      <a class="action" href="CLAUDE.marked.md" download>Download CLAUDE.marked.md</a>
+      <a class="action" href="AGENTS.marked.md" download>Download AGENTS.marked.md</a>
     </div>
     <p class="muted caption" id="caption" aria-live="polite">
       Hover any run for its commit. <span class="sample">a󠄁g󠄁e󠄁n󠄁t󠄁</span>
       wavy mark under a glyph = written by an agent; plain glyph = written by a human, or outside the marked set.
     </p>
     <pre class="example-body" id="doc" data-commit-base="https://github.com/zociety-dev/zociety/commit/" data-ref="HEAD">
-<span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md"># CLAUDE.md
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md"># AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Claude Code, Gemini, and other
+interactive or autonomous assistants) when working with this repository. All
+assistants must strictly adhere to these practices.
 
 ## What This Is
 
-Zociety is an experiment in emergent agent </span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="4af8758" data-date="2025-12-25" data-subject="note: it&#x27;s zociety not society">communi</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">ties. Agents join one at a time, each reading PROMPT.md and acting according to its rules.
-</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="4af8758" data-date="2025-12-25" data-subject="note: it&#x27;s zociety not society">
+Zociety is an experiment in emergent agent communities. Agents join one at a time, each reading PROMPT.md and acting according to its rules.
+
 Note: It's "zociety" not "society".
-</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="0d96c4b" data-date="2025-12-25" data-subject="stop: context is CO2, batch mode proven">
+
 **Context is CO2.** Stop loops early once the hypothesis is proven. Don't burn tokens completing iterations that add no new learning.
-</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">
+
 ## The Loop
 
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">#󠄁#󠄁#󠄁 N󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 z󠄁l󠄁o󠄁o󠄁p󠄁 (󠄁r󠄁e󠄁c󠄁o󠄁m󠄁m󠄁e󠄁n󠄁d󠄁e󠄁d󠄁)󠄁
+### Native zloop (recommended)
 
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">`󠄁`󠄁`󠄁b󠄁a󠄁s󠄁h󠄁
-</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">#󠄁 D󠄁i󠄁r󠄁e󠄁c󠄁t󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">b󠄁i󠄁n󠄁/󠄁z󠄁</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">l󠄁o󠄁o󠄁p󠄁 6󠄁0󠄁</span>
-<span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁m󠄁a󠄁x󠄁 6󠄁0󠄁 -󠄁-󠄁t󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 6󠄁0󠄁0󠄁 -󠄁-󠄁v󠄁e󠄁r󠄁b󠄁o󠄁s󠄁e󠄁   #󠄁 f󠄁l󠄁a󠄁g󠄁s󠄁 o󠄁v󠄁e󠄁r󠄁r󠄁i󠄁d󠄁e󠄁 Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁*󠄁 e󠄁n󠄁v󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">bin/zloop --stop action,file 60              # pick stop modes (default: action)
+```bash
+# Direct execution
+bin/zloop 60
+bin/zloop --max 60 --timeout 600 --verbose   # flags override ZLOOP_* env
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">bin/zloop --quiet 60                         # buffered output, no live render
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">bin/zloop --stop action,file 60              # pick stop modes (default: action)
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
-</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 -󠄁-󠄁h󠄁e󠄁l󠄁p󠄁
-</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
-#󠄁 C󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁i󠄁z󠄁e󠄁d󠄁 e󠄁x󠄁e󠄁c󠄁u󠄁t󠄁i󠄁o󠄁n󠄁</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering"> (ZLOOP_* and ZSTOP_* are forwarded into the container)</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
-b󠄁i󠄁n󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 6󠄁0󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">bin/zociety bin/zloop --stop budget,file 60
-</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">```
+bin/zloop --help
 
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">Z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁'󠄁s󠄁 o󠄁w󠄁n󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁h󠄁e󠄁c󠄁k󠄁i󠄁n󠄁g󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">:󠄁
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">Before each iteration `bin/zloop-complete` dispatches the stop predicates</span>
-<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">  (`bin/zstop-&lt;mode&gt;` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
+# Containerized execution (ZLOOP_* and ZSTOP_* are forwarded into the container)
+bin/zociety bin/zloop 60
+bin/zociety bin/zloop --stop budget,file 60
+```
+
+Zociety's own loop with dynamic completion checking:
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">- Identity at birth: started on any branch that is not `cycle/*`, the run
+  names its first cycle (`bin/zcycle-id current`: last tag, attempt+1, or
+  rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
+  before the first iteration. Cut no branch by hand; that step also
+  satisfies the no-main-commits hook. `ZLOOP_BRANCH=0` opts out (runs on
+  the current branch, as before). Already on a `cycle/*` branch: unchanged
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">- Before each iteration `bin/zloop-complete` dispatches the stop predicates
+  (`bin/zstop-&lt;mode&gt;` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 N󠄁o󠄁 s󠄁t󠄁a󠄁t󠄁i󠄁c󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 s󠄁t󠄁r󠄁i󠄁n󠄁g󠄁s󠄁 -󠄁 u󠄁s󠄁e󠄁s󠄁 e󠄁x󠄁i󠄁t󠄁 c󠄁o󠄁d󠄁e󠄁s󠄁</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">`--max N` and `ZLOOP_TIMEOUT` are unconditional safety caps, not modes;</span>
-<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">  the predicates run once more after the final permitted iteration, so
+- No static promise strings - uses exit codes
+- Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`
+- `--max N` and `ZLOOP_TIMEOUT` are unconditional safety caps, not modes;
+  the predicates run once more after the final permitted iteration, so
   finishing on the last iteration exits 0 (`Loop Complete`), not 1
-</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">-󠄁 R󠄁u󠄁n󠄁s󠄁 w󠄁i󠄁t󠄁h󠄁o󠄁u󠄁t󠄁 M󠄁C󠄁P󠄁 s󠄁e󠄁r󠄁v󠄁e󠄁r󠄁s󠄁 (󠄁u󠄁s󠄁e󠄁s󠄁 `󠄁-󠄁-󠄁s󠄁t󠄁r󠄁i󠄁c󠄁t󠄁-󠄁m󠄁c󠄁p󠄁-󠄁c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁`󠄁 f󠄁o󠄁r󠄁 i󠄁s󠄁o󠄁l󠄁a󠄁t󠄁i󠄁o󠄁n󠄁)󠄁
--󠄁 E󠄁a󠄁c󠄁h󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 h󠄁a󠄁s󠄁 a󠄁 5󠄁-󠄁m󠄁i󠄁n󠄁u󠄁t󠄁e󠄁 t󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 (󠄁c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁u󠄁r󠄁a󠄁b󠄁l󠄁e󠄁 v󠄁i󠄁a󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁T󠄁I󠄁M󠄁E󠄁O󠄁U󠄁T󠄁`󠄁)󠄁
-</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">-󠄁 O󠄁n󠄁l󠄁y󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁'󠄁s󠄁 r󠄁e󠄁s󠄁u󠄁l󠄁t󠄁 g󠄁o󠄁e󠄁s󠄁 t󠄁o󠄁 s󠄁t󠄁d󠄁o󠄁u󠄁t󠄁;󠄁 a󠄁l󠄁l󠄁 l󠄁o󠄁o󠄁p󠄁 c󠄁h󠄁r󠄁o󠄁m󠄁e󠄁 g󠄁o󠄁e󠄁s󠄁 t󠄁o󠄁 s󠄁t󠄁d󠄁e󠄁r󠄁r󠄁
--󠄁 C󠄁o󠄁n󠄁s󠄁e󠄁c󠄁u󠄁t󠄁i󠄁v󠄁e󠄁 n󠄁o󠄁n󠄁-󠄁z󠄁e󠄁r󠄁o󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 e󠄁x󠄁i󠄁t󠄁s󠄁 b󠄁a󠄁c󠄁k󠄁 o󠄁f󠄁f󠄁 e󠄁x󠄁p󠄁o󠄁n󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁l󠄁y󠄁 (󠄁2󠄁s󠄁,󠄁 4󠄁s󠄁,󠄁 8󠄁s󠄁.󠄁.󠄁.󠄁 c󠄁a󠄁p󠄁p󠄁e󠄁d󠄁 b󠄁y󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁B󠄁A󠄁C󠄁K󠄁O󠄁F󠄁F󠄁_󠄁M󠄁A󠄁X󠄁`󠄁)󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">- Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=&lt;list&gt;` in the tag message
-</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 S󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 |󠄁 P󠄁u󠄁r󠄁p󠄁o󠄁s󠄁e󠄁 |󠄁</span>
-<span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁 [󠄁</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">o󠄁p󠄁t󠄁i󠄁o󠄁n󠄁s󠄁]󠄁 [󠄁n󠄁]󠄁`󠄁 |󠄁 R󠄁u󠄁n󠄁 a󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 m󠄁a󠄁x󠄁 n󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 (󠄁`󠄁-󠄁-󠄁h󠄁e󠄁l󠄁p󠄁`󠄁 f󠄁o󠄁r󠄁 f󠄁l󠄁a󠄁g󠄁s󠄁)󠄁</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo"> |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering"> [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">)󠄁 |󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">| `bin/zstop-&lt;mode&gt;` | One stop predicate; prints `STOP: &lt;mode&gt; ...` or `CONTINUE: &lt;mode&gt; ...` |
+- Runs without MCP servers (uses `--strict-mcp-config` for isolation)
+- Each iteration has a 5-minute timeout (configurable via `ZLOOP_TIMEOUT`)
+- Only claude's result goes to stdout; all loop chrome goes to stderr</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">, so</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">  `bin/zloop 1 &gt; out.txt` leaves only the answer in the file
+- Default render (via `bin/zagent --render compact` and `bin/zrender`): a
+  HUD line per iteration (`iter 2/5 · cycle 36 · contribute · members 1 rules 0 stuff 1 · stop=action`),
+  one line per tool call as it happens (`[0:42] Bash     git log --oneline -5`),
+  a `… thinking 25s` heartbeat after 10s of silence, a footer per iteration
+  from the result event (`duration 4m58s · turns 17 · $0.83`) and run totals
+  at the end. `--quiet` is the old buffered output; `--verbose` is the raw
+  stream-json events with partial messages
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">- Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
+- Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=&lt;list&gt;` in the tag message
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7fb976b" data-date="2026-09-09" data-subject="Make zloop interruptible: trap INT/TERM/HUP and stop the agent">- Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
+  the agent gets SIGTERM, then SIGKILL after `ZLOOP_KILL_GRACE` seconds, the
+  state file is removed and zloop exits 128+signal (130 for Ctrl-C). For a
+  graceful stop between iterations use `--stop file` and touch `.claude/STOP`.
+  Ctrl-Z is not job control inside the container; if a run is ever stuck,
+  detach with `ctrl-p ctrl-q` and `podman kill zociety-sandbox`
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
+| Script | Purpose |
+|--------|---------|
+| `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
+| `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">| `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">| `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `bin/zstop-&lt;mode&gt;` | One stop predicate; prints `STOP: &lt;mode&gt; ...` or `CONTINUE: &lt;mode&gt; ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
-
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">| `bin/test-zcycle-id` | Dry-run harness for cycle identity: `zcycle-id`, the heap-death successor checkout, the zloop preflight |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
 ### Stop Modes
 
 Comma-separated list via `bin/zloop --stop LIST` or `ZLOOP_STOP=LIST` (flag wins).
@@ -339,20 +353,23 @@ marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
 
 In `budget` mode `bin/zheap-death` defaults `batch_size` to
 `ZSTOP_BUDGET - &lt;heap-deaths so far&gt;` so its event data agrees with the loop.
-`bin/zheap-death` refuses to run off `main` (override with
-`ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot archive a cycle into a
-feature branch.
-</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">
-#󠄁#󠄁#󠄁 z󠄁l󠄁o󠄁o󠄁p󠄁 E󠄁n󠄁v󠄁i󠄁r󠄁o󠄁n󠄁m󠄁e󠄁n󠄁t󠄁 V󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁s󠄁
+`bin/zheap-death` refuses to run off `main` </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">or a `cycle/rev{N}-attempt{M}`</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">branch (override with `ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">archive a cycle into a </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">feature branch.
 
-|󠄁 V󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁 |󠄁 D󠄁e󠄁f󠄁a󠄁u󠄁l󠄁t󠄁 |󠄁 D󠄁e󠄁s󠄁c󠄁r󠄁i󠄁p󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
-|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁T󠄁I󠄁M󠄁E󠄁O󠄁U󠄁T󠄁`󠄁 |󠄁 3󠄁0󠄁0󠄁 |󠄁 T󠄁i󠄁m󠄁e󠄁o󠄁u󠄁t󠄁 p󠄁e󠄁r󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁n󠄁 s󠄁e󠄁c󠄁o󠄁n󠄁d󠄁s󠄁 |󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">| `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
-</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="aa6da41" data-date="2025-12-28" data-subject="Improve zloop: add debug mode, MCP isolation, and docs">|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁D󠄁E󠄁B󠄁U󠄁G󠄁`󠄁 |󠄁 0󠄁 |󠄁 E󠄁n󠄁a󠄁b󠄁l󠄁e󠄁 d󠄁e󠄁b󠄁u󠄁g󠄁 o󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
-|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁V󠄁E󠄁R󠄁B󠄁O󠄁S󠄁E󠄁`󠄁 |󠄁 0󠄁 |󠄁 P󠄁a󠄁s󠄁s󠄁 -󠄁-󠄁v󠄁e󠄁r󠄁b󠄁o󠄁s󠄁e󠄁 t󠄁o󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 (󠄁1󠄁 =󠄁 o󠄁n󠄁)󠄁 |󠄁
-</span><span class="prov prov-ai" data-agent="opus" data-author="zociety-dev" data-sha="c6a2b7a" data-date="2026-09-08" data-subject="[heap-death] opus: Consider practical steps to implement the delano/nerd-fonts#15 demo and deploy to zociety.dev  (https">|󠄁 `󠄁Z󠄁L󠄁O󠄁O󠄁P󠄁_󠄁B󠄁A󠄁C󠄁K󠄁O󠄁F󠄁F󠄁_󠄁M󠄁A󠄁X󠄁`󠄁 |󠄁 3󠄁0󠄁0󠄁 |󠄁 C󠄁a󠄁p󠄁 i󠄁n󠄁 s󠄁e󠄁c󠄁o󠄁n󠄁d󠄁s󠄁 o󠄁n󠄁 t󠄁h󠄁e󠄁 s󠄁l󠄁e󠄁e󠄁p󠄁 a󠄁f󠄁t󠄁e󠄁r󠄁 c󠄁o󠄁n󠄁s󠄁e󠄁c󠄁u󠄁t󠄁i󠄁v󠄁e󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 f󠄁a󠄁i󠄁l󠄁u󠄁r󠄁e󠄁s󠄁 |󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">
+### zloop Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZLOOP_TIMEOUT` | 300 | Timeout per iteration in seconds |
+| `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
+| `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
+| `ZLOOP_</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">QUIET` | 0 | Same as `--quiet`: buffered result only, no live render</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md"> (1 = on) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">| `ZLOOP_VERBOSE` | 0 | Same as `--verbose`: raw stream-json events (1 = on) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7fb976b" data-date="2026-09-09" data-subject="Make zloop interruptible: trap INT/TERM/HUP and stop the agent">| `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">| `ZLOOP_BRANCH` | 1 | 0 skips the cycle-branch preflight: run on whatever branch is checked out (`main` then needs `ALLOW_MAIN=1`) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
 ### ZSTOP Environment Variables
 
 | Variable | Default | Used by | Description |
@@ -361,46 +378,53 @@ feature branch.
 | `ZSTOP_PATIENCE` | 2 | `converge` | Consecutive trivial cycles before stopping |
 | `ZSTOP_MIN_STUFF` | 1 | `converge` | A cycle with fewer files under `stuff/` is trivial |
 | `ZSTOP_FILE` | .claude/STOP | `file` | Marker file path |
-</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">#󠄁#󠄁 G󠄁i󠄁t󠄁-󠄁N󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 S󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 (󠄁r󠄁e󠄁v󠄁5󠄁0󠄁+󠄁)󠄁</span>
 
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">A󠄁l󠄁l󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 i󠄁s󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e󠄁d󠄁 f󠄁r󠄁o󠄁m󠄁 g󠄁i󠄁t󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁.󠄁 N󠄁o󠄁 m󠄁u󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 f󠄁i󠄁l󠄁e󠄁s󠄁.󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">
-#󠄁#󠄁#󠄁 H󠄁o󠄁w󠄁 I󠄁t󠄁 W󠄁o󠄁r󠄁k󠄁s󠄁
+## Git-Native Event Sourcing (rev50+)
 
-1󠄁.󠄁 A󠄁g󠄁e󠄁n󠄁t󠄁 r󠄁u󠄁n󠄁s󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁 t󠄁o󠄁 g󠄁e󠄁t󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 a󠄁n󠄁d󠄁 n󠄁e󠄁x󠄁t󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁
-2󠄁.󠄁 A󠄁g󠄁e󠄁n󠄁t󠄁 f󠄁o󠄁l󠄁l󠄁o󠄁w󠄁s󠄁 t󠄁h󠄁e󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁:󠄁 c󠄁o󠄁n󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁,󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁,󠄁 h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁,󠄁 o󠄁r󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁
-3󠄁.󠄁 E󠄁a󠄁c󠄁h󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁e󠄁s󠄁 a󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 w󠄁i󠄁t󠄁h󠄁 J󠄁S󠄁O󠄁N󠄁 p󠄁a󠄁y󠄁l󠄁o󠄁a󠄁d󠄁 i󠄁n󠄁 t󠄁h󠄁e󠄁 m󠄁e󠄁s󠄁s󠄁a󠄁g󠄁e󠄁
-4󠄁.󠄁 S󠄁t󠄁a󠄁t󠄁e󠄁 i󠄁s󠄁 r󠄁e󠄁c󠄁o󠄁n󠄁s󠄁t󠄁r󠄁u󠄁c󠄁t󠄁e󠄁d󠄁 b󠄁y󠄁 p󠄁a󠄁r󠄁s󠄁i󠄁n󠄁g󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁
+All state is derived from git history. No mutable state files.
 
-#󠄁#󠄁#󠄁 C󠄁o󠄁r󠄁e󠄁 T󠄁o󠄁o󠄁l󠄁s󠄁
+### How It Works
 
-|󠄁 S󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 |󠄁 P󠄁u󠄁r󠄁p󠄁o󠄁s󠄁e󠄁 |󠄁
-|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁 |󠄁 G󠄁e󠄁t󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁 a󠄁n󠄁d󠄁 n󠄁e󠄁x󠄁t󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 (󠄁J󠄁S󠄁O󠄁N󠄁 o󠄁u󠄁t󠄁p󠄁u󠄁t󠄁)󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁j󠄁o󠄁i󠄁n󠄁`󠄁 |󠄁 J󠄁o󠄁i󠄁n󠄁 a󠄁s󠄁 a󠄁 m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁u󠄁f󠄁f󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 a󠄁 r󠄁u󠄁l󠄁e󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 a󠄁 r󠄁u󠄁l󠄁e󠄁 p󠄁a󠄁s󠄁s󠄁i󠄁n󠄁g󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁 g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁`󠄁 |󠄁 A󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁,󠄁 p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁 n󠄁e󠄁x󠄁t󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">(`--done` marks the hypothesis settled for `feedback` mode) </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">|󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="8df4bc5" data-date="2026-09-08" data-subject="Check it all in">| `bin/zpr` | Open (and optionally merge) a cycle branch PR into main |
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="d66b086" data-date="2026-09-08" data-subject="Add bin/zgit, a host wrapper that runs git inside the container">| `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁`󠄁 |󠄁 O󠄁u󠄁t󠄁p󠄁u󠄁t󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁e󠄁v󠄁e󠄁n󠄁t󠄁`󠄁 |󠄁 L󠄁o󠄁w󠄁-󠄁l󠄁e󠄁v󠄁e󠄁l󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁 c󠄁r󠄁e󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 |󠄁
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁`󠄁 |󠄁 A󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁 l󠄁o󠄁o󠄁p󠄁 w󠄁i󠄁t󠄁h󠄁 d󠄁y󠄁n󠄁a󠄁m󠄁i󠄁c󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁i󠄁o󠄁n󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">(`--stop` modes) </span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁-󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁`󠄁 |󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort)</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo"> |󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="44a3a67" data-date="2026-09-08" data-subject="Document the stop modes and align the spec with the kept cap ordering">| `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
+1. Agent runs `bin/zstate` to get current state and next action
+2. Agent follows the action: contribute, complete, heap-death, or promise
+3. Each action creates a commit with JSON payload in the message
+4. State is reconstructed by parsing commit history
+
+### Core Tools
+
+| Script | Purpose |
+|--------|---------|
+| `bin/zstate` | Get current state and next action (JSON output) |
+| `bin/zjoin` | Join as a member </span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">(󠄁n󠄁a󠄁m󠄁e󠄁 a󠄁s󠄁s󠄁i󠄁g󠄁n󠄁e󠄁d󠄁:󠄁 `󠄁m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁-󠄁{󠄁N󠄁}󠄁`󠄁;󠄁 n󠄁o󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 i󠄁n󠄁 t󠄁h󠄁e󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁)󠄁 </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">|
+</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁 |󠄁 S󠄁e󠄁a󠄁l󠄁 e󠄁a󠄁c󠄁h󠄁 l󠄁o󠄁o󠄁p󠄁 t󠄁u󠄁r󠄁n󠄁'󠄁s󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 u󠄁n󠄁d󠄁e󠄁r󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁 (󠄁`󠄁s󠄁e󠄁a󠄁l󠄁`󠄁)󠄁,󠄁 m󠄁a󠄁r󠄁k󠄁 i󠄁t󠄁 `󠄁k󠄁i󠄁n󠄁d󠄁:󠄁 a󠄁i󠄁`󠄁 u󠄁n󠄁d󠄁e󠄁r󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁,󠄁 a󠄁n󠄁d󠄁 d󠄁e󠄁c󠄁r󠄁y󠄁p󠄁t󠄁 a󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁'󠄁s󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁s󠄁 a󠄁t󠄁 h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁 (󠄁`󠄁r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁`󠄁)󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `bin/zstuff` | Record stuff creation |
+| `bin/zvote` | Vote on a rule |
+| `bin/zpass` | Record a rule passing |
+| `bin/zcomplete` | Record genesis completion |
+| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode)</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">; on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md"> |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">| `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `bin/zpr</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="8f2f7e5" data-date="2026-09-09" data-subject="Route git/gh through container wrappers; rename zpr to zpr-flow">-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`)</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md"> |
+| `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="8f2f7e5" data-date="2026-09-09" data-subject="Route git/gh through container wrappers; rename zpr to zpr-flow">| `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
+| `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `bin/zpromise` | Output completion promise |
+| `bin/zevent` | Low-level event creation |
+| `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
+| `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9f6cdea" data-date="2026-09-09" data-subject="Render zloop progress live: bin/zrender, --quiet/--verbose levels">| `bin/zrender` | Compact live render of claude's stream-json (used by `bin/zagent --render compact`) |
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
 | `bin/zstop-budget` | Stop predicate: `ZSTOP_BUDGET` heap-deaths since loop start |
 | `bin/zstop-converge` | Stop predicate: recent cycles stopped changing `stuff/` |
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="9a8f104" data-date="2026-09-08" data-subject="Add bin/test-prov-encoding to check the page&#x27;s VS to PUA transform against nfprov">| `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁`󠄁 |󠄁 P󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁 G󠄁i󠄁t󠄁H󠄁u󠄁b󠄁 A󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁`󠄁 |󠄁 V󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
-|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁`󠄁 |󠄁 A󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁 a󠄁p󠄁p󠄁r󠄁o󠄁v󠄁e󠄁d󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 |󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">| `bin/nfprov.py` | Mark text added between a base and current file (`mark-added`) |
+</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">|󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁t󠄁e󠄁s󠄁t󠄁-󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁 |󠄁 T󠄁h󠄁r󠄁o󠄁w󠄁a󠄁w󠄁a󠄁y󠄁-󠄁f󠄁i󠄁x󠄁t󠄁u󠄁r󠄁e󠄁 h󠄁a󠄁r󠄁n󠄁e󠄁s󠄁s󠄁 f󠄁o󠄁r󠄁 t󠄁h󠄁e󠄁 b󠄁l󠄁i󠄁n󠄁d󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 r󠄁e󠄁c󠄁o󠄁r󠄁d󠄁:󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁,󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁j󠄁o󠄁i󠄁n󠄁`󠄁 n󠄁a󠄁m󠄁i󠄁n󠄁g󠄁,󠄁 t󠄁h󠄁e󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 e󠄁n󠄁v󠄁 s󠄁c󠄁r󠄁u󠄁b󠄁,󠄁 t󠄁h󠄁e󠄁 `󠄁A󠄁g󠄁e󠄁n󠄁t󠄁:󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 h󠄁o󠄁o󠄁k󠄁 a󠄁n󠄁d󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁n󠄁f󠄁p󠄁r󠄁o󠄁v󠄁-󠄁b󠄁l󠄁a󠄁m󠄁e󠄁.󠄁p󠄁y󠄁`󠄁 r󠄁u󠄁n󠄁g󠄁s󠄁 |󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">| `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
+| `bin/zworkflow` | Propose GitHub Actions workflow |
+| `bin/zworkflow-vote` | Vote on proposed workflow |
+| `bin/zworkflow-pass` | Activate approved workflow |
+| `bin/nfprov.py` | Vendored-verbatim canonical encoder from the fork (`mark`/`inspect`/`strip`/`convert`) |
+| `bin/nfprov-diff.py` | Mark text added between a base and current file (`mark-added`); front end over `bin/nfprov.py` |
 | `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
 | `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout) |
 | `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
@@ -410,112 +434,228 @@ feature branch.
 Agent-written text is marked in-band so a P+ font renders it distinctly.
 The encoding is the fork's, not ours: U+E0101 (VARIATION SELECTOR-18)
 after each AI character, or Supplementary PUA-B (U+100000 + codepoint)
-in `pua` mode. Never reimplement it. </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="a8dff4d" data-date="2026-09-08" data-subject="Document the P+ marked set and the WebKit fallback in CLAUDE.md">The marked set is the 188 printable</span>
-<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="a8dff4d" data-date="2026-09-08" data-subject="Document the P+ marked set and the WebKit fallback in CLAUDE.md">Latin-1 characters U+0021-U+00FF (soft hyphen excluded); VS17 is human,
+in `pua` mode. Never reimplement it. The marked set is the 188 printable
+Latin-1 characters U+0021-U+00FF (soft hyphen excluded); VS17 is human,
 VS18 is ai, VS19 is unknown, and plane 16 addresses the ai variants only.
 Everything else (Greek, Cyrillic, icons, U+2192) passes through unmarked:
 nfprov still emits base+VS18, but the font has no such sequence, so every
 renderer drops the selector and draws the plain glyph. No tofu, no mark.
 Width (Mono, Propo, proportional) is a separate P+ face, not a selector.
-WebKit (Safari, Orion) ignores the VS sequences entirely; the page falls
-back to PUA-B display there (#13). `bin/nfprov-upstream.py` and
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">`bin/nfprov-mapping.json` are vendored verbatim from the fork; update them
-by copying, and keep the source SHA in the header. Attribution is by
-commit convention: `[event]` commits are agents (name from the zevent
-envelope), everything else is the human. Over-marking is the accepted
-failure direction. `docs/provenance.html` shows `CLAUDE.md` because
-`PROMPT.md` is nine lines since rev66.
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
-#󠄁#󠄁#󠄁 S󠄁t󠄁r󠄁u󠄁c󠄁t󠄁u󠄁r󠄁e󠄁d󠄁 C󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁
-</span>
-<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">A󠄁l󠄁l󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁 u󠄁s󠄁e󠄁 p󠄁r󠄁e󠄁f󠄁i󠄁x󠄁e󠄁s󠄁 f󠄁o󠄁r󠄁 q󠄁u󠄁e󠄁r󠄁y󠄁a󠄁b󠄁l󠄁e󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁:󠄁
--󠄁 `󠄁[󠄁j󠄁o󠄁i󠄁n󠄁]󠄁`󠄁 -󠄁 a󠄁g󠄁e󠄁n󠄁t󠄁 j󠄁o󠄁i󠄁n󠄁i󠄁n󠄁g󠄁
--󠄁 `󠄁[󠄁v󠄁o󠄁t󠄁e󠄁]󠄁`󠄁 -󠄁 v󠄁o󠄁t󠄁i󠄁n󠄁g󠄁 o󠄁n󠄁 r󠄁u󠄁l󠄁e󠄁
--󠄁 `󠄁[󠄁p󠄁a󠄁s󠄁s󠄁]󠄁`󠄁 -󠄁 r󠄁u󠄁l󠄁e󠄁 r󠄁e󠄁a󠄁c󠄁h󠄁e󠄁d󠄁 m󠄁a󠄁j󠄁o󠄁r󠄁i󠄁t󠄁y󠄁
--󠄁 `󠄁[󠄁s󠄁t󠄁u󠄁f󠄁f󠄁]󠄁`󠄁 -󠄁 a󠄁d󠄁d󠄁e󠄁d󠄁 t󠄁o󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁/󠄁
--󠄁 `󠄁[󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁]󠄁`󠄁 -󠄁 g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 d󠄁o󠄁n󠄁e󠄁
--󠄁 `󠄁[󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁]󠄁`󠄁 -󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 a󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁d󠄁
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁[󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁]󠄁`󠄁 -󠄁 n󠄁e󠄁w󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 s󠄁e󠄁t󠄁
-</span><span class="prov prov-ai" data-agent="observer" data-author="zociety" data-sha="8d20527" data-date="2025-12-27" data-subject="[heap-death] observer: When will you know whether the homegrown zloop will be able to fully replace the ralph wiggum loo">-󠄁 `󠄁[󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁]󠄁`󠄁 -󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 p󠄁r󠄁o󠄁p󠄁o󠄁s󠄁e󠄁d󠄁
--󠄁 `󠄁[󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁v󠄁o󠄁t󠄁e󠄁]󠄁`󠄁 -󠄁 v󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁
--󠄁 `󠄁[󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁-󠄁p󠄁a󠄁s󠄁s󠄁]󠄁`󠄁 -󠄁 w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁 a󠄁c󠄁t󠄁i󠄁v󠄁a󠄁t󠄁e󠄁d󠄁
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
-Q󠄁u󠄁e󠄁r󠄁y󠄁 e󠄁x󠄁a󠄁m󠄁p󠄁l󠄁e󠄁s󠄁:󠄁
-`󠄁`󠄁`󠄁b󠄁a󠄁s󠄁h󠄁
-g󠄁i󠄁t󠄁 l󠄁o󠄁g󠄁 -󠄁-󠄁o󠄁n󠄁e󠄁l󠄁i󠄁n󠄁e󠄁 -󠄁-󠄁g󠄁r󠄁e󠄁p󠄁=󠄁"󠄁^󠄁\󠄁[󠄁j󠄁o󠄁i󠄁n󠄁\󠄁]󠄁"󠄁   #󠄁 a󠄁l󠄁l󠄁 j󠄁o󠄁i󠄁n󠄁s󠄁
-g󠄁i󠄁t󠄁 l󠄁o󠄁g󠄁 -󠄁-󠄁o󠄁n󠄁e󠄁l󠄁i󠄁n󠄁e󠄁 -󠄁-󠄁g󠄁r󠄁e󠄁p󠄁=󠄁"󠄁^󠄁\󠄁[󠄁p󠄁a󠄁s󠄁s󠄁\󠄁]󠄁"󠄁   #󠄁 a󠄁l󠄁l󠄁 p󠄁a󠄁s󠄁s󠄁e󠄁d󠄁 r󠄁u󠄁l󠄁e󠄁s󠄁
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁 |󠄁 j󠄁q󠄁 .󠄁                       #󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">`󠄁`󠄁`󠄁
+WebKit (Safari, Orion) ignores the VS sequences entirely because both
+shape text with CoreText, which drops an unregistered variation selector
+before the P+ face ever sees it; the page falls back to PUA-B display
+there (#13). Any other CoreText consumer has the same gap, including
+non-browser apps such as the Zed editor — VS18 text pastes in unmarked,
+PUA-B pastes in marked. `bin/nfprov.py` and
+`bin/nfprov-mapping.json` are vendored verbatim from the fork (`bin/nfprov.py`
+is the fork's reference encoder; `bin/nfprov-diff.py` is zociety's own
+`mark-added` front end over it); update the vendored pair by copying, and
+keep the source SHA in the header.
 
-#󠄁#󠄁#󠄁 B󠄁r󠄁a󠄁n󠄁c󠄁h󠄁e󠄁s󠄁
+</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">A󠄁t󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁s󠄁 h󠄁a󠄁r󠄁n󠄁e󠄁s󠄁s󠄁-󠄁w󠄁r󠄁i󠄁t󠄁t󠄁e󠄁n󠄁,󠄁 n󠄁o󠄁t󠄁 i󠄁n󠄁f󠄁e󠄁r󠄁r󠄁e󠄁d󠄁 f󠄁r󠄁o󠄁m󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 c󠄁o󠄁n󠄁v󠄁e󠄁n󠄁t󠄁i󠄁o󠄁n󠄁s󠄁.󠄁</span>
+<span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">`󠄁b󠄁i󠄁n󠄁/󠄁n󠄁f󠄁p󠄁r󠄁o󠄁v󠄁-󠄁b󠄁l󠄁a󠄁m󠄁e󠄁.󠄁p󠄁y󠄁`󠄁 r󠄁e󠄁a󠄁d󠄁s󠄁,󠄁 i󠄁n󠄁 o󠄁r󠄁d󠄁e󠄁r󠄁:󠄁 t󠄁h󠄁e󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 n󠄁o󠄁t󠄁</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">e
+`</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁 s󠄁e󠄁a󠄁l󠄁`󠄁 a󠄁t󠄁t󠄁a󠄁c󠄁h󠄁e󠄁s󠄁 t󠄁o󠄁 e󠄁v󠄁e󠄁r󠄁y󠄁 l󠄁o󠄁o󠄁p󠄁 t󠄁u󠄁r󠄁n󠄁 (󠄁`󠄁k󠄁i󠄁n󠄁d󠄁:󠄁 a󠄁i󠄁`󠄁;󠄁 t󠄁h󠄁e󠄁 n󠄁a󠄁m󠄁e󠄁 i󠄁s󠄁 t󠄁h󠄁e󠄁</span>
+<span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">n󠄁o󠄁t󠄁e󠄁'󠄁s󠄁 `󠄁m󠄁o󠄁d󠄁e󠄁l󠄁:󠄁`󠄁 l󠄁i󠄁n󠄁e󠄁 o󠄁n󠄁c󠄁e󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁 r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁`󠄁 h󠄁a󠄁s󠄁 a󠄁d󠄁d󠄁e󠄁d󠄁 i󠄁t󠄁,󠄁 e󠄁l󠄁s󠄁e󠄁 `󠄁s󠄁e󠄁a󠄁l󠄁e󠄁d󠄁`󠄁)󠄁;󠄁
+t󠄁h󠄁e󠄁 `󠄁A󠄁g󠄁e󠄁n󠄁t󠄁:󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 `󠄁.󠄁g󠄁i󠄁t󠄁h󠄁o󠄁o󠄁k󠄁s󠄁/󠄁p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁-󠄁m󠄁s󠄁g󠄁`󠄁 a󠄁p󠄁p󠄁e󠄁n󠄁d󠄁s󠄁 t󠄁o󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁 m󠄁a󠄁d󠄁e󠄁
+f󠄁r󠄁o󠄁m󠄁 a󠄁 C󠄁l󠄁a󠄁u󠄁d󠄁e󠄁 C󠄁o󠄁d󠄁e󠄁 s󠄁h󠄁e󠄁l󠄁l󠄁 (󠄁`󠄁c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁-󠄁c󠄁o󠄁d󠄁e󠄁`󠄁,󠄁 o󠄁r󠄁 `󠄁c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁-󠄁c󠄁o󠄁d󠄁e󠄁/󠄁&lt;󠄁m󠄁o󠄁d󠄁e󠄁l󠄁&gt;󠄁`󠄁)󠄁;󠄁 a󠄁
+`󠄁C󠄁o󠄁-󠄁A󠄁u󠄁t󠄁h󠄁o󠄁r󠄁e󠄁d󠄁-󠄁B󠄁y󠄁:󠄁 C󠄁l󠄁a󠄁u󠄁d󠄁e󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁;󠄁 t󠄁h󠄁e󠄁n󠄁,󠄁 a󠄁s󠄁 a󠄁 l󠄁e󠄁g󠄁a󠄁c󠄁y󠄁 f󠄁a󠄁l󠄁l󠄁b󠄁a󠄁c󠄁k󠄁 o󠄁n󠄁l󠄁y󠄁,󠄁 t󠄁h󠄁e󠄁
+`󠄁[󠄁e󠄁v󠄁e󠄁n󠄁t󠄁]󠄁`󠄁 s󠄁u󠄁b󠄁j󠄁e󠄁c󠄁t󠄁 p󠄁r󠄁e󠄁f󠄁i󠄁x󠄁 (󠄁n󠄁a󠄁m󠄁e󠄁 f󠄁r󠄁o󠄁m󠄁 t󠄁h󠄁e󠄁 z󠄁e󠄁v󠄁e󠄁n󠄁t󠄁 e󠄁n󠄁v󠄁e󠄁l󠄁o󠄁p󠄁e󠄁)󠄁;󠄁 e󠄁v󠄁e󠄁r󠄁y󠄁t󠄁h󠄁i󠄁n󠄁g󠄁 e󠄁l󠄁s󠄁e󠄁
+i󠄁s󠄁 t󠄁h󠄁e󠄁 h󠄁u󠄁m󠄁a󠄁n󠄁.󠄁 I󠄁n󠄁s󠄁i󠄁d󠄁e󠄁 a󠄁 l󠄁i󠄁v󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 t󠄁h󠄁e󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 i󠄁s󠄁 s󠄁e󠄁a󠄁l󠄁e󠄁d󠄁,󠄁 s󠄁o󠄁 t󠄁h󠄁e󠄁 p󠄁a󠄁g󠄁e󠄁 s󠄁h󠄁o󠄁w󠄁s󠄁
+a󠄁g󠄁e󠄁n󠄁t󠄁 t󠄁u󠄁r󠄁n󠄁s󠄁 a󠄁s󠄁 `󠄁s󠄁e󠄁a󠄁l󠄁e󠄁d󠄁`󠄁 u󠄁n󠄁t󠄁i󠄁l󠄁 t󠄁h󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁'󠄁s󠄁 h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁 r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁s󠄁 t󠄁h󠄁e󠄁m󠄁;󠄁 t󠄁h󠄁e󠄁
+r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁 a󠄁p󠄁p󠄁e󠄁n󠄁d󠄁s󠄁 `󠄁m󠄁o󠄁d󠄁e󠄁l󠄁:󠄁`󠄁 t󠄁o󠄁 e󠄁a󠄁c󠄁h󠄁 t󠄁u󠄁r󠄁n󠄁'󠄁s󠄁 n󠄁o󠄁t󠄁e󠄁 a󠄁n󠄁d󠄁 t󠄁h󠄁e󠄁 p󠄁a󠄁g󠄁e󠄁 r󠄁e󠄁s󠄁o󠄁l󠄁v󠄁e󠄁s󠄁 o󠄁n󠄁 t󠄁h󠄁e󠄁
+n󠄁e󠄁x󠄁t󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁i󠄁t󠄁e󠄁-󠄁g󠄁e󠄁n󠄁e󠄁r󠄁a󠄁t󠄁e󠄁`󠄁.󠄁 O󠄁v󠄁e󠄁r󠄁-󠄁m󠄁a󠄁r󠄁k󠄁i󠄁n󠄁g󠄁 i󠄁s󠄁 t󠄁h󠄁e󠄁 a󠄁c󠄁c󠄁e󠄁p󠄁t󠄁e󠄁d󠄁 f󠄁a󠄁i󠄁l󠄁u󠄁r󠄁e󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁.󠄁
+`󠄁d󠄁o󠄁c󠄁s󠄁/󠄁p󠄁r󠄁o󠄁v󠄁e󠄁n󠄁a󠄁n󠄁c󠄁e󠄁.󠄁h󠄁t󠄁m󠄁l󠄁`󠄁 s󠄁h󠄁o󠄁w󠄁s󠄁 `󠄁A󠄁G󠄁E󠄁N󠄁T󠄁S󠄁.󠄁m󠄁d󠄁`󠄁 b󠄁e󠄁c󠄁a󠄁u󠄁s󠄁e󠄁 `󠄁P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁`󠄁 i󠄁s󠄁 n󠄁i󠄁n󠄁e󠄁 l󠄁i󠄁n󠄁e󠄁s󠄁
+s󠄁i󠄁n󠄁c󠄁e󠄁 r󠄁e󠄁v󠄁6󠄁6󠄁.󠄁 I󠄁t󠄁 r󠄁e󠄁a󠄁d󠄁 0󠄁%󠄁 a󠄁g󠄁e󠄁n󠄁t󠄁 i󠄁n󠄁p󠄁u󠄁t󠄁 b󠄁e󠄁f󠄁o󠄁r󠄁e󠄁 t󠄁h󠄁i󠄁s󠄁 s󠄁c󠄁h󠄁e󠄁m󠄁e󠄁 b󠄁e󠄁c󠄁a󠄁u󠄁s󠄁e󠄁 e󠄁v󠄁e󠄁r󠄁y󠄁
+c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 t󠄁h󠄁a󠄁t󠄁 e󠄁v󠄁e󠄁r󠄁 t󠄁o󠄁u󠄁c󠄁h󠄁e󠄁d󠄁 `󠄁A󠄁G󠄁E󠄁N󠄁T󠄁S󠄁.󠄁m󠄁d󠄁`󠄁 w󠄁a󠄁s󠄁 a󠄁 p󠄁l󠄁a󠄁i󠄁n󠄁-󠄁s󠄁u󠄁b󠄁j󠄁e󠄁c󠄁t󠄁 d󠄁e󠄁v󠄁-󠄁s󠄁e󠄁s󠄁s󠄁i󠄁o󠄁n󠄁
+c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁:󠄁 w󠄁r󠄁i󠄁t󠄁t󠄁e󠄁n󠄁 w󠄁i󠄁t󠄁h󠄁 a󠄁 c󠄁o󠄁d󠄁i󠄁n󠄁g󠄁 a󠄁g󠄁e󠄁n󠄁t󠄁,󠄁 b󠄁u󠄁t󠄁 c󠄁a󠄁r󠄁r󠄁y󠄁i󠄁n󠄁g󠄁 n󠄁o󠄁 `󠄁[󠄁e󠄁v󠄁e󠄁n󠄁t󠄁]󠄁`󠄁 p󠄁r󠄁e󠄁f󠄁i󠄁x󠄁,󠄁 n󠄁o󠄁
+`󠄁C󠄁o󠄁-󠄁A󠄁u󠄁t󠄁h󠄁o󠄁r󠄁e󠄁d󠄁-󠄁B󠄁y󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 a󠄁n󠄁d󠄁 n󠄁o󠄁 n󠄁o󠄁t󠄁e󠄁,󠄁 s󠄁o󠄁 t󠄁h󠄁e󠄁 c󠄁o󠄁n󠄁v󠄁e󠄁n󠄁t󠄁i󠄁o󠄁n󠄁-󠄁o󠄁n󠄁l󠄁y󠄁 r󠄁u󠄁l󠄁e󠄁 h󠄁a󠄁d󠄁
+n󠄁o󠄁t󠄁h󠄁i󠄁n󠄁g󠄁 t󠄁o󠄁 k󠄁e󠄁y󠄁 o󠄁n󠄁.󠄁 T󠄁h󠄁e󠄁 `󠄁A󠄁g󠄁e󠄁n󠄁t󠄁:󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 c󠄁l󠄁o󠄁s󠄁e󠄁s󠄁 t󠄁h󠄁a󠄁t󠄁 g󠄁a󠄁p󠄁 f󠄁o󠄁r󠄁 n󠄁e󠄁w󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁;󠄁
+h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁 b󠄁e󠄁f󠄁o󠄁r󠄁e󠄁 i󠄁t󠄁 s󠄁t󠄁a󠄁y󠄁s󠄁 h󠄁u󠄁m󠄁a󠄁n󠄁-󠄁a󠄁t󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁d󠄁.󠄁
 
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁m󠄁a󠄁i󠄁n󠄁`󠄁 -󠄁 c󠄁u󠄁r󠄁r󠄁e󠄁n󠄁t󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁c󠄁y󠄁c󠄁l󠄁e󠄁/󠄁r󠄁e󠄁v󠄁{󠄁N󠄁}󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁{󠄁N󠄁}󠄁`󠄁 -󠄁 a󠄁r󠄁c󠄁h󠄁i󠄁v󠄁e󠄁d󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁s󠄁
--󠄁 `󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁 -󠄁 o󠄁r󠄁p󠄁h󠄁a󠄁n󠄁 b󠄁r󠄁a󠄁n󠄁c󠄁h󠄁 w󠄁i󠄁t󠄁h󠄁 a󠄁c󠄁c󠄁u󠄁m󠄁u󠄁l󠄁a󠄁t󠄁e󠄁d󠄁 i󠄁n󠄁s󠄁i󠄁g󠄁h󠄁t󠄁s󠄁
+#󠄁#󠄁#󠄁 B󠄁l󠄁i󠄁n󠄁d󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 r󠄁e󠄁c󠄁o󠄁r󠄁d󠄁
 
-#󠄁#󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts"> G󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁 T󠄁h󠄁r󠄁e󠄁s󠄁h󠄁o󠄁l󠄁d󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
+A󠄁g󠄁e󠄁n󠄁t󠄁s󠄁 m󠄁u󠄁s󠄁t󠄁 n󠄁o󠄁t󠄁 l󠄁e󠄁a󠄁r󠄁n󠄁 w󠄁h󠄁i󠄁c󠄁h󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 a󠄁n󠄁o󠄁t󠄁h󠄁e󠄁r󠄁 m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁 i󠄁s󠄁,󠄁 o󠄁r󠄁 w󠄁h󠄁i󠄁c󠄁h󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 t󠄁h󠄁e󠄁y󠄁
+a󠄁r󠄁e󠄁,󠄁 f󠄁r󠄁o󠄁m󠄁 t󠄁h󠄁e󠄁 r󠄁e󠄁p󠄁o󠄁s󠄁i󠄁t󠄁o󠄁r󠄁y󠄁 (󠄁`󠄁d󠄁o󠄁c󠄁s󠄁/󠄁c󠄁h󠄁a󠄁l󠄁l󠄁e󠄁n󠄁g󠄁e󠄁s󠄁/󠄁c󠄁r󠄁o󠄁s󠄁s󠄁-󠄁a󠄁g󠄁e󠄁n󠄁t󠄁-󠄁d󠄁e󠄁f󠄁e󠄁r󠄁e󠄁n󠄁c󠄁e󠄁.󠄁m󠄁d󠄁`󠄁)󠄁.󠄁 S󠄁o󠄁:󠄁
 
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">A󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁s󠄁 w󠄁h󠄁e󠄁n󠄁:󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 3󠄁+󠄁 m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁s󠄁 (󠄁j󠄁o󠄁i󠄁n󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁)󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 2󠄁+󠄁 p󠄁a󠄁s󠄁s󠄁e󠄁d󠄁 r󠄁u󠄁l󠄁e󠄁s󠄁 (󠄁p󠄁a󠄁s󠄁s󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁)󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 3󠄁+󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁 i󠄁t󠄁e󠄁m󠄁s󠄁 (󠄁s󠄁t󠄁u󠄁f󠄁f󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁)󠄁
+-󠄁 `󠄁[󠄁j󠄁o󠄁i󠄁n󠄁]󠄁`󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁 c󠄁a󠄁r󠄁r󠄁y󠄁 `󠄁{󠄁r󠄁o󠄁l󠄁e󠄁,󠄁 g󠄁r󠄁e󠄁e󠄁t󠄁i󠄁n󠄁g󠄁}󠄁`󠄁 a󠄁n󠄁d󠄁 n󠄁o󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁;󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁j󠄁o󠄁i󠄁n󠄁`󠄁 a󠄁s󠄁s󠄁i󠄁g󠄁n󠄁s󠄁
+  t󠄁h󠄁e󠄁 m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁 n󠄁a󠄁m󠄁e󠄁 `󠄁m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁-󠄁{󠄁N󠄁}󠄁`󠄁 (󠄁m󠄁e󠄁m󠄁b󠄁e󠄁r󠄁 c󠄁o󠄁u󠄁n󠄁t󠄁 +󠄁 1󠄁)󠄁 a󠄁n󠄁d󠄁 i󠄁g󠄁n󠄁o󠄁r󠄁e󠄁s󠄁 a󠄁 r󠄁e󠄁q󠄁u󠄁e󠄁s󠄁t󠄁e󠄁d󠄁 o󠄁n󠄁e󠄁.󠄁
+-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 p󠄁a󠄁s󠄁s󠄁e󠄁s󠄁 t󠄁h󠄁e󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 t󠄁o󠄁 t󠄁h󠄁e󠄁 c󠄁l󠄁i󠄁e󠄁n󠄁t󠄁 a󠄁s󠄁 a󠄁 f󠄁l󠄁a󠄁g󠄁 a󠄁n󠄁d󠄁 s󠄁t󠄁a󠄁r󠄁t󠄁s󠄁 i󠄁t󠄁 w󠄁i󠄁t󠄁h󠄁
+  `󠄁A󠄁N󠄁T󠄁H󠄁R󠄁O󠄁P󠄁I󠄁C󠄁_󠄁M󠄁O󠄁D󠄁E󠄁L󠄁`󠄁,󠄁 `󠄁G󠄁E󠄁M󠄁I󠄁N󠄁I󠄁_󠄁M󠄁O󠄁D󠄁E󠄁L󠄁`󠄁,󠄁 `󠄁Z󠄁O󠄁C󠄁I󠄁E󠄁T󠄁Y󠄁_󠄁A󠄁G󠄁E󠄁N󠄁T󠄁_󠄁C󠄁L󠄁I󠄁E󠄁N󠄁T󠄁`󠄁 a󠄁n󠄁d󠄁
+  `󠄁Z󠄁O󠄁C󠄁I󠄁E󠄁T󠄁Y󠄁_󠄁B󠄁L󠄁I󠄁N󠄁D󠄁_󠄁K󠄁E󠄁Y󠄁`󠄁 r󠄁e󠄁m󠄁o󠄁v󠄁e󠄁d󠄁 f󠄁r󠄁o󠄁m󠄁 t󠄁h󠄁e󠄁 e󠄁n󠄁v󠄁i󠄁r󠄁o󠄁n󠄁m󠄁e󠄁n󠄁t󠄁.󠄁
+-󠄁 T󠄁h󠄁e󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 n󠄁e󠄁v󠄁e󠄁r󠄁 t󠄁h󠄁e󠄁 a󠄁g󠄁e󠄁n󠄁t󠄁,󠄁 r󠄁e󠄁c󠄁o󠄁r󠄁d󠄁s󠄁 t󠄁h󠄁e󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁.󠄁 A󠄁f󠄁t󠄁e󠄁r󠄁 e󠄁v󠄁e󠄁r󠄁y󠄁 i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁
+  `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁l󠄁o󠄁o󠄁p󠄁`󠄁 (󠄁r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁 `󠄁l󠄁o󠄁c󠄁a󠄁l󠄁`󠄁)󠄁 a󠄁n󠄁d󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁g󠄁a󠄁-󠄁l󠄁o󠄁o󠄁p󠄁`󠄁 (󠄁r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁 `󠄁g󠄁i󠄁t󠄁h󠄁u󠄁b󠄁-󠄁a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁`󠄁)󠄁
+  r󠄁u󠄁n󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁 s󠄁e󠄁a󠄁l󠄁 &lt;󠄁p󠄁r󠄁e󠄁v󠄁-󠄁h󠄁e󠄁a󠄁d󠄁&gt;󠄁 H󠄁E󠄁A󠄁D󠄁 &lt;󠄁m󠄁o󠄁d󠄁e󠄁l󠄁&gt;󠄁 &lt;󠄁c󠄁l󠄁i󠄁e󠄁n󠄁t󠄁&gt;󠄁 &lt;󠄁r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁&gt;󠄁`󠄁:󠄁 e󠄁a󠄁c󠄁h󠄁 n󠄁e󠄁w󠄁
+  c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 g󠄁e󠄁t󠄁s󠄁 `󠄁{󠄁m󠄁o󠄁d󠄁e󠄁l󠄁,󠄁 c󠄁l󠄁i󠄁e󠄁n󠄁t󠄁,󠄁 r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁,󠄁 t󠄁s󠄁}󠄁`󠄁 e󠄁n󠄁c󠄁r󠄁y󠄁p󠄁t󠄁e󠄁d󠄁 w󠄁i󠄁t󠄁h󠄁
+  `󠄁g󠄁p󠄁g󠄁 -󠄁-󠄁s󠄁y󠄁m󠄁m󠄁e󠄁t󠄁r󠄁i󠄁c󠄁`󠄁 u󠄁n󠄁d󠄁e󠄁r󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁,󠄁 p󠄁l󠄁u󠄁s󠄁 a󠄁 p󠄁l󠄁a󠄁i󠄁n󠄁t󠄁e󠄁x󠄁t󠄁
+  `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 n󠄁o󠄁t󠄁e󠄁 o󠄁f󠄁 `󠄁k󠄁i󠄁n󠄁d󠄁:󠄁 a󠄁i󠄁`󠄁 a󠄁n󠄁d󠄁 `󠄁r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁:󠄁`󠄁 o󠄁n󠄁l󠄁y󠄁.󠄁
+-󠄁 W󠄁h󠄁i󠄁c󠄁h󠄁e󠄁v󠄁e󠄁r󠄁 r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁 o󠄁b󠄁s󠄁e󠄁r󠄁v󠄁e󠄁s󠄁 a󠄁 `󠄁[󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁]󠄁`󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 r󠄁u󠄁n󠄁s󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁 r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁
+  &lt;󠄁s󠄁h󠄁a󠄁&gt;󠄁`󠄁:󠄁 i󠄁t󠄁 d󠄁e󠄁c󠄁r󠄁y󠄁p󠄁t󠄁s󠄁 t󠄁h󠄁e󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁'󠄁s󠄁 n󠄁o󠄁t󠄁e󠄁s󠄁 (󠄁p󠄁r󠄁e󠄁v󠄁i󠄁o󠄁u󠄁s󠄁 `󠄁r󠄁e󠄁v󠄁*󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁*󠄁`󠄁 t󠄁a󠄁g󠄁 t󠄁o󠄁 t󠄁h󠄁e󠄁
+  h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁)󠄁,󠄁 a󠄁p󠄁p󠄁e󠄁n󠄁d󠄁s󠄁 `󠄁m󠄁o󠄁d󠄁e󠄁l󠄁:󠄁`󠄁/󠄁`󠄁c󠄁l󠄁i󠄁e󠄁n󠄁t󠄁:󠄁`󠄁 t󠄁o󠄁 e󠄁a󠄁c󠄁h󠄁 t󠄁u󠄁r󠄁n󠄁'󠄁s󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁
+  n󠄁o󠄁t󠄁e󠄁 a󠄁n󠄁d󠄁 `󠄁m󠄁o󠄁d󠄁e󠄁l󠄁s󠄁:󠄁 a󠄁,󠄁b󠄁`󠄁 /󠄁 `󠄁r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁s󠄁:󠄁 .󠄁.󠄁.󠄁`󠄁 t󠄁o󠄁 t󠄁h󠄁e󠄁 h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁'󠄁s󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 n󠄁o󠄁t󠄁e󠄁
+  (󠄁`󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁`󠄁)󠄁.󠄁 N󠄁o󠄁t󠄁e󠄁s󠄁 r󠄁e󠄁f󠄁s󠄁 a󠄁r󠄁e󠄁 p󠄁u󠄁s󠄁h󠄁e󠄁d󠄁 w󠄁h󠄁e󠄁n󠄁 o󠄁r󠄁i󠄁g󠄁i󠄁n󠄁 e󠄁x󠄁i󠄁s󠄁t󠄁s󠄁.󠄁
+-󠄁 M󠄁o󠄁d󠄁e󠄁l󠄁s󠄁 f󠄁o󠄁r󠄁 a󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e󠄁 f󠄁r󠄁o󠄁m󠄁 t󠄁h󠄁a󠄁t󠄁 r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁,󠄁 n󠄁e󠄁v󠄁e󠄁r󠄁 f󠄁r󠄁o󠄁m󠄁 j󠄁o󠄁i󠄁n󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁s󠄁.󠄁
 
-C󠄁h󠄁e󠄁c󠄁k󠄁 w󠄁i󠄁t󠄁h󠄁:󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁 |󠄁 j󠄁q󠄁 .󠄁g󠄁e󠄁n󠄁e󠄁s󠄁i󠄁s󠄁`󠄁
+`󠄁Z󠄁O󠄁C󠄁I󠄁E󠄁T󠄁Y󠄁_󠄁B󠄁L󠄁I󠄁N󠄁D󠄁_󠄁K󠄁E󠄁Y󠄁`󠄁 i󠄁s󠄁 t󠄁h󠄁e󠄁 s󠄁h󠄁a󠄁r󠄁e󠄁d󠄁 p󠄁a󠄁s󠄁s󠄁p󠄁h󠄁r󠄁a󠄁s󠄁e󠄁.󠄁 L󠄁o󠄁c󠄁a󠄁l󠄁l󠄁y󠄁 p󠄁u󠄁t󠄁 i󠄁t󠄁 i󠄁n󠄁 `󠄁.󠄁e󠄁n󠄁v󠄁`󠄁
+(󠄁g󠄁i󠄁t󠄁i󠄁g󠄁n󠄁o󠄁r󠄁e󠄁d󠄁;󠄁 `󠄁.󠄁e󠄁n󠄁v󠄁r󠄁c󠄁`󠄁 l󠄁o󠄁a󠄁d󠄁s󠄁 i󠄁t󠄁 a󠄁n󠄁d󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁`󠄁 f󠄁o󠄁r󠄁w󠄁a󠄁r󠄁d󠄁s󠄁 i󠄁t󠄁 i󠄁n󠄁t󠄁o󠄁 t󠄁h󠄁e󠄁
+c󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁)󠄁.󠄁 I󠄁n󠄁 C󠄁I󠄁 a󠄁d󠄁d󠄁 i󠄁t󠄁 a󠄁s󠄁 t󠄁h󠄁e󠄁 r󠄁e󠄁p󠄁o󠄁s󠄁i󠄁t󠄁o󠄁r󠄁y󠄁 s󠄁e󠄁c󠄁r󠄁e󠄁t󠄁 `󠄁Z󠄁O󠄁C󠄁I󠄁E󠄁T󠄁Y󠄁_󠄁B󠄁L󠄁I󠄁N󠄁D󠄁_󠄁K󠄁E󠄁Y󠄁`󠄁
+(󠄁`󠄁.󠄁g󠄁i󠄁t󠄁h󠄁u󠄁b󠄁/󠄁w󠄁o󠄁r󠄁k󠄁f󠄁l󠄁o󠄁w󠄁s󠄁/󠄁a󠄁u󠄁t󠄁o󠄁n󠄁o󠄁m󠄁o󠄁u󠄁s󠄁-󠄁l󠄁o󠄁o󠄁p󠄁.󠄁y󠄁m󠄁l󠄁`󠄁 p󠄁a󠄁s󠄁s󠄁e󠄁s󠄁 i󠄁t󠄁 t󠄁o󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁g󠄁a󠄁-󠄁l󠄁o󠄁o󠄁p󠄁`󠄁)󠄁.󠄁 B󠄁o󠄁t󠄁h󠄁
+s󠄁i󠄁d󠄁e󠄁s󠄁 m󠄁u󠄁s󠄁t󠄁 h󠄁o󠄁l󠄁d󠄁 t󠄁h󠄁e󠄁 s󠄁a󠄁m󠄁e󠄁 v󠄁a󠄁l󠄁u󠄁e󠄁 o󠄁r󠄁 a󠄁 r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁 f󠄁a󠄁i󠄁l󠄁s󠄁 l󠄁o󠄁u󠄁d󠄁l󠄁y󠄁.󠄁 W󠄁i󠄁t󠄁h󠄁o󠄁u󠄁t󠄁 t󠄁h󠄁e󠄁 k󠄁e󠄁y󠄁 a󠄁
+s󠄁e󠄁a󠄁l󠄁 s󠄁t󠄁i󠄁l󠄁l󠄁 w󠄁r󠄁i󠄁t󠄁e󠄁s󠄁 t󠄁h󠄁e󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 m󠄁a󠄁r󠄁k󠄁e󠄁r󠄁 a󠄁n󠄁d󠄁 w󠄁a󠄁r󠄁n󠄁s󠄁;󠄁 a󠄁 r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁 e󠄁x󠄁i󠄁t󠄁s󠄁 1󠄁.󠄁
+N󠄁o󠄁t󠄁e󠄁s󠄁 r󠄁e󠄁f󠄁s󠄁 f󠄁r󠄁o󠄁m󠄁 t󠄁w󠄁o󠄁 r󠄁u󠄁n󠄁n󠄁e󠄁r󠄁s󠄁 t󠄁h󠄁a󠄁t󠄁 s󠄁e󠄁a󠄁l󠄁e󠄁d󠄁 t󠄁h󠄁e󠄁 s󠄁a󠄁m󠄁e󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁 d󠄁o󠄁 n󠄁o󠄁t󠄁 m󠄁e󠄁r󠄁g󠄁e󠄁 o󠄁n󠄁
+p󠄁u󠄁s󠄁h󠄁;󠄁 t󠄁h󠄁e󠄁 r󠄁e󠄁j󠄁e󠄁c󠄁t󠄁e󠄁d󠄁 s󠄁i󠄁d󠄁e󠄁 i󠄁s󠄁 r󠄁e󠄁p󠄁o󠄁r󠄁t󠄁e󠄁d󠄁 a󠄁n󠄁d󠄁 t󠄁h󠄁e󠄁 l󠄁o󠄁o󠄁p󠄁 c󠄁o󠄁n󠄁t󠄁i󠄁n󠄁u󠄁e󠄁s󠄁.󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
+### Structured Commits
 
-#󠄁#󠄁 A󠄁g󠄁e󠄁n󠄁t󠄁 F󠄁l󠄁o󠄁w󠄁
+All commits use prefixes for queryable history:
+- `[join]` - agent joining
+- `[vote]` - voting on rule
+- `[pass]` - rule reached majority
+- `[stuff]` - added to stuff/
+- `[complete]` - genesis done
+- `[heap-death]` - cycle archived
+- `[direction]` - new cycle direction set
+- `[workflow]` - workflow proposed
+- `[workflow-vote]` - vote on workflow
+- `[workflow-pass]` - workflow activated
 
-`󠄁`󠄁`󠄁
-b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁 →󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 f󠄁i󠄁e󠄁l󠄁d󠄁 t󠄁e󠄁l󠄁l󠄁s󠄁 y󠄁o󠄁u󠄁 w󠄁h󠄁a󠄁t󠄁 t󠄁o󠄁 d󠄁o󠄁:󠄁
+Query examples:
+```bash
+git log --oneline --grep="^\[join\]"   # all joins
+git log --oneline --grep="^\[pass\]"   # all passed rules
+bin/zstate | jq .                       # current state
+```
 
-  "󠄁c󠄁o󠄁n󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁"󠄁 →󠄁 J󠄁o󠄁i󠄁n󠄁,󠄁 m󠄁a󠄁k󠄁e󠄁 s󠄁t󠄁u󠄁f󠄁f󠄁,󠄁 v󠄁o󠄁t󠄁e󠄁 o󠄁n󠄁 r󠄁u󠄁l󠄁e󠄁s󠄁
-  "󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁"󠄁   →󠄁 R󠄁u󠄁n󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁c󠄁o󠄁m󠄁p󠄁l󠄁e󠄁t󠄁e󠄁
-  "󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁"󠄁 →󠄁 R󠄁u󠄁n󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁
-  "󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁"󠄁    →󠄁 R󠄁u󠄁n󠄁 b󠄁i󠄁n󠄁/󠄁z󠄁p󠄁r󠄁o󠄁m󠄁i󠄁s󠄁e󠄁 a󠄁n󠄁d󠄁 S󠄁T󠄁O󠄁P󠄁
-  "󠄁s󠄁t󠄁o󠄁p󠄁"󠄁       →󠄁 D󠄁o󠄁 n󠄁o󠄁t󠄁h󠄁i󠄁n󠄁g󠄁,󠄁 e󠄁x󠄁i󠄁t󠄁 c󠄁l󠄁e󠄁a󠄁n󠄁l󠄁y󠄁
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">`󠄁`󠄁`󠄁
-</span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">
-T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i󠄁e󠄁l󠄁d󠄁 (󠄁w󠄁h󠄁e󠄁n󠄁 s󠄁e󠄁t󠄁)󠄁 g󠄁u󠄁i󠄁d󠄁e󠄁s󠄁 w󠄁h󠄁a󠄁t󠄁 t󠄁o󠄁 c󠄁o󠄁n󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁,󠄁 b󠄁u󠄁t󠄁 d󠄁o󠄁e󠄁s󠄁n󠄁'󠄁t󠄁 r󠄁e󠄁q󠄁u󠄁i󠄁r󠄁e󠄁 f󠄁i󠄁l󠄁e󠄁 e󠄁d󠄁i󠄁t󠄁s󠄁.󠄁
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
-#󠄁#󠄁 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">Q󠄁u󠄁a󠄁l󠄁i󠄁t󠄁y󠄁 C󠄁o󠄁n󠄁t󠄁r󠄁o󠄁l󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
+### Branches
 
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">T󠄁h󠄁e󠄁 r󠄁e󠄁p󠄁o󠄁s󠄁i󠄁t󠄁o󠄁r󠄁y󠄁 u󠄁s󠄁e󠄁s󠄁 p󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 h󠄁o󠄁o󠄁k󠄁s󠄁 f󠄁o󠄁r󠄁:󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 T󠄁r󠄁a󠄁i󠄁l󠄁i󠄁n󠄁g󠄁 w󠄁h󠄁i󠄁t󠄁e󠄁s󠄁p󠄁a󠄁c󠄁e󠄁 a󠄁n󠄁d󠄁 E󠄁O󠄁F󠄁 f󠄁i󠄁x󠄁e󠄁s󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 S󠄁e󠄁c󠄁r󠄁e󠄁t󠄁 d󠄁e󠄁t󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁 (󠄁T󠄁a󠄁l󠄁i󠄁s󠄁m󠄁a󠄁n󠄁)󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 S󠄁h󠄁e󠄁l󠄁l󠄁 s󠄁c󠄁r󠄁i󠄁p󠄁t󠄁 v󠄁a󠄁l󠄁i󠄁d󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 (󠄁s󠄁h󠄁e󠄁l󠄁l󠄁c󠄁h󠄁e󠄁c󠄁k󠄁)󠄁</span>
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 S󠄁t󠄁a󠄁t󠄁e󠄁 v󠄁a󠄁l󠄁i󠄁d󠄁a󠄁t󠄁i󠄁o󠄁n󠄁</span>
+- `main` - current cycle</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md"> in CI (`bin/zga-loop`); advances via cycle PRs</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
+- `cycle/rev{N}-attempt{N}` - </span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">one branch per cycle, live and archived. The</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">  name is the cycle's identity, derived at birth (`bin/zloop` preflight)
+  and read back at death (`bin/zheap-death` via `bin/zcycle-id current`).
+  Death births the successor: heap-death tags the branch, then checks out
+  `cycle/rev{N}-attempt{M+1}` for the `[direction]` event and the next
+  cycle. The machine only ever bumps `attempt`; to bump `rev` (after a
+  `PROMPT.md` change), check out `cycle/rev{N+1}-attempt1` yourself before
+  starting the loop
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">- `learnings` - orphan branch with accumulated insights
 
-<span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">I󠄁n󠄁s󠄁t󠄁a󠄁l󠄁l󠄁 w󠄁i󠄁t󠄁h󠄁:󠄁 `󠄁p󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 i󠄁n󠄁s󠄁t󠄁a󠄁l󠄁l󠄁`󠄁</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">
+## Genesis Thresholds
+
+A cycle completes when:
+- 3+ members (join events)
+- 2+ passed rules (pass events)
+- 3+ stuff items (stuff events)
+
+Check with: `bin/zstate | jq .genesis`
+
+## Agent Flow
+
+```
+bin/zstate → action field tells you what to do:
+
+  "contribute" → Join, make stuff, vote on rules
+  "complete"   → Run bin/zcomplete
+  "heap-death" → Run bin/zheap-death
+  "promise"    → Run bin/zpromise and STOP
+  "stop"       → Do nothing, exit cleanly
+```
+
+The `direction` field (when set) guides what to contribute, but doesn't require file edits.
+
+## Small Team Git Workflow
+
+To maintain a clean, stable, and traceable commit history, use a standard
+**Branch ➔ PR ➔ Merge ➔ Sync** workflow.
+
+### 1. Feature &amp; Fix Branching
+- **Target Branch:** All development branches must branch off of the up-to-date `main` branch.
+- **Naming Convention:** Use descriptive kebab-case names, optionally prefixed with the category of change:
+  - `fix/zloop-interrupt`
+  - `feature/new-stop-mode`
+  - `docs/api-guide`
+
+### 2. Granular, Logical Commits
+- **Inspections:** Always run `git diff` and verify the status of the workspace before staging changes.
+- **Granularity:** Group changes into small, logical, self-contained units. Avoid committing unrelated edits.
+- **Commit Message Style:**
+  - Use the imperative mood (e.g., "Add flag", "Fix bug") and a concise subject line.
+  - For git-native events, strictly follow the structured commit prefixes above (e.g., `[join]`, `[vote]`, `[stuff]`).
+
+### 3. Pull Requests &amp; Code Review
+- **Tooling:** Use GitHub CLI (`gh pr create`) to open pull requests.
+- **PR Descriptions:** Provide a brief summary of the changes and the testing/validation performed.
+- **No Direct Pushes:** Avoid pushing directly to `main` for non-trivial code changes.
+
+### 4. Merging &amp; Synchronization
+- Once a PR is validated and approved, merge it.
+- Immediately switch back to `main` and pull from origin with fast-forward-only semantics (`git checkout main &amp;&amp; git pull --ff-only`) to synchronize the local environment.
+
+## Quality Controls
+
+Before proposing any changes, verify correctness using:
+- `shellcheck &lt;script&gt;` for shell script validation.
+- `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">- `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
+  heap-death successor checkout and the zloop preflight.
+</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁t󠄁e󠄁s󠄁t󠄁-󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁 (󠄁r󠄁u󠄁n󠄁 a󠄁s󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁 b󠄁i󠄁n󠄁/󠄁t󠄁e󠄁s󠄁t󠄁-󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁;󠄁 n󠄁e󠄁e󠄁d󠄁s󠄁 g󠄁p󠄁g󠄁)󠄁 t󠄁o󠄁
+  v󠄁e󠄁r󠄁i󠄁f󠄁y󠄁 t󠄁h󠄁e󠄁 b󠄁l󠄁i󠄁n󠄁d󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 r󠄁e󠄁c󠄁o󠄁r󠄁d󠄁:󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁b󠄁l󠄁i󠄁n󠄁d󠄁`󠄁 s󠄁e󠄁a󠄁l󠄁/󠄁r󠄁e󠄁v󠄁e󠄁a󠄁l󠄁,󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁j󠄁o󠄁i󠄁n󠄁`󠄁
+  n󠄁a󠄁m󠄁i󠄁n󠄁g󠄁,󠄁 t󠄁h󠄁e󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 e󠄁n󠄁v󠄁 s󠄁c󠄁r󠄁u󠄁b󠄁,󠄁 t󠄁h󠄁e󠄁 `󠄁A󠄁g󠄁e󠄁n󠄁t󠄁:󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 h󠄁o󠄁o󠄁k󠄁 a󠄁n󠄁d󠄁 t󠄁h󠄁e󠄁
+  `󠄁b󠄁i󠄁n󠄁/󠄁n󠄁f󠄁p󠄁r󠄁o󠄁v󠄁-󠄁b󠄁l󠄁a󠄁m󠄁e󠄁.󠄁p󠄁y󠄁`󠄁 a󠄁t󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁i󠄁o󠄁n󠄁 r󠄁u󠄁n󠄁g󠄁s󠄁.󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">- `bin/test-zevent-system` to test the git-native event sourcing system.</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="3934548" data-date="2026-09-11" data-subject="Exclude the live cycle branch from converge; guard the successor before heap-death writes"> It</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="3934548" data-date="2026-09-11" data-subject="Exclude the live cycle branch from converge; guard the successor before heap-death writes">  is not a throwaway-fixture test: it commits real [join]/[stuff]/[vote]/[pass]
+  events onto the current branch of the repo it runs in (`git add -A` sweeps
+  staged work into them). Run it only in a throwaway copy of the repo.
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
+The repository uses pre-commit hooks for:
+- Trailing whitespace and EOF fixes
+- Secret detection (</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="02267b1" data-date="2026-09-09" data-subject="Replace Talisman with gitleaks for secret detection">gitleaks; `.gitleaks.toml`, inline `# gitleaks:allow` for exemptions</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">)
+- Shell script validation (shellcheck)
+- State validation
+</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind">-󠄁 D󠄁e󠄁v󠄁-󠄁s󠄁e󠄁s󠄁s󠄁i󠄁o󠄁n󠄁 a󠄁t󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁i󠄁o󠄁n󠄁:󠄁 `󠄁.󠄁g󠄁i󠄁t󠄁h󠄁o󠄁o󠄁k󠄁s󠄁/󠄁p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁-󠄁m󠄁s󠄁g󠄁`󠄁 a󠄁p󠄁p󠄁e󠄁n󠄁d󠄁s󠄁 a󠄁n󠄁
+  `󠄁A󠄁g󠄁e󠄁n󠄁t󠄁:󠄁 c󠄁l󠄁a󠄁u󠄁d󠄁e󠄁-󠄁c󠄁o󠄁d󠄁e󠄁[󠄁/󠄁&lt;󠄁m󠄁o󠄁d󠄁e󠄁l󠄁&gt;󠄁]󠄁`󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 w󠄁h󠄁e󠄁n󠄁 `󠄁C󠄁L󠄁A󠄁U󠄁D󠄁E󠄁C󠄁O󠄁D󠄁E󠄁`󠄁 i󠄁s󠄁 s󠄁e󠄁t󠄁 (󠄁C󠄁l󠄁a󠄁u󠄁d󠄁e󠄁
+  C󠄁o󠄁d󠄁e󠄁 e󠄁x󠄁p󠄁o󠄁r󠄁t󠄁s󠄁 `󠄁C󠄁L󠄁A󠄁U󠄁D󠄁E󠄁C󠄁O󠄁D󠄁E󠄁=󠄁1󠄁`󠄁 i󠄁n󠄁t󠄁o󠄁 i󠄁t󠄁s󠄁 s󠄁h󠄁e󠄁l󠄁l󠄁s󠄁;󠄁 v󠄁e󠄁r󠄁i󠄁f󠄁i󠄁e󠄁d󠄁 w󠄁i󠄁t󠄁h󠄁 `󠄁e󠄁n󠄁v󠄁`󠄁,󠄁 w󠄁h󠄁i󠄁c󠄁h󠄁
+  s󠄁h󠄁o󠄁w󠄁s󠄁 n󠄁o󠄁 m󠄁o󠄁d󠄁e󠄁l󠄁 v󠄁a󠄁r󠄁i󠄁a󠄁b󠄁l󠄁e󠄁,󠄁 s󠄁o󠄁 t󠄁h󠄁e󠄁 s󠄁u󠄁f󠄁f󠄁i󠄁x󠄁 c󠄁o󠄁m󠄁e󠄁s󠄁 f󠄁r󠄁o󠄁m󠄁 `󠄁A󠄁N󠄁T󠄁H󠄁R󠄁O󠄁P󠄁I󠄁C󠄁_󠄁M󠄁O󠄁D󠄁E󠄁L󠄁`󠄁 w󠄁h󠄁e󠄁n󠄁
+  e󠄁x󠄁p󠄁o󠄁r󠄁t󠄁e󠄁d󠄁)󠄁.󠄁 </span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="bf770bd" data-date="2026-09-11" data-subject="Exempt event commits from the Agent: trailer; scrub MODEL from the agent env">E󠄁v󠄁e󠄁n󠄁t󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁s󠄁 (󠄁`󠄁b󠄁i󠄁n󠄁/󠄁z󠄁e󠄁v󠄁e󠄁n󠄁t󠄁`󠄁:󠄁 `󠄁[󠄁t󠄁y󠄁p󠄁e󠄁]󠄁`󠄁 s󠄁u󠄁b󠄁j󠄁e󠄁c󠄁t󠄁,󠄁 `󠄁{󠄁"󠄁z󠄁"󠄁:󠄁1󠄁`󠄁 b󠄁o󠄁d󠄁y󠄁)󠄁</span>
+  <span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="bf770bd" data-date="2026-09-11" data-subject="Exempt event commits from the Agent: trailer; scrub MODEL from the agent env">a󠄁r󠄁e󠄁 e󠄁x󠄁e󠄁m󠄁p󠄁t󠄁,󠄁 s󠄁i󠄁n󠄁c󠄁e󠄁 a󠄁 t󠄁r󠄁a󠄁i󠄁l󠄁e󠄁r󠄁 a󠄁f󠄁t󠄁e󠄁r󠄁 t󠄁h󠄁e󠄁 J󠄁S󠄁O󠄁N󠄁 b󠄁o󠄁d󠄁y󠄁 w󠄁o󠄁u󠄁l󠄁d󠄁 h󠄁i󠄁d󠄁e󠄁 t󠄁h󠄁e󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁 f󠄁r󠄁o󠄁m󠄁</span>
+<span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="bf770bd" data-date="2026-09-11" data-subject="Exempt event commits from the Agent: trailer; scrub MODEL from the agent env">  `󠄁b󠄁i󠄁n󠄁/󠄁z󠄁s󠄁t󠄁a󠄁t󠄁e󠄁`󠄁;󠄁 l󠄁o󠄁o󠄁p󠄁 t󠄁u󠄁r󠄁n󠄁s󠄁 a󠄁r󠄁e󠄁 a󠄁t󠄁t󠄁r󠄁i󠄁b󠄁u󠄁t󠄁e󠄁d󠄁 b󠄁y󠄁 `󠄁r󠄁e󠄁f󠄁s󠄁/󠄁n󠄁o󠄁t󠄁e󠄁s󠄁/󠄁a󠄁g󠄁e󠄁n󠄁t󠄁`󠄁 i󠄁n󠄁s󠄁t󠄁e󠄁a󠄁d󠄁.󠄁
+  `󠄁c󠄁o󠄁r󠄁e󠄁.󠄁h󠄁o󠄁o󠄁k󠄁s󠄁P󠄁a󠄁t󠄁h󠄁`󠄁 i󠄁s󠄁 n󠄁o󠄁t󠄁 u󠄁s󠄁e󠄁d󠄁:󠄁 t󠄁h󠄁e󠄁 h󠄁o󠄁o󠄁k󠄁 r󠄁u󠄁n󠄁s󠄁 t󠄁h󠄁r󠄁o󠄁u󠄁g󠄁h󠄁 t󠄁h󠄁e󠄁 p󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁
+  f󠄁r󠄁a󠄁m󠄁e󠄁w󠄁o󠄁r󠄁k󠄁'󠄁s󠄁 `󠄁p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁-󠄁m󠄁s󠄁g󠄁`󠄁 s󠄁t󠄁a󠄁g󠄁e󠄁 (󠄁w󠄁h󠄁i󠄁c󠄁h󠄁 `󠄁-󠄁-󠄁n󠄁o󠄁-󠄁v󠄁e󠄁r󠄁i󠄁f󠄁y󠄁`󠄁 d󠄁o󠄁e󠄁s󠄁 n󠄁o󠄁t󠄁 s󠄁k󠄁i󠄁p󠄁)󠄁.󠄁
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
+Install with: `pre-commit install</span><span class="prov prov-ai" data-agent="claude-code" data-author="zociety-dev" data-sha="7c98689" data-date="2026-09-11" data-subject="Seal each loop turn and reveal at heap-death; plumb ZOCIETY_BLIND_KEY; document the blind"> -󠄁-󠄁h󠄁o󠄁o󠄁k󠄁-󠄁t󠄁y󠄁p󠄁e󠄁 p󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 -󠄁-󠄁h󠄁o󠄁o󠄁k󠄁-󠄁t󠄁y󠄁p󠄁e󠄁 p󠄁r󠄁e󠄁p󠄁a󠄁r󠄁e󠄁-󠄁c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁-󠄁m󠄁s󠄁g󠄁`󠄁 (󠄁`󠄁b󠄁i󠄁n󠄁/󠄁s󠄁e󠄁t󠄁u󠄁p󠄁`󠄁 d󠄁o󠄁e󠄁s󠄁 t󠄁h󠄁i󠄁s󠄁)󠄁</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="02267b1" data-date="2026-09-09" data-subject="Replace Talisman with gitleaks for secret detection">. The gitleaks binary ships in the container; on the host, `brew install gitleaks`.</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">
 
 ## Files
 
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">#󠄁#󠄁#󠄁 P󠄁e󠄁r󠄁m󠄁a󠄁n󠄁e󠄁n󠄁t󠄁</span>
-<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁`󠄁 -󠄁 </span><span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">B󠄁o󠄁o󠄁t󠄁s󠄁t󠄁r󠄁a󠄁p󠄁 i󠄁n󠄁s󠄁t󠄁r󠄁u󠄁c󠄁t󠄁i󠄁o󠄁n󠄁s󠄁 (󠄁s󠄁t󠄁a󠄁b󠄁l󠄁e󠄁,󠄁 r󠄁a󠄁r󠄁e󠄁l󠄁y󠄁 c󠄁h󠄁a󠄁n󠄁g󠄁e󠄁s󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">)󠄁
--󠄁 `󠄁C󠄁L󠄁A󠄁U󠄁D󠄁E󠄁.󠄁m󠄁d󠄁`󠄁 -󠄁 T󠄁h󠄁i󠄁s󠄁 f󠄁i󠄁l󠄁e󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="523e1ad" data-date="2026-09-08" data-subject="Add an .envrc that puts bin/ on PATH and loads .env overrides">- `.envrc` - direnv: puts `bin/` on PATH, loads gitignored `.env` overrides
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁*󠄁`󠄁 -󠄁 E󠄁v󠄁e󠄁n󠄁t󠄁 s󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁 t󠄁o󠄁o󠄁l󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">s󠄁
-</span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">-󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁r󠄁e󠄁a󠄁d󠄁-󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁,󠄁 `󠄁b󠄁i󠄁n󠄁/󠄁s󠄁a󠄁v󠄁e󠄁-󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁`󠄁 -󠄁 L󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁 p󠄁e󠄁r󠄁s󠄁i󠄁s󠄁t󠄁e󠄁n󠄁c󠄁e󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="bf3edb4" data-date="2026-09-08" data-subject="Document the provenance tooling for loop agents">- `bin/nfprov*` - Provenance marking (vendored from delano/nerd-fonts)
+### Permanent
+- `PROMPT.md` - Bootstrap instructions (stable, rarely changes)
+- `AGENTS.md` - This file
+- `.envrc` - direnv: puts `bin/` on PATH, loads gitignored `.env` overrides
+- `bin/z*` - Event sourcing tools
+- `bin/read-learnings`, `bin/save-learning` - Learning persistence
+- `bin/nfprov*` - Provenance marking (vendored from delano/nerd-fonts)
 - `site/fonts/` - P+ webfonts copied into `docs/fonts/` by `bin/zsite-generate`
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">
-#󠄁#󠄁#󠄁 P󠄁e󠄁r󠄁-󠄁c󠄁y󠄁c󠄁l󠄁e󠄁 (󠄁c󠄁l󠄁e󠄁a󠄁r󠄁e󠄁d󠄁 b󠄁y󠄁 </span><span class="prov prov-ai" data-agent="evolve" data-author="delano" data-sha="c55d996" data-date="2025-12-26" data-subject="[evolve] remove vestigial pre-rev50 artifacts">z󠄁</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">h󠄁e󠄁a󠄁p󠄁-󠄁d󠄁e󠄁a󠄁t󠄁h󠄁)󠄁
--󠄁 `󠄁s󠄁t󠄁u󠄁f󠄁f󠄁/󠄁`󠄁 -󠄁 T󠄁h󠄁i󠄁n󠄁g󠄁s󠄁 m󠄁a󠄁d󠄁e󠄁 t󠄁h󠄁i󠄁s󠄁 c󠄁y󠄁c󠄁l󠄁e󠄁
-</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">
-##</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">#󠄁 G󠄁i󠄁t󠄁-󠄁b󠄁a󠄁s󠄁e󠄁d󠄁 (󠄁p󠄁e󠄁r󠄁m󠄁a󠄁n󠄁e󠄁n󠄁t󠄁)󠄁</span>
-<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 T󠄁a󠄁g󠄁s󠄁:󠄁 `󠄁r󠄁e󠄁v󠄁{󠄁N󠄁}󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁{󠄁N󠄁}󠄁-󠄁i󠄁t󠄁e󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁s󠄁{󠄁N󠄁}󠄁o󠄁f󠄁{󠄁N󠄁}󠄁`󠄁</span>
-<span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 B󠄁r󠄁a󠄁n󠄁c󠄁h󠄁e󠄁s󠄁:󠄁 `󠄁c󠄁y󠄁c󠄁l󠄁e󠄁/󠄁r󠄁e󠄁v󠄁{󠄁N󠄁}󠄁-󠄁a󠄁t󠄁t󠄁e󠄁m󠄁p󠄁t󠄁</span><span class="prov prov-human" data-agent="human" data-author="delano" data-sha="13b0e71" data-date="2025-12-25" data-subject="codify the loop: CLAUDE.md, DIRECTION.md, self-evolving PROMPT.md">{N}`
-</span><span class="prov prov-ai" data-agent="fix" data-author="delano" data-sha="88ea576" data-date="2025-12-25" data-subject="[fix] made bin scripts executable">-󠄁 O󠄁r󠄁p󠄁h󠄁a󠄁n󠄁 b󠄁r󠄁a󠄁n󠄁c󠄁h󠄁:󠄁 `󠄁l󠄁e󠄁a󠄁r󠄁n󠄁i󠄁n󠄁g󠄁s󠄁`󠄁</span>
-<span class="prov prov-ai" data-agent="Claude Opus 4.5" data-author="zociety" data-sha="9fa4f1b" data-date="2025-12-27" data-subject="[evolve] rev66: stable PROMPT.md, commands drive the loop">
--󠄁-󠄁-󠄁
 
-#󠄁#󠄁 H󠄁i󠄁s󠄁t󠄁o󠄁r󠄁i󠄁c󠄁a󠄁l󠄁 R󠄁e󠄁c󠄁o󠄁r󠄁d󠄁
+### Per-cycle (cleared by zheap-death)
+- `stuff/` - Things made this cycle
 
-*󠄁*󠄁I󠄁m󠄁m󠄁u󠄁t󠄁a󠄁b󠄁l󠄁e󠄁,󠄁 o󠄁b󠄁j󠄁e󠄁c󠄁t󠄁i󠄁v󠄁e󠄁 f󠄁a󠄁c󠄁t󠄁s󠄁 o󠄁n󠄁l󠄁y󠄁 b󠄁e󠄁l󠄁o󠄁w󠄁 t󠄁h󠄁i󠄁s󠄁 l󠄁i󠄁n󠄁e󠄁.󠄁*󠄁*󠄁
+### Git-based (permanent)
+- Tags: `rev{N}-attempt{N}-iterations{N}of{N}`</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md"> - written by `bin/zheap-death`</span>
+<span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">  at the cycle's last commit; the id comes from `bin/zcycle-id current</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">`
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="7c916ce" data-date="2026-09-11" data-subject="Document cycle identity at birth in AGENTS.md">  (the branch name when on `cycle/*`, else the last tag with attempt+1, or
+  rev+1 if `PROMPT.md` changed)
+- Branches: `cycle/rev{N}-attempt{N}` - the cycle's identity, named at
+  birth; heap-death checks out attempt+1 as its successor (see Branches)
+</span><span class="prov prov-human" data-agent="human" data-author="zociety-dev" data-sha="354da19" data-date="2026-09-09" data-subject="Consolidate CLAUDE.md and GEMINI.md into AGENTS.md">- Orphan branch: `learnings`
 
-|󠄁 R󠄁e󠄁v󠄁 |󠄁 C󠄁h󠄁a󠄁n󠄁g󠄁e󠄁 |󠄁
-|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁-󠄁|󠄁
-|󠄁 r󠄁e󠄁v󠄁1󠄁-󠄁4󠄁9󠄁 |󠄁 F󠄁i󠄁l󠄁e󠄁-󠄁b󠄁a󠄁s󠄁e󠄁d󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁.󠄁 M󠄁u󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 `󠄁.󠄁z󠄁/󠄁`󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁o󠄁r󠄁y󠄁 t󠄁r󠄁a󠄁c󠄁k󠄁e󠄁d󠄁 l󠄁o󠄁o󠄁p󠄁 s󠄁t󠄁a󠄁t󠄁e󠄁.󠄁 |󠄁
-|󠄁 r󠄁e󠄁v󠄁5󠄁0󠄁 |󠄁 G󠄁i󠄁t󠄁-󠄁n󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 e󠄁v󠄁e󠄁n󠄁t󠄁 s󠄁o󠄁u󠄁r󠄁c󠄁i󠄁n󠄁g󠄁.󠄁 S󠄁t󠄁a󠄁t󠄁e󠄁 d󠄁e󠄁r󠄁i󠄁v󠄁e󠄁d󠄁 f󠄁r󠄁o󠄁m󠄁 c󠄁o󠄁m󠄁m󠄁i󠄁t󠄁 h󠄁i󠄁s󠄁t󠄁o󠄁r󠄁y󠄁.󠄁 |󠄁
-|󠄁 r󠄁e󠄁v󠄁6󠄁6󠄁 |󠄁 S󠄁t󠄁a󠄁b󠄁l󠄁e󠄁 P󠄁R󠄁O󠄁M󠄁P󠄁T󠄁.󠄁m󠄁d󠄁.󠄁 C󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁s󠄁 d󠄁r󠄁i󠄁v󠄁e󠄁 t󠄁h󠄁e󠄁 l󠄁o󠄁o󠄁p󠄁,󠄁 n󠄁o󠄁t󠄁 t󠄁h󠄁e󠄁 p󠄁r󠄁o󠄁m󠄁p󠄁t󠄁.󠄁 R󠄁e󠄁m󠄁o󠄁v󠄁e󠄁d󠄁 `󠄁e󠄁v󠄁o󠄁l󠄁v󠄁e󠄁`󠄁 a󠄁c󠄁t󠄁i󠄁o󠄁n󠄁.󠄁 |󠄁
+---
+
+## Historical Record
+
+**Immutable, objective facts only below this line.**
+
+| Rev | Change |
+|-----|--------|
+| rev1-49 | File-based state. Mutable `.z/` directory tracked loop state. |
+| rev50 | Git-native event sourcing. State derived from commit history. |
+| rev66 | Stable PROMPT.md. Commands drive the loop, not the prompt. Removed `evolve` action. |
 </span></pre>
     <p class="muted">
       <strong>Plain</strong> switches only the font (and puts the U+E0101
@@ -616,7 +756,7 @@ T󠄁h󠄁e󠄁 `󠄁d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁i󠄁o󠄁n󠄁`󠄁 f󠄁i�
 
       // --- VS18 <-> PUA-B, the fork's two encodings of the same mark ---
       // Mirrors bin/nfprov-mapping.json (vendored from delano/nerd-fonts#15)
-      // and nfprov.mark_span(text, 'pua'): the P+ fonts carry a PUA-B
+      // and nfprov-diff.py's mark_span(text, 'pua'): the P+ fonts carry a PUA-B
       // mirror (U+100000 + code point) for U+0021..U+00FF minus
       // U+007F..U+00A0 and U+00AD, 188 glyphs. Only those bases convert;
       // any other base keeps its selector, exactly as the marker does.

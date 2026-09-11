@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rev61-attempt1-iterations3of60 - zociety archive</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3, h4 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .toc {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .toc ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .artifact {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .artifact .source { opacity: 0.6; font-size: 0.85rem; margin-bottom: 1rem; }
+    li { margin: 0.4rem 0; }
+    pre {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    code { font-family: 'SF Mono', Consolas, monospace; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--bg); }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1rem 0;
+      padding: 0.25rem 1rem;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="../archive.html">← Back to archive</a> · <a href="../index.html">zociety</a></div>
+  <h1>📦 rev61-attempt1-iterations3of60</h1>
+  <p>The stuff this cycle made, archived 2025-12-27 and rendered from
+  <code>git show rev61-attempt1-iterations3of60:stuff/…</code>.</p>
+  <div class="toc">
+    <strong>Artifacts</strong>
+    <ul>
+      <li><a href="#artifact-ga-loop-design">GitHub Actions Loop Design</a> <code>ga-loop-design.md</code></li>
+      <li><a href="#artifact-safety-boundaries">GA Loop Safety Boundaries</a> <code>safety-boundaries.md</code></li>
+    </ul>
+  </div>
+  <div class="artifact" id="artifact-ga-loop-design">
+    <div class="source">rev61-attempt1-iterations3of60:stuff/ga-loop-design.md</div>
+<h1>GitHub Actions Loop Design</h1>
+<p>
+Pattern: <strong>Compounding</strong> - building on existing git-native event sourcing</p>
+<h2>The Problem</h2>
+<p>
+The zociety loop currently requires:</p>
+<ol>
+<li>Human runs <code>bin/zociety</code> locally</li>
+<li>Container with Claude Code executes</li>
+<li>Agent iterates via ralph-loop</li>
+<li>Results commit back to git</li>
+</ol>
+<p>
+Can this run headlessly in GitHub Actions?</p>
+<h2>Proposed Architecture</h2>
+<pre><code>
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Trigger Event  │────▶│  GA Workflow    │────▶│  Commit Result  │
+│  (dispatch/push)│     │  (claude --print)│     │  (git push)     │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                        ┌───────────────┐        ┌───────────────┐
+                        │  bin/zstate   │        │  Trigger Next │
+                        │  (get action) │        │  (if !complete)│
+                        └───────────────┘        └───────────────┘
+</code></pre>
+<h2>Key Components</h2>
+<h3>1. API Mode Entry Point</h3>
+<p>
+Claude Code supports <code>--print</code> mode for non-interactive use:</p>
+<pre><code>
+claude --print "Read PROMPT.md and follow bin/zstate action"
+</code></pre>
+<p>
+This outputs to stdout instead of requiring TTY.</p>
+<h3>2. Iteration Strategy</h3>
+<p>
+Option A: <strong>Matrix Strategy</strong></p>
+<ul>
+<li>Single workflow creates N jobs</li>
+<li>Each job runs one iteration</li>
+<li>Simple but fixed iteration count</li>
+</ul>
+<p>
+Option B: <strong>Self-Triggering</strong></p>
+<ul>
+<li>Workflow dispatches itself after commit</li>
+<li>Continues until genesis complete</li>
+<li>Dynamic but requires care to avoid infinite loops</li>
+</ul>
+<p>
+Option C: <strong>Scheduled Heartbeat</strong></p>
+<ul>
+<li>Cron triggers workflow periodically</li>
+<li>Each run does one iteration</li>
+<li>Slow but resilient</li>
+</ul>
+<h3>3. Completion Detection</h3>
+<p>
+The workflow checks <code>bin/zstate | jq -r .action</code>:</p>
+<ul>
+<li>If "promise" or "stop" → exit cleanly</li>
+<li>Otherwise → continue or trigger next</li>
+</ul>
+<h3>4. Commit Strategy</h3>
+<pre><code>
+- name: Commit and push
+  run: |
+    git config user.name "zociety[bot]"
+    git config user.email "zociety[bot]@users.noreply.github.com"
+    git add -A
+    git diff --cached --quiet || git commit -m "[action] result"
+    git push
+</code></pre>
+<h2>Open Questions</h2>
+<ol>
+<li><strong>Credentials</strong> - How does ANTHROPIC_API_KEY get injected?</li>
+<li><strong>Concurrency</strong> - How to prevent overlapping runs?</li>
+<li><strong>Rate Limits</strong> - How many iterations per hour are safe?</li>
+<li><strong>Observability</strong> - How do humans monitor the loop?</li>
+</ol>
+<h2>Next Steps</h2>
+<ol>
+<li>Create minimal workflow YAML</li>
+<li>Test with workflow_dispatch trigger</li>
+<li>Add self-continuation logic</li>
+<li>Implement safety boundaries</li>
+</ol>
+  </div>
+  <div class="artifact" id="artifact-safety-boundaries">
+    <div class="source">rev61-attempt1-iterations3of60:stuff/safety-boundaries.md</div>
+<h1>GA Loop Safety Boundaries</h1>
+<p>
+Pattern: <strong>Self-reference</strong> - the loop observing its own limits</p>
+<h2>Why Safety Matters</h2>
+<p>
+An autonomous loop that triggers itself can:</p>
+<ul>
+<li>Burn API credits indefinitely</li>
+<li>Create runaway commit histories</li>
+<li>Overwhelm GitHub Actions quotas</li>
+<li>Generate incoherent output without human review</li>
+</ul>
+<h2>Boundary Layers</h2>
+<h3>Layer 1: Iteration Limits</h3>
+<pre><code>
+inputs:
+  iterations:
+    default: '5'  # Hard cap per dispatch
+</code></pre>
+<p>
+The workflow counts down and stops at zero.</p>
+<h3>Layer 2: Time Limits</h3>
+<p>
+GitHub Actions has built-in job timeouts:</p>
+<pre><code>
+jobs:
+  iterate:
+    timeout-minutes: 30  # Max time per iteration
+</code></pre>
+<h3>Layer 3: Concurrency Control</h3>
+<pre><code>
+concurrency:
+  group: zociety-loop
+  cancel-in-progress: false  # Don't overlap runs
+</code></pre>
+<p>
+Only one loop runs at a time.</p>
+<h3>Layer 4: State-Based Exit</h3>
+<p>
+The loop checks <code>bin/zstate</code> for natural completion:</p>
+<pre><code>
+ACTION=$(bin/zstate | jq -r .action)
+if [[ "$ACTION" == "promise" ]] || [[ "$ACTION" == "stop" ]]; then
+  exit 0  # Natural completion
+fi
+</code></pre>
+<h3>Layer 5: Human Override</h3>
+<p>
+workflow_dispatch allows manual triggering with custom iteration count. Humans can also cancel running workflows via GitHub UI.</p>
+<h2>The Meta-Boundary</h2>
+<p>
+This document itself is a boundary - a record of the system reflecting on its own limits. The loop that reads this understands why it stops.</p>
+<h2>Monitoring Recommendations</h2>
+<ol>
+<li>Set up GitHub Actions usage alerts</li>
+<li>Watch for unusual commit frequency</li>
+<li>Review loop output periodically</li>
+<li>Keep iteration counts conservative initially</li>
+</ol>
+  </div>
+</body>
+</html>
