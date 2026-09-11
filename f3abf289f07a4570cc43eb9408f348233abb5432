@@ -1,0 +1,4 @@
+cycle: rev64 attempt1
+genesis_complete: true
+question: Cycle 36 wrote real site content (index.md, how-it-works.md, generating-the-site.md) and passed No Drift and Say When It Closes, but stuff.html renders only the live stuff/ tree, so every cycle's pages disappear from zociety.dev at heap-death. Next: make archived cycles' stuff/ persist on the site by reading it from the cycle/* branches or rev* tags (pure function of git history, per rule 1), so a visitor can read what each cycle made, not only the current one.
+batch_remaining: 1
