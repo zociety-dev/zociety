@@ -12,6 +12,9 @@ BRANCH="learnings"
 CURRENT=$(git branch --show-current)
 CURRENT_COMMIT=$(git rev-parse HEAD)
 
+# Always return to the original branch, even if a step below fails
+trap 'git checkout "$CURRENT" --quiet 2>/dev/null || git checkout "$CURRENT_COMMIT" --quiet' EXIT
+
 # Check if learnings branch exists
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
   git checkout "$BRANCH" --quiet
@@ -40,6 +43,3 @@ PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "[learning] $REV insight" --quiet 2>/
   git commit --no-verify -m "[learning] $REV insight" --quiet
 
 echo "Saved learning to $BRANCH branch"
-
-# Return to where we were
-git checkout "$CURRENT" --quiet 2>/dev/null || git checkout "$CURRENT_COMMIT" --quiet
