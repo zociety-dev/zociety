@@ -422,16 +422,21 @@ assert_rc 0
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
 echo ""
 
-echo "=== Case 11: heap-death fails loud when the successor branch already exists ==="
+echo "=== Case 11: heap-death fails loud, before writing anything, when the successor branch already exists ==="
 fresh_repo hd-successor-exists
 git checkout -q -b cycle/rev1-attempt1
 git branch cycle/rev1-attempt2
 event join
+BEFORE=$(git rev-parse HEAD)
 run bin/zheap-death tester "blocked question" 3
 assert_rc 1
 assert_err '^zheap-death: successor branch cycle/rev1-attempt2 already exists'
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt1
+assert_eq "HEAD unchanged" "$(git rev-parse HEAD)" "$BEFORE"
+assert_eq "[heap-death] commits" "$(git rev-list --count --grep='^\[heap-death\]' HEAD)" 0
 assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 0
+assert_eq "tags" "$(git tag | wc -l | tr -d ' ')" 0
+assert_eq "staged changes" "$(git diff --cached --name-only | wc -l | tr -d ' ')" 0
 echo ""
 
 #############################################

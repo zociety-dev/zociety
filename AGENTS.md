@@ -299,7 +299,10 @@ Before proposing any changes, verify correctness using:
 - `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
 - `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
   heap-death successor checkout and the zloop preflight.
-- `bin/test-zevent-system` to test the git-native event sourcing system.
+- `bin/test-zevent-system` to test the git-native event sourcing system. It
+  is not a throwaway-fixture test: it commits real [join]/[stuff]/[vote]/[pass]
+  events onto the current branch of the repo it runs in (`git add -A` sweeps
+  staged work into them). Run it only in a throwaway copy of the repo.
 
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes

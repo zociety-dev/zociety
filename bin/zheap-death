@@ -43,7 +43,9 @@
 #   1. Names the cycle that just ended via bin/zcycle-id current: the branch
 #      name when on cycle/rev{N}-attempt{M} (identity derived at birth by
 #      bin/zloop), otherwise the last tag with rev bumped if PROMPT.md
-#      changed since it, else attempt bumped.
+#      changed since it, else attempt bumped. On a cycle branch also names
+#      the successor (bin/zcycle-id next) and refuses, before anything is
+#      written, if that branch already exists.
 #   2. Saves new PROMPT.md lines to the learnings branch (bin/save-learning).
 #   3. Records a [heap-death] event commit via bin/zevent.
 #   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
@@ -205,6 +207,18 @@ CYCLE_ID=$(bin/zcycle-id current)
   || { echo "zheap-death: bin/zcycle-id returned '$CYCLE_ID'" >&2; exit 1; }
 REV="${BASH_REMATCH[1]}"
 ATTEMPT="${BASH_REMATCH[2]}"
+
+# On a cycle branch death births the successor (step 7b). Name it now and
+# refuse while nothing has been written: failing after the event commit, tag
+# and pushes would leave a half-archived cycle with staged deletions.
+NEXT_BRANCH=""
+if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
+  NEXT_BRANCH=$(bin/zcycle-id --branch next)
+  if git show-ref --verify --quiet "refs/heads/$NEXT_BRANCH"; then
+    echo "zheap-death: successor branch $NEXT_BRANCH already exists; check it out or delete it, then rerun" >&2
+    exit 1
+  fi
+fi
 
 # Still needed by step 2 (new PROMPT.md lines since the last tag).
 LAST_TAG=$(git tag --sort=-version:refname | head -1)
@@ -368,11 +382,7 @@ rm -f .zociety/zloop.state .claude/zloop.state
 # a cycle branch (main in CI, a feature branch): stay put, as before.
 
 if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
-  NEXT_BRANCH=$(bin/zcycle-id --branch next)
-  if git show-ref --verify --quiet "refs/heads/$NEXT_BRANCH"; then
-    echo "zheap-death: successor branch $NEXT_BRANCH already exists; check it out or delete it, then continue by hand" >&2
-    exit 1
-  fi
+  # NEXT_BRANCH was named and checked for existence in step 1.
   echo "Birthing successor branch: $NEXT_BRANCH"
   git checkout -b "$NEXT_BRANCH" --quiet
 fi
