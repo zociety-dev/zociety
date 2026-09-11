@@ -55,3 +55,6 @@ git show rev64-attempt1-iterations4of60:stuff/index.md | bin/zmd2html | head
 ```
 
 The second command is exactly what the generator ran to build that page.
+
+`bin/test-zsite-archive` runs the checks above in a throwaway copy of the
+repository; see `archive-proof.md` for what each case proves.
