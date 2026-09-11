@@ -1019,6 +1019,41 @@ assert_err '^\[zloop\] WARNING: iteration 3 hard-killed at 2s \(2 consecutive\)$
 assert_err '^=== Loop Aborted ===$'
 echo ""
 
+# The orientation cost: a fresh iteration used to re-derive zstate, the
+# latest direction, the command list and the recent log before doing any
+# work. bin/zprompt hands them over, so the prompt the agent receives must
+# carry them -- generated from the repo it runs in, not canned.
+echo "=== Case 35m: bin/zprompt carries the repo's state, latest direction and commands ==="
+fresh_repo prompt-context
+heap_death '{"batch_remaining":1}'
+bin/zevent direction tester "Cycle 1 asked: does the harness prove anything?" '{"question":"does it?","batch_total":2,"batch_remaining":1}' >/dev/null 2>&1
+prompt=$(bin/zprompt --budget 30)
+assert_eq "prompt opens with PROMPT.md" "$(printf '%s\n' "$prompt" | head -n1)" "Read PROMPT.md and follow its instructions."
+assert_eq "prompt has the context header" "$(printf '%s\n' "$prompt" | grep -c '^## Where things stand')" 1
+assert_eq "prompt carries zstate action" "$(printf '%s\n' "$prompt" | grep -c '^bin/zstate: .*"action":"contribute"')" 1
+assert_eq "prompt carries the latest direction" "$(printf '%s\n' "$prompt" | grep -c '^Latest direction: \[direction\] tester: Cycle 1 asked: does the harness prove anything?$')" 1
+assert_eq "prompt carries the latest heap-death" "$(printf '%s\n' "$prompt" | grep -c '^Latest heap-death: \[heap-death\] tester: synthetic heap-death$')" 1
+assert_eq "prompt carries the branch" "$(printf '%s\n' "$prompt" | grep -c '^Branch: main$')" 1
+assert_eq "prompt lists the agent commands" "$(printf '%s\n' "$prompt" | grep -c '^Commands: .*bin/zjoin .*bin/zstuff .*bin/zvote .*(each takes --help)$')" 1
+assert_eq "prompt does not list the loop plumbing" "$(printf '%s\n' "$prompt" | grep -c 'bin/zloop\|bin/zstop-\|bin/zprompt')" 0
+assert_eq "prompt carries the recent log" "$(printf '%s\n' "$prompt" | grep -c '^  [0-9a-f]\{7,\} \[direction\] tester:')" 1
+assert_eq "prompt ends with the budget" "$(printf '%s\n' "$prompt" | grep -c 'about 30 seconds of wall-clock time')" 1
+# The same block reaches the agent through bin/zloop, not just on the CLI.
+run bin/zloop --budget 30 --max 1
+assert_rc 1
+assert_eq "zloop passes the context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 1
+assert_eq "zloop passes the direction" "$(grep -c 'Latest direction: \[direction\] tester:' "$FAKE_LOG")" 1
+echo ""
+
+echo "=== Case 35n: bin/zprompt --no-context and no budget is the bare instruction ==="
+fresh_repo prompt-bare
+assert_eq "bare prompt" "$(bin/zprompt --no-context)" "Read PROMPT.md and follow its instructions."
+assert_eq "no budget, no time paragraph" "$(bin/zprompt --no-context --budget 0 | grep -c 'wall-clock')" 0
+run bin/zprompt --budget x
+assert_rc 2
+assert_err "^zprompt: --budget expects a non-negative integer, got 'x'$"
+echo ""
+
 echo "=== Case 36: bin/zrender heartbeat, error footer and metrics file ==="
 slow_stream() {
   echo '{"type":"system","subtype":"init","model":"claude-fake"}'

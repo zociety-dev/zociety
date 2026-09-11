@@ -2,25 +2,40 @@
 # zprompt - The per-iteration prompt every loop runner hands the agent
 #
 # Usage:
-#   bin/zprompt [--budget N]
+#   bin/zprompt [--budget N] [--no-context]
 #   bin/zprompt -h | --help
 #
 # Options:
-#   --budget N   Seconds of work the iteration has. Omit (or 0) for a run
-#                with no budget: the time paragraph is left out entirely
-#                rather than stating a number nobody enforces.
+#   --budget N     Seconds of work the iteration has. Omit (or 0) for a run
+#                  with no budget: the time paragraph is left out entirely
+#                  rather than stating a number nobody enforces.
+#   --no-context   Omit the generated "where things stand" block.
 #
 # Prints the prompt on stdout. Single source of truth so bin/zloop (local) and
-# bin/zga-loop (GitHub Actions) cannot drift: an agent that is not told its
-# budget cannot scope a turn to it or commit before the time runs out, and
-# every iteration then dies mid-work with nothing to show. That was a real
-# failure (rev64-attempt4), and duplicating the paragraph is how it returns.
+# bin/zga-loop (GitHub Actions) cannot drift.
 #
-# See bin/zloop --help (Time) for what the budget is and is not.
+# Two things go in besides "read PROMPT.md":
+#
+#   Context. Every fresh iteration used to spend its first 40-50s and 8-12
+#   tool calls re-deriving the same facts: find PROMPT.md, bin/zstate, ls bin,
+#   cat AGENTS.md, git log, show the latest [direction] and [heap-death]. With
+#   a 60s budget that was the whole turn (rev64-attempt4: five iterations,
+#   zero commits). The block below hands those facts over so the turn starts
+#   at the decision, not the archaeology. PROMPT.md is untouched: it is the
+#   cycle's constitution and bin/zcycle-id bumps the rev when it changes.
+#
+#   Budget. An agent that is not told its budget cannot scope a turn to it or
+#   commit before the time runs out, and every iteration then dies mid-work
+#   with nothing to show. See bin/zloop --help (Time).
+#
+# Runs from the repo root (as both loops do). Every context probe is
+# best-effort: a failing git or bin/zstate degrades the block, never the
+# prompt.
 
 set -euo pipefail
 
 BUDGET=0
+CONTEXT=1
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -39,6 +54,9 @@ while [[ $# -gt 0 ]]; do
       BUDGET="$2"
       shift
       ;;
+    --no-context)
+      CONTEXT=0
+      ;;
     *)
       echo "zprompt: unknown argument '$1'" >&2
       usage >&2
@@ -49,6 +67,36 @@ while [[ $# -gt 0 ]]; do
 done
 
 printf '%s\n' "Read PROMPT.md and follow its instructions."
+
+if [[ "$CONTEXT" -eq 1 ]]; then
+  state=$(bin/zstate 2>/dev/null | jq -c . 2>/dev/null) || state=""
+  branch=$(git branch --show-current 2>/dev/null) || branch=""
+  recent=$(git --no-pager log --oneline -10 2>/dev/null) || recent=""
+  direction=$(git --no-pager log -1 --format=%s --grep='^\[direction\]' 2>/dev/null) || direction=""
+  heap_death=$(git --no-pager log -1 --format=%s --grep='^\[heap-death\]' 2>/dev/null) || heap_death=""
+  # The agent-facing z* commands: everything the loop plumbing, renderers and
+  # maintenance scripts are not.
+  commands=""
+  for f in bin/z*; do
+    [[ -x "$f" ]] || continue
+    case "${f#bin/}" in
+      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*) continue ;;
+    esac
+    commands="$commands$f "
+  done
+
+  printf '\n%s\n' "## Where things stand (generated for this turn; do not re-derive it)"
+  [[ -n "$state" ]]      && printf '%s\n' "bin/zstate: $state"
+  [[ -n "$branch" ]]     && printf '%s\n' "Branch: $branch"
+  [[ -n "$direction" ]]  && printf '%s\n' "Latest direction: $direction"
+  [[ -n "$heap_death" ]] && printf '%s\n' "Latest heap-death: $heap_death"
+  if [[ -n "$recent" ]]; then
+    printf '%s\n' "Recent commits:"
+    printf '%s\n' "$recent" | sed 's/^/  /'
+  fi
+  [[ -n "$commands" ]]   && printf '%s\n' "Commands: ${commands% } (each takes --help)"
+  printf '%s\n' "Protocol: AGENTS.md. Read the section you need, not the file."
+fi
 
 if [[ "$BUDGET" -gt 0 ]]; then
   printf '\n%s\n' "You have about ${BUDGET} seconds of wall-clock time for this turn. Scope

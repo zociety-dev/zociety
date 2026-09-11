@@ -79,7 +79,7 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt [--budget N]` | The per-iteration prompt handed to the agent; shared by `bin/zloop` and `bin/zga-loop` so the budget paragraph cannot drift |
+| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: "read PROMPT.md", then a generated block with `bin/zstate`, the branch, the latest `[direction]`/`[heap-death]`, the recent log and the agent commands so a turn does not spend its first minute re-deriving them, then the working budget |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
@@ -178,7 +178,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
 | `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt` | Per-iteration agent prompt (single source for the working-budget paragraph) |
+| `bin/zprompt` | Per-iteration agent prompt: PROMPT.md pointer, generated state/direction/commands context, working budget (single source for both loops) |
 | `bin/zrender` | Compact live render of claude's stream-json (used by `bin/zagent --render compact`) |
 | `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
 | `bin/zstop-budget` | Stop predicate: `ZSTOP_BUDGET` heap-deaths since loop start |
