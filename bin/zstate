@@ -8,11 +8,26 @@
 #   - genesis: {members, rules, stuff, complete}
 #   - batch: remaining attempts (null if not set)
 #   - direction: question for cycle (null if not set)
-#   - action: what agent should do next
+#   - action: what agent should do next (stable vocabulary:
+#             join|contribute|complete|heap-death|promise|stop)
+#   - needs: remaining genesis requirements, {members, rules, stuff}, counts
+#            REMAINING (not current). All zero once genesis is complete.
+#   - next: deficit-qualified form of action. Equals action except when
+#           action is "contribute", where it becomes contribute:member,
+#           contribute:rule or contribute:stuff. Priority when several legs
+#           are short: members, then rules, then stuff (members gate voting,
+#           rules are the scarcest leg, stuff is always available).
 #   - last_event: type of last event
 #   - last_agent: who did last event
+#
+# Genesis thresholds: 3 members, 2 passed rules, 3 stuff items.
 
 set -e
+
+# Genesis thresholds (see AGENTS.md "Genesis")
+NEED_MEMBERS=3
+NEED_RULES=2
+NEED_STUFF=3
 
 # Find most recent event commit by searching for valid JSON with z:1 marker
 # Uses jq to parse regardless of pretty-print formatting
@@ -41,19 +56,23 @@ LAST_EVENT=$(find_last_event || true)
 if [[ -z "$LAST_EVENT" ]]; then
   # No events yet - initial state
   bin/zlog zstate "No events found - returning initial state" '{"action": "join"}' 2>/dev/null || true
-  cat <<'EOF'
-{
-  "cycle": 1,
-  "seq": 0,
-  "phase": "initial",
-  "genesis": {"members": 0, "rules": 0, "stuff": 0, "complete": false},
-  "batch": null,
-  "direction": null,
-  "action": "join",
-  "last_event": null,
-  "last_agent": null
-}
-EOF
+  jq -n \
+    --argjson need_members "$NEED_MEMBERS" \
+    --argjson need_rules "$NEED_RULES" \
+    --argjson need_stuff "$NEED_STUFF" \
+    '{
+      cycle: 1,
+      seq: 0,
+      phase: "initial",
+      genesis: {members: 0, rules: 0, stuff: 0, complete: false},
+      batch: null,
+      direction: null,
+      action: "join",
+      needs: {members: $need_members, rules: $need_rules, stuff: $need_stuff},
+      next: "join",
+      last_event: null,
+      last_agent: null
+    }'
   exit 0
 fi
 
@@ -64,7 +83,10 @@ bin/zlog zstate "Found last event: $LAST_EVENT_TYPE by $LAST_EVENT_AGENT" \
   "$(echo "$LAST_EVENT" | jq -c '{event: .event, agent: .agent, batch: .data.batch_remaining}')" 2>/dev/null || true
 
 # Parse last event and compute phase and action
-OUTPUT=$(echo "$LAST_EVENT" | jq -r '
+OUTPUT=$(echo "$LAST_EVENT" | jq -r \
+  --argjson need_members "$NEED_MEMBERS" \
+  --argjson need_rules "$NEED_RULES" \
+  --argjson need_stuff "$NEED_STUFF" '
   # Determine phase based on last event and state
   .phase = (
     if .event == "promise" then "stopped"
@@ -95,6 +117,30 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r '
     end
   ) |
 
+  # What is still missing for genesis, as REMAINING counts (never negative).
+  # Overshooting one leg (e.g. 4 members) reports 0, not a negative number.
+  .needs = (
+    if .state.complete then {members: 0, rules: 0, stuff: 0}
+    else {
+      members: ([$need_members - (.state.members // 0), 0] | max),
+      rules:   ([$need_rules   - (.state.rules   // 0), 0] | max),
+      stuff:   ([$need_stuff   - (.state.stuff   // 0), 0] | max)
+    }
+    end
+  ) |
+
+  # Deficit-qualified action. .action keeps its stable vocabulary for the
+  # stop predicates; .next is the field an agent reads to pick a leg.
+  # Deterministic priority: members, then rules, then stuff.
+  .next = (
+    if .action != "contribute" then .action
+    elif .needs.members > 0 then "contribute:member"
+    elif .needs.rules > 0 then "contribute:rule"
+    elif .needs.stuff > 0 then "contribute:stuff"
+    else "contribute"
+    end
+  ) |
+
   # Build output structure
   {
     cycle: .cycle,
@@ -104,6 +150,8 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r '
     batch: (.data.batch_remaining // null),
     direction: (.data.question // null),
     action: .action,
+    needs: .needs,
+    next: .next,
     last_event: .event,
     last_agent: .agent
   }
@@ -112,8 +160,9 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r '
 # Log the computed state with explanation
 ACTION=$(echo "$OUTPUT" | jq -r '.action')
 PHASE=$(echo "$OUTPUT" | jq -r '.phase')
-bin/zlog zstate "Computed: phase=$PHASE, action=$ACTION" \
-  "$(echo "$OUTPUT" | jq -c '{phase: .phase, action: .action, batch: .batch, complete: .genesis.complete}')" 2>/dev/null || true
+NEXT=$(echo "$OUTPUT" | jq -r '.next')
+bin/zlog zstate "Computed: phase=$PHASE, action=$ACTION, next=$NEXT" \
+  "$(echo "$OUTPUT" | jq -c '{phase: .phase, action: .action, next: .next, needs: .needs, batch: .batch, complete: .genesis.complete}')" 2>/dev/null || true
 
 # Output the state
 echo "$OUTPUT"
