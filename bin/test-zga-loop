@@ -1,0 +1,300 @@
+#!/bin/bash
+# test-zga-loop: Dry-run harness for bin/zga-loop, the GitHub Actions runner
+#
+# Usage:
+#   bin/test-zga-loop [--keep]
+#   bin/test-zga-loop -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway directory behind (path printed) for inspection
+#
+# bin/zga-loop pulls from and pushes to origin, so it never had a harness.
+# This one gives it a throwaway bare origin under mktemp, a clone with this
+# repo's bin/ committed in, and the same fake `claude` bin/test-zstop-modes
+# uses (one line, exit 0; FAKE_CLAUDE_SLEEP to outlive the hard kill;
+# FAKE_CLAUDE_HEAP_DEATH / FAKE_CLAUDE_PROMISE to commit an event). Cases
+# assert the exit code, the runner's stdout, what reached the fake claude and
+# what reached origin.
+
+set -e
+
+SRC_BIN="$(cd "$(dirname "$0")" && pwd)"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --keep)
+      KEEP=1
+      ;;
+    *)
+      echo "test-zga-loop: unknown argument '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zga-test.XXXXXX")
+OUT="$TMP/out"
+FAKE_LOG="$TMP/claude-ran.log"
+FAKEBIN="$TMP/fakebin"
+export FAKE_CLAUDE_LOG="$FAKE_LOG"
+
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then
+    echo "Kept: $TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+PASSED=0
+FAILED=0
+RC=0
+
+#############################################
+# Fixtures
+#############################################
+
+mkdir -p "$FAKEBIN" "$TMP/nohooks"
+cat > "$FAKEBIN/claude" <<'EOF'
+#!/bin/bash
+set -e
+echo "fake claude ran"
+# One line per invocation: the prompt spans several lines.
+echo "$(date +%s) $*" | tr '\n' ' ' >> "$FAKE_CLAUDE_LOG"
+echo >> "$FAKE_CLAUDE_LOG"
+if [[ -n "${FAKE_CLAUDE_SLEEP:-}" ]]; then
+  echo "$$" > "$FAKE_CLAUDE_LOG.pid"
+  exec sleep "$FAKE_CLAUDE_SLEEP"
+fi
+if [[ "${FAKE_CLAUDE_HEAP_DEATH:-0}" == "1" ]]; then
+  bin/zevent heap-death fake "synthetic heap-death" '{"batch_remaining":2}' \
+    >> "$FAKE_CLAUDE_LOG.err" 2>&1
+fi
+if [[ "${FAKE_CLAUDE_PROMISE:-0}" == "1" ]]; then
+  bin/zevent promise fake "cycle complete" '{"terminal":true}' \
+    >> "$FAKE_CLAUDE_LOG.err" 2>&1
+fi
+exit "${FAKE_CLAUDE_EXIT:-0}"
+EOF
+chmod +x "$FAKEBIN/claude"
+export PATH="$FAKEBIN:$PATH"
+
+# fresh_repo <name>: a bare origin plus a clone of it with bin/ committed on
+# main, cwd moved into the clone. bin/zga-loop pulls at start and pushes after
+# every iteration that commits, so origin must exist and must be writable.
+fresh_repo() {
+  ORIGIN="$TMP/origin-$1.git"
+  REPO="$TMP/repo-$1"
+  # Leave the source checkout before the first git call: this repo's git shim
+  # routes calls made from inside the project into the container, which
+  # cannot write the host's mktemp directory.
+  cd "$TMP"
+  git init -q --bare -b main "$ORIGIN"
+  git clone -q "$ORIGIN" "$REPO" 2>/dev/null
+  cd "$REPO"
+  git symbolic-ref HEAD refs/heads/main
+  git config user.name tester
+  git config user.email tester@example.com
+  git config commit.gpgsign false
+  git config core.hooksPath "$TMP/nohooks"
+  mkdir -p bin .claude
+  cp -R "$SRC_BIN/." bin/
+  echo "# fixture prompt" > PROMPT.md
+  printf '.claude/\n' > .gitignore
+  git add .gitignore PROMPT.md bin
+  git commit -q -m "genesis fixture"
+  git push -q -u origin main
+  rm -f "$FAKE_LOG" "$FAKE_LOG.err" "$FAKE_LOG.pid"
+  unset FAKE_CLAUDE_HEAP_DEATH FAKE_CLAUDE_PROMISE FAKE_CLAUDE_SLEEP FAKE_CLAUDE_EXIT
+}
+
+#############################################
+# Assertions
+#############################################
+
+# run <cmd...>: capture rc and combined output (zga-loop writes everything to
+# stdout, as a CI log expects)
+run() {
+  RC=0
+  "$@" >"$OUT" 2>&1 || RC=$?
+}
+
+pass() {
+  echo "  ✓ $1"
+  PASSED=$((PASSED + 1))
+}
+
+fail() {
+  echo "  ✗ $1"
+  FAILED=$((FAILED + 1))
+}
+
+assert_rc() {
+  if [[ "$RC" -eq "$1" ]]; then
+    pass "exit $RC"
+  else
+    fail "exit $RC (want $1)"
+    sed 's/^/    out: /' "$OUT"
+  fi
+}
+
+# assert_out <ere>: output has a line matching; print the first match
+assert_out() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$OUT"); then
+    pass "out: $line"
+  else
+    fail "out lacks /$1/"
+    sed 's/^/    out: /' "$OUT"
+  fi
+}
+
+assert_no_out() {
+  if grep -E -q -- "$1" "$OUT"; then
+    fail "out unexpectedly matches /$1/"
+  else
+    pass "out has no /$1/"
+  fi
+}
+
+# assert_eq <label> <got> <want>
+assert_eq() {
+  if [[ "$2" == "$3" ]]; then
+    pass "$1: $2"
+  else
+    fail "$1: $2 (want $3)"
+  fi
+}
+
+assert_claude_runs() {
+  local n=0
+  [[ -f "$FAKE_LOG" ]] && n=$(wc -l < "$FAKE_LOG" | tr -d ' ')
+  if [[ "$n" -eq "$1" ]]; then
+    pass "fake claude ran $n time(s)"
+  else
+    fail "fake claude ran $n time(s) (want $1)"
+  fi
+}
+
+# assert_origin_has <ere>: origin/main's log has a subject matching
+assert_origin_has() {
+  if git --git-dir="$ORIGIN" log --format=%s main | grep -E -q -- "$1"; then
+    pass "origin has /$1/"
+  else
+    fail "origin lacks /$1/"
+    git --git-dir="$ORIGIN" log --format='    origin: %s' main
+  fi
+}
+
+#############################################
+# Cases
+#############################################
+
+echo "=== Case 1: the budget reaches the agent, the banner names all three knobs, a commit is pushed ==="
+fresh_repo push
+export FAKE_CLAUDE_HEAP_DEATH=1
+run env ZLOOP_BUDGET=45 ZLOOP_INTERVAL=0 bin/zga-loop 1 fake-model
+unset FAKE_CLAUDE_HEAP_DEATH
+assert_rc 0
+assert_out '^Budget per iteration: 45s \(told to the agent\)$'
+assert_out '^Interval between iterations: 0s$'
+assert_out '^Hard kill: 90s$'
+assert_out '^=== Max Iterations Reached ===$'
+assert_claude_runs 1
+assert_eq "prompt carries the budget" "$(grep -c 'about 45 seconds of wall-clock time' "$FAKE_LOG")" 1
+assert_eq "prompt carries the context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 1
+assert_eq "model reaches the client" "$(grep -c -- '--model fake-model' "$FAKE_LOG")" 1
+assert_origin_has '^\[heap-death\] fake: synthetic heap-death$'
+echo ""
+
+echo "=== Case 2: the promise stops the loop (exit 0) and the final push lands ==="
+fresh_repo complete
+export FAKE_CLAUDE_PROMISE=1
+run env ZLOOP_INTERVAL=0 bin/zga-loop 3 fake-model
+unset FAKE_CLAUDE_PROMISE
+assert_rc 0
+assert_out '^=== Loop Complete ===$'
+assert_claude_runs 1
+assert_origin_has '^\[promise\] fake: cycle complete$'
+echo ""
+
+echo "=== Case 3: consecutive hard kills warn, then abort with exit 3 ==="
+fresh_repo kill
+export FAKE_CLAUDE_SLEEP=30
+run env ZLOOP_BUDGET=1 ZLOOP_TIMEOUT=2 ZLOOP_MAX_TIMEOUTS=2 ZLOOP_INTERVAL=0 bin/zga-loop 5 fake-model
+unset FAKE_CLAUDE_SLEEP
+assert_rc 3
+assert_out '^Hard kill: 2s$'
+assert_out '^WARNING: iteration 1 hard-killed at 2s \(1 consecutive\); uncommitted work is lost$'
+assert_out '^WARNING: iteration 2 hard-killed at 2s \(2 consecutive\); uncommitted work is lost$'
+assert_out '^=== Loop Aborted ===$'
+assert_out '^2 consecutive hard kills at 2s with a 1s budget'
+assert_claude_runs 2
+if [[ -s "$FAKE_LOG.pid" ]] && kill -0 "$(cat "$FAKE_LOG.pid")" 2>/dev/null; then
+  fail "fake claude (pid $(cat "$FAKE_LOG.pid")) still running"
+else
+  pass "fake claude gone"
+fi
+echo ""
+
+echo "=== Case 4: ZLOOP_MAX_TIMEOUTS=0 never aborts on hard kills ==="
+fresh_repo kill-noabort
+export FAKE_CLAUDE_SLEEP=30
+run env ZLOOP_BUDGET=1 ZLOOP_TIMEOUT=2 ZLOOP_MAX_TIMEOUTS=0 ZLOOP_INTERVAL=0 bin/zga-loop 2 fake-model
+unset FAKE_CLAUDE_SLEEP
+assert_rc 0
+assert_out '^=== Max Iterations Reached ===$'
+assert_no_out '^=== Loop Aborted ===$'
+assert_claude_runs 2
+echo ""
+
+echo "=== Case 5: an inherited ZLOOP_TIMEOUT at or below the budget is corrected, not fatal ==="
+fresh_repo timeout-migration
+run env ZLOOP_TIMEOUT=300 ZLOOP_INTERVAL=0 bin/zga-loop 1 fake-model
+assert_rc 0
+assert_out '^ZLOOP_TIMEOUT=300s is not above the 300s budget; using 600s'
+assert_out '^Hard kill: 600s$'
+assert_claude_runs 1
+echo ""
+
+echo "=== Case 6: a non-integer knob is a usage error before anything runs ==="
+fresh_repo bad-knob
+run env ZLOOP_BUDGET=soon bin/zga-loop 1 fake-model
+assert_rc 2
+assert_out "^zga-loop: BUDGET_SECS expects a non-negative integer, got 'soon'$"
+assert_claude_runs 0
+echo ""
+
+echo "=== Case 7: a failed iteration (non-zero, non-124) continues and does not count as a kill ==="
+fresh_repo agent-fail
+export FAKE_CLAUDE_EXIT=7
+run env ZLOOP_INTERVAL=0 ZLOOP_MAX_TIMEOUTS=1 bin/zga-loop 2 fake-model
+unset FAKE_CLAUDE_EXIT
+assert_rc 0
+assert_out '^Warning: Agent iteration failed \(exit 7\), continuing\.\.\.$'
+assert_no_out 'hard-killed'
+assert_out '^=== Max Iterations Reached ===$'
+assert_claude_runs 2
+echo ""
+
+#############################################
+# Summary
+#############################################
+
+echo "=== Results: $PASSED passed, $FAILED failed ==="
+if [[ $FAILED -gt 0 ]]; then
+  exit 1
+fi
+echo "All zga-loop cases passed."

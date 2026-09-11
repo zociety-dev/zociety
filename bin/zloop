@@ -6,7 +6,12 @@
 #
 # Options:
 #   -n, --max N        Max iterations (default: 60; positional N also accepted)
-#   -t, --timeout N    Timeout per iteration in seconds (default: 300)
+#   -b, --budget N     Seconds of work an iteration is told it has (default:
+#                      300). This is the number the agent sees; see Time below.
+#   -i, --interval N   Seconds to wait between iterations (default: 1)
+#   -t, --timeout N    Hard kill: SIGTERM to the agent after N seconds
+#                      (default: 2x the budget). A backstop for a hung
+#                      process, NOT the working budget -- see Time below.
 #   -s, --stop LIST    Stop modes, comma-separated (default: action)
 #                      Modes: action, budget, converge, feedback, file
 #                      e.g. --stop action,file  or  --stop budget,converge,file
@@ -16,7 +21,10 @@
 #   -h, --help         Show this help
 #
 # Environment (flags override these):
-#   ZLOOP_TIMEOUT=300       Timeout per iteration in seconds
+#   ZLOOP_BUDGET=300        Seconds of work an iteration is told it has
+#   ZLOOP_INTERVAL=1        Seconds to wait between iterations
+#   ZLOOP_TIMEOUT=          Hard kill in seconds (default: 2x the budget)
+#   ZLOOP_MAX_TIMEOUTS=3    Consecutive hard kills that abort the run (0 = never)
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_QUIET=1           Same as --quiet
@@ -27,6 +35,24 @@
 #   ZLOOP_BRANCH=0          Skip the cycle-branch preflight and run on whatever
 #                           branch is checked out (main needs ALLOW_MAIN=1)
 #   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
+#
+# Time: three different things, three different flags. Conflating them is the
+# classic way to get a run that looks healthy and produces nothing.
+#
+#   --interval  cadence. Seconds of quiet between one iteration ending and the
+#               next starting. This is what `watch -n` and cron mean by their
+#               time argument. It does not bound any work.
+#   --budget    the working budget. Passed to the agent in its prompt, so it
+#               can scope the turn and land a commit before the budget is out.
+#               An agent that is never told its budget cannot respect it.
+#   --timeout   the guillotine. `timeout` SIGTERMs the agent mid-token and
+#               everything not already committed to git is lost. Defaults to
+#               2x the budget so it only fires on a genuinely stuck process.
+#               Set it equal to the budget and every iteration dies mid-work.
+#
+# A hard kill is reported as a warning, not as a normal turn, and
+# ZLOOP_MAX_TIMEOUTS consecutive kills abort the run (exit 3): a loop whose
+# iterations are all being guillotined is misconfigured, not working.
 #
 # Identity at birth: unless ZLOOP_BRANCH=0, a run started on a branch that is
 # not cycle/* derives its first cycle's name (bin/zcycle-id current: last tag,
@@ -58,18 +84,30 @@
 #
 # Runs Claude Code iterations until bin/zloop-complete returns 0. The resolved
 # stop-mode list is passed to it as the argument; it runs bin/zstop-<mode> for
-# each name (exit 0 stop, 1 continue, 2 abort the loop). --max and the timeout
-# are unconditional safety caps, not modes; the predicates get to see the
+# each name (exit 0 stop, 1 continue, 2 abort the loop). --max and the hard
+# kill are unconditional safety caps, not modes; the predicates get to see the
 # result of the final permitted iteration before --max ends the run.
+#
+# Exit codes: 0 complete, 1 max iterations reached, 2 usage error or an
+# aborting stop predicate, 3 too many consecutive hard kills, 128+N a signal.
 # Each iteration reads PROMPT.md and follows instructions.
 # State persists in git between iterations; .claude/zloop.state carries
 # iteration/max/start/mode for zheap-death and the predicates.
 
 set -euo pipefail
 
-PROMPT="Read PROMPT.md and follow its instructions."
 MAX_ITERATIONS=60
-TIMEOUT_SECS="${ZLOOP_TIMEOUT:-300}"
+# See "Time" in the header: budget is what the agent is told, timeout is the
+# guillotine. TIMEOUT_SECS empty here means "derive from the budget below".
+BUDGET_SECS="${ZLOOP_BUDGET:-300}"
+INTERVAL_SECS="${ZLOOP_INTERVAL:-1}"
+TIMEOUT_SECS="${ZLOOP_TIMEOUT:-}"
+# Where TIMEOUT_SECS came from: "" derived, "env" ZLOOP_TIMEOUT, "flag"
+# --timeout. A flag the operator typed is worth dying over; an inherited env
+# var from before the budget/timeout split is worth a warning (see below).
+TIMEOUT_SOURCE=""
+[[ -n "$TIMEOUT_SECS" ]] && TIMEOUT_SOURCE="env"
+MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 # Render level handed to bin/zagent --render: compact (default), text
@@ -79,6 +117,9 @@ RENDER="compact"
 [[ "${ZLOOP_QUIET:-0}" == "1" ]] && RENDER="text"
 BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
 KILL_GRACE="${ZLOOP_KILL_GRACE:-10}"
+# Seed for the failure backoff only (2s, 4s, 8s ...). Deliberately not
+# --interval: an interval of 0 is a legitimate cadence but would flatten the
+# backoff to zero and hammer a failing API.
 BACKOFF_BASE=1
 
 usage() {
@@ -125,10 +166,23 @@ while [[ $# -gt 0 ]]; do
       MAX_ITERATIONS="$2"
       shift
       ;;
+    -b|--budget)
+      [[ $# -ge 2 ]] || die "$1 requires a value"
+      require_int "$1" "$2"
+      BUDGET_SECS="$2"
+      shift
+      ;;
+    -i|--interval)
+      [[ $# -ge 2 ]] || die "$1 requires a value"
+      require_int "$1" "$2"
+      INTERVAL_SECS="$2"
+      shift
+      ;;
     -t|--timeout)
       [[ $# -ge 2 ]] || die "$1 requires a value"
       require_int "$1" "$2"
       TIMEOUT_SECS="$2"
+      TIMEOUT_SOURCE="flag"
       shift
       ;;
     -s|--stop)
@@ -154,9 +208,38 @@ while [[ $# -gt 0 ]]; do
 done
 [[ $# -eq 0 ]] || die "unexpected argument '$1'"
 
-require_int "ZLOOP_TIMEOUT" "$TIMEOUT_SECS"
+require_int "ZLOOP_BUDGET" "$BUDGET_SECS"
+require_int "ZLOOP_INTERVAL" "$INTERVAL_SECS"
+require_int "ZLOOP_MAX_TIMEOUTS" "$MAX_TIMEOUTS"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
+[[ "$BUDGET_SECS" -gt 0 ]] || die "--budget/ZLOOP_BUDGET must be greater than 0"
+
+# The guillotine defaults to 2x the budget: far enough out that it only fires
+# on a stuck process, never on an agent that merely used all its time.
+if [[ -n "$TIMEOUT_SECS" ]]; then
+  require_int "ZLOOP_TIMEOUT" "$TIMEOUT_SECS"
+  if [[ "$TIMEOUT_SECS" -le "$BUDGET_SECS" ]]; then
+    if [[ "$TIMEOUT_SOURCE" == "env" ]]; then
+      # ZLOOP_TIMEOUT predates the budget/timeout split, and its old default
+      # (300) is exactly the new budget default. An inherited shell or .envrc
+      # must not turn into a hard failure: say what changed and carry on with
+      # the derived guillotine.
+      log "[zloop] ZLOOP_TIMEOUT=${TIMEOUT_SECS}s is not above the ${BUDGET_SECS}s budget."
+      log "[zloop] ZLOOP_TIMEOUT is now the hard kill, not the working budget;" \
+          "set ZLOOP_BUDGET=${TIMEOUT_SECS} for that."
+      log "[zloop] Using a $((BUDGET_SECS * 2))s hard kill instead." \
+          "See 'bin/zloop --help' (Time)."
+      TIMEOUT_SECS=$((BUDGET_SECS * 2))
+    else
+      die "--timeout ($TIMEOUT_SECS s) must exceed --budget ($BUDGET_SECS s): the
+guillotine kills the agent mid-work and loses everything it has not committed.
+For the time the agent gets to work, you want --budget. See 'bin/zloop --help' (Time)."
+    fi
+  fi
+else
+  TIMEOUT_SECS=$((BUDGET_SECS * 2))
+fi
 [[ "$STOP_MODES" =~ ^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$ ]] \
   || die "--stop/ZLOOP_STOP expects a comma-separated list of mode names, got '$STOP_MODES'"
 for _mode in ${STOP_MODES//,/ }; do
@@ -257,12 +340,21 @@ trap 'on_signal INT 2' INT
 trap 'on_signal TERM 15' TERM
 trap 'on_signal HUP 1' HUP
 
-# `timeout` (GNU or BusyBox) caps an iteration; without it (stock macOS) the
-# iteration runs unbounded, as before.
+# `timeout` (GNU or BusyBox) enforces the guillotine; without it (stock macOS)
+# the iteration runs unbounded. Say so rather than letting a run silently lose
+# its only backstop against a hung agent.
 TIMEOUT_CMD=()
 if command -v timeout &>/dev/null; then
   TIMEOUT_CMD=(timeout "$TIMEOUT_SECS")
+else
+  log "[zloop] no timeout(1) on PATH: iterations run unbounded (brew install coreutils)"
 fi
+
+# The working budget reaches the agent in its prompt. Without this the agent
+# cannot scope a turn to the time it has, and the guillotine takes it
+# mid-thought with nothing committed -- the failure this run is built to avoid.
+# bin/zprompt is shared with bin/zga-loop so the two cannot drift.
+PROMPT=$(bin/zprompt --budget "$BUDGET_SECS") || die "bin/zprompt failed"
 
 # interruptible_sleep N: a foreground `sleep` would delay a trapped SIGTERM
 # (or a SIGHUP) until it returned; a background one lets `wait` return now.
@@ -273,10 +365,17 @@ interruptible_sleep() {
 
 ITERATION=0
 FAILURES=0
+TIMEOUTS=0
 
 log "=== Zociety Loop ($(date '+%H:%M:%S')) ==="
 log "Max iterations: $MAX_ITERATIONS"
-log "Timeout per iteration: ${TIMEOUT_SECS}s"
+log "Budget per iteration: ${BUDGET_SECS}s (told to the agent)"
+log "Interval between iterations: ${INTERVAL_SECS}s"
+log "Hard kill: ${TIMEOUT_SECS}s$([[ ${#TIMEOUT_CMD[@]} -eq 0 ]] && echo ' (unenforced: no timeout(1))')"
+# Muscle memory from before the split reaches for -t to mean "how long a
+# turn gets". Say what it means now, once, whenever it is typed.
+[[ "$TIMEOUT_SOURCE" == "flag" ]] \
+  && log "Note: --timeout is the hard kill; --budget is the working time, --interval the cadence"
 log "Stop modes: $STOP_MODES"
 log "Start: $START_SHA"
 case "$RENDER" in
@@ -312,7 +411,7 @@ EOF
       log "=== Loop Complete ==="
       log "Iterations: $((ITERATION - 1))"
       print_totals
-      bin/zstate | jq '{action, phase, genesis}' >&2
+      bin/zstate | jq '{action, phase, genesis}' >&2 || true
       exit 0
       ;;
     2)
@@ -332,7 +431,7 @@ EOF
     log "=== Max Iterations Reached ==="
     log "Stopped after $MAX_ITERATIONS iterations"
     print_totals
-    bin/zstate | jq '{action, phase, genesis}' >&2
+    bin/zstate | jq '{action, phase, genesis}' >&2 || true
     exit 1
   fi
 
@@ -381,18 +480,45 @@ EOF
       || log "[zloop] zblind reveal failed for ${death_sha:0:7} (continuing)"
   done
 
-  # Fixed 1s pause on success. On consecutive non-zero exits (rate limits,
-  # transient API errors) back off exponentially instead of hammering every
-  # second: 2s, 4s, 8s ... capped at BACKOFF_MAX. A timeout (124) means the agent
-  # was working, not refused, so it does not count toward backoff.
+  # The configured interval on success. On consecutive non-zero exits (rate
+  # limits, transient API errors) back off exponentially instead of hammering
+  # every second: 2s, 4s, 8s ... capped at BACKOFF_MAX.
+  #
+  # A hard kill (124) does not count toward that backoff -- the agent was
+  # working, not refused -- but it is not a normal turn either. It is reported
+  # as a warning and counted: a run whose iterations are all being guillotined
+  # is misconfigured, and saying "CONTINUE" after each one hides exactly the
+  # failure that matters. MAX_TIMEOUTS consecutive kills abort the run.
   if [[ $exit_code -eq 0 ]]; then
     FAILURES=0
-    delay=$BACKOFF_BASE
+    TIMEOUTS=0
+    delay=$INTERVAL_SECS
   elif [[ $exit_code -eq 124 ]]; then
-    log "[zloop] Iteration timed out after ${TIMEOUT_SECS}s"
-    delay=$BACKOFF_BASE
+    TIMEOUTS=$((TIMEOUTS + 1))
+    log "[zloop] WARNING: iteration $ITERATION hard-killed at ${TIMEOUT_SECS}s" \
+        "($TIMEOUTS consecutive)"
+    log "[zloop] The agent was SIGTERMed mid-work; anything it had not" \
+        "committed is lost."
+    if [[ $MAX_TIMEOUTS -gt 0 && $TIMEOUTS -ge $MAX_TIMEOUTS ]]; then
+      log ""
+      log "=== Loop Aborted ==="
+      log "$TIMEOUTS consecutive hard kills at ${TIMEOUT_SECS}s with a" \
+          "${BUDGET_SECS}s budget."
+      log "No iteration is finishing, so none of them can contribute. Raise" \
+          "--budget (and"
+      log "with it the hard kill), or lower the work each turn attempts. See" \
+          "'bin/zloop --help' (Time)."
+      print_totals
+      bin/zstate | jq '{action, phase, genesis}' >&2 || true
+      exit 3
+    fi
+    delay=$INTERVAL_SECS
   else
     FAILURES=$((FAILURES + 1))
+    # TIMEOUTS is deliberately NOT reset here. A run alternating 124, 1, 124,
+    # 1 is entirely broken, and resetting on the unrelated failure would let it
+    # loop forever without ever reaching the abort. Only a clean iteration --
+    # proof that the budget is workable -- clears the count.
     if [[ $FAILURES -lt 20 ]]; then
       delay=$((BACKOFF_BASE << FAILURES))
     else

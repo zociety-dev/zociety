@@ -12,6 +12,15 @@
 # Requires: ANTHROPIC_API_KEY in environment
 #
 # Environment:
+#   ZLOOP_BUDGET=300    Seconds of work an iteration is told it has, via
+#                       bin/zprompt (same paragraph bin/zloop sends)
+#   ZLOOP_INTERVAL=2    Seconds between iterations (rate-limit breathing room)
+#   ZLOOP_TIMEOUT=      Hard kill per iteration (default: 2x the budget), the
+#                       same guillotine bin/zloop applies. Before this the
+#                       only bound was the workflow's timeout-minutes, which
+#                       kills the whole job, not the iteration.
+#   ZLOOP_MAX_TIMEOUTS=3  Consecutive hard kills that abort the run (exit 3;
+#                       0 = never). See bin/zloop --help (Time).
 #   ZLOOP_STOP=action   Stop modes passed to bin/zloop-complete (no --stop flag
 #                       here; set it in the workflow env). See bin/zloop --help.
 #   ZSTOP_*             Per-mode knobs; see bin/zstop-<mode> --help
@@ -26,12 +35,44 @@ set -euo pipefail
 MAX_ITERATIONS="${1:-30}"
 MODEL="${2:-claude-haiku-4-5-20251001}"
 STOP_MODES="${ZLOOP_STOP:-action}"
+BUDGET_SECS="${ZLOOP_BUDGET:-300}"
+INTERVAL_SECS="${ZLOOP_INTERVAL:-2}"
+TIMEOUT_SECS="${ZLOOP_TIMEOUT:-}"
+MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
 ITERATION=0
-PROMPT="Read PROMPT.md and follow its instructions."
+TIMEOUTS=0
+for v in BUDGET_SECS INTERVAL_SECS MAX_TIMEOUTS; do
+    [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "zga-loop: $v expects a non-negative integer, got '${!v}'" >&2; exit 2; }
+done
+# Same rule as bin/zloop: the guillotine must sit above the budget, else every
+# iteration dies mid-work. An inherited value at or below it is corrected with
+# a note rather than failing the job.
+if [[ -n "$TIMEOUT_SECS" ]]; then
+    [[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]] || { echo "zga-loop: ZLOOP_TIMEOUT expects a non-negative integer, got '$TIMEOUT_SECS'" >&2; exit 2; }
+    if [[ "$TIMEOUT_SECS" -le "$BUDGET_SECS" ]]; then
+        echo "ZLOOP_TIMEOUT=${TIMEOUT_SECS}s is not above the ${BUDGET_SECS}s budget; using $((BUDGET_SECS * 2))s (ZLOOP_TIMEOUT is the hard kill, ZLOOP_BUDGET the working time)"
+        TIMEOUT_SECS=$((BUDGET_SECS * 2))
+    fi
+else
+    TIMEOUT_SECS=$((BUDGET_SECS * 2))
+fi
+TIMEOUT_CMD=()
+if command -v timeout &>/dev/null; then
+    TIMEOUT_CMD=(timeout "$TIMEOUT_SECS")
+else
+    echo "Warning: no timeout(1) on PATH; iterations run unbounded"
+fi
+# Shared with bin/zloop (see bin/zprompt): the agent is told its budget here
+# too. CI iterations that do not know their time limit fail the same way local
+# ones did -- killed mid-work by the job timeout with nothing committed.
+PROMPT=$(bin/zprompt --budget "$BUDGET_SECS")
 
 echo "=== Zociety GA Loop ==="
 echo "Max iterations: $MAX_ITERATIONS"
 echo "Model: $MODEL"
+echo "Budget per iteration: ${BUDGET_SECS}s (told to the agent)"
+echo "Interval between iterations: ${INTERVAL_SECS}s"
+echo "Hard kill: ${TIMEOUT_SECS}s"
 echo "Stop modes: $STOP_MODES"
 echo ""
 
@@ -89,10 +130,10 @@ EOF
         # Push whatever we have (with retry)
         if ! git push origin HEAD 2>/dev/null; then
             echo "Push failed, trying pull-rebase-push..."
-            git pull --rebase && git push origin HEAD || {
+            if ! { git pull --rebase && git push origin HEAD; }; then
                 echo "Warning: final push failed after rebase"
                 exit 1
-            }
+            fi
         fi
         exit 0  # Success if we made progress, even without completing
     fi
@@ -112,20 +153,38 @@ EOF
     fi
     AGENT_ARGS+=("$PROMPT")
 
-    # Run one agent iteration
+    # Run one agent iteration under the hard kill. As in bin/zloop, a kill
+    # (124) is a warning with a streak, not a normal turn, and MAX_TIMEOUTS in
+    # a row abort the run: an iteration that never finishes cannot contribute.
     PREV_HEAD=$(git rev-parse HEAD)
-    if bin/zagent "${AGENT_ARGS[@]}" 2>&1; then
+    exit_code=0
+    ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" 2>&1 || exit_code=$?
+    if [[ $exit_code -eq 0 ]]; then
+        TIMEOUTS=0
         # Push after successful iteration (if there are changes)
         if ! git diff --quiet HEAD 2>/dev/null; then
             echo ""
             echo "Pushing changes..."
-            git push origin HEAD || {
+            if ! git push origin HEAD; then
                 echo "Push failed, trying pull-rebase-push..."
-                git pull --rebase && git push origin HEAD
-            } || echo "Warning: push failed, continuing..."
+                if ! { git pull --rebase && git push origin HEAD; }; then
+                    echo "Warning: push failed, continuing..."
+                fi
+            fi
+        fi
+    elif [[ $exit_code -eq 124 ]]; then
+        TIMEOUTS=$((TIMEOUTS + 1))
+        echo "WARNING: iteration $ITERATION hard-killed at ${TIMEOUT_SECS}s ($TIMEOUTS consecutive); uncommitted work is lost"
+        if [[ $MAX_TIMEOUTS -gt 0 && $TIMEOUTS -ge $MAX_TIMEOUTS ]]; then
+            echo ""
+            echo "=== Loop Aborted ==="
+            echo "$TIMEOUTS consecutive hard kills at ${TIMEOUT_SECS}s with a ${BUDGET_SECS}s budget; raise ZLOOP_BUDGET or shrink the work per turn"
+            rm -f .zociety/zloop.state .claude/zloop.state
+            git push origin HEAD || echo "Warning: final push failed"
+            exit 3
         fi
     else
-        echo "Warning: Agent iteration failed, continuing..."
+        echo "Warning: Agent iteration failed (exit $exit_code), continuing..."
     fi
 
     # Blind model record (same as bin/zloop, runner github-actions): seal the
@@ -139,6 +198,6 @@ EOF
             || echo "Warning: zblind reveal failed for ${death_sha:0:7}, continuing..."
     done
 
-    # Small delay to avoid rate limits
-    sleep 2
+    # Small delay to avoid rate limits (cadence, as bin/zloop --interval)
+    sleep "$INTERVAL_SECS"
 done
