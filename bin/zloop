@@ -25,6 +25,9 @@
 #   ZLOOP_INTERVAL=1        Seconds to wait between iterations
 #   ZLOOP_TIMEOUT=          Hard kill in seconds (default: 2x the budget)
 #   ZLOOP_MAX_TIMEOUTS=3    Consecutive hard kills that abort the run (0 = never)
+#   ZLOOP_MAX_SEAL_FAILURES=3  Consecutive bin/zblind seal failures that abort
+#                           the run (exit 4; 0 = never). A seal skipped for a
+#                           missing ZOCIETY_BLIND_KEY exits 0 and never counts
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_QUIET=1           Same as --quiet
@@ -53,6 +56,20 @@
 # A hard kill is reported as a warning, not as a normal turn, and
 # ZLOOP_MAX_TIMEOUTS consecutive kills abort the run (exit 3): a loop whose
 # iterations are all being guillotined is misconfigured, not working.
+#
+# The same shape guards the provenance seal. A run that fails to seal every
+# single iteration produces no provenance at all, and "(continuing)" after
+# each one hides that: ZLOOP_MAX_SEAL_FAILURES consecutive failures abort the
+# run (exit 4). A seal that is skipped because ZOCIETY_BLIND_KEY is unset
+# exits 0 and is not a failure.
+#
+# Orientation: bin/zprompt is regenerated before every iteration, not once per
+# run. Its block is the turn's state (bin/zstate, branch, latest direction and
+# heap-death, recent log), and that changes with every commit the previous
+# iteration made; a prompt built once hands iteration 5 iteration 1's world and
+# the agent re-derives everything anyway. Measured at ~1.3s per call against
+# this repo, against the 18-35s of tool calls a turn used to spend re-deriving
+# the same facts.
 #
 # Identity at birth: unless ZLOOP_BRANCH=0, a run started on a branch that is
 # not cycle/* derives its first cycle's name (bin/zcycle-id current: last tag,
@@ -89,7 +106,8 @@
 # result of the final permitted iteration before --max ends the run.
 #
 # Exit codes: 0 complete, 1 max iterations reached, 2 usage error or an
-# aborting stop predicate, 3 too many consecutive hard kills, 128+N a signal.
+# aborting stop predicate, 3 too many consecutive hard kills, 4 too many
+# consecutive bin/zblind seal failures, 128+N a signal.
 # Each iteration reads PROMPT.md and follows instructions.
 # State persists in git between iterations; .claude/zloop.state carries
 # iteration/max/start/mode for zheap-death and the predicates.
@@ -108,6 +126,7 @@ TIMEOUT_SECS="${ZLOOP_TIMEOUT:-}"
 TIMEOUT_SOURCE=""
 [[ -n "$TIMEOUT_SECS" ]] && TIMEOUT_SOURCE="env"
 MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
+MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 # Render level handed to bin/zagent --render: compact (default), text
@@ -211,6 +230,7 @@ done
 require_int "ZLOOP_BUDGET" "$BUDGET_SECS"
 require_int "ZLOOP_INTERVAL" "$INTERVAL_SECS"
 require_int "ZLOOP_MAX_TIMEOUTS" "$MAX_TIMEOUTS"
+require_int "ZLOOP_MAX_SEAL_FAILURES" "$MAX_SEAL_FAILURES"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 [[ "$BUDGET_SECS" -gt 0 ]] || die "--budget/ZLOOP_BUDGET must be greater than 0"
@@ -350,11 +370,10 @@ else
   log "[zloop] no timeout(1) on PATH: iterations run unbounded (brew install coreutils)"
 fi
 
-# The working budget reaches the agent in its prompt. Without this the agent
-# cannot scope a turn to the time it has, and the guillotine takes it
-# mid-thought with nothing committed -- the failure this run is built to avoid.
-# bin/zprompt is shared with bin/zga-loop so the two cannot drift.
-PROMPT=$(bin/zprompt --budget "$BUDGET_SECS") || die "bin/zprompt failed"
+# Fail fast on a broken bin/zprompt rather than at the top of iteration 1: the
+# real prompt is built per iteration, below, because its context block goes
+# stale the moment the previous iteration commits.
+bin/zprompt --budget "$BUDGET_SECS" >/dev/null || die "bin/zprompt failed"
 
 # interruptible_sleep N: a foreground `sleep` would delay a trapped SIGTERM
 # (or a SIGHUP) until it returned; a background one lets `wait` return now.
@@ -366,6 +385,7 @@ interruptible_sleep() {
 ITERATION=0
 FAILURES=0
 TIMEOUTS=0
+SEAL_FAILURES=0
 
 log "=== Zociety Loop ($(date '+%H:%M:%S')) ==="
 log "Max iterations: $MAX_ITERATIONS"
@@ -447,6 +467,10 @@ EOF
   log ""
   iter_start=$SECONDS
 
+  # Orientation for this turn, regenerated now: the context block is the state
+  # after the previous iteration's commits. See the header (Orientation).
+  PROMPT=$(bin/zprompt --budget "$BUDGET_SECS") || die "bin/zprompt failed"
+
   # Build agent runner arguments
   AGENT_ARGS=(--render "$RENDER")
   if [[ -n "${ZOCIETY_AGENT_CLIENT:-}" ]]; then
@@ -473,8 +497,31 @@ EOF
   # Blind model record: seal every commit this iteration made, then reveal
   # the cycle for every heap-death among them. Neither failure ends the loop.
   CUR_HEAD=$(git rev-parse HEAD)
-  bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "$CLIENT" local \
-    || log "[zloop] zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7} (continuing)"
+  # A seal that is skipped for a missing key exits 0; only a real failure
+  # counts. Mirrors the hard-kill streak above: warn every time, abort once
+  # MAX_SEAL_FAILURES in a row have failed, because a run that seals nothing
+  # produces no provenance and "(continuing)" makes that invisible.
+  if bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "$CLIENT" local; then
+    SEAL_FAILURES=0
+  else
+    SEAL_FAILURES=$((SEAL_FAILURES + 1))
+    log "[zloop] WARNING: zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7}" \
+        "($SEAL_FAILURES consecutive)"
+    log "[zloop] Those commits carry no provenance note; the cycle cannot be" \
+        "revealed at heap-death."
+    if [[ $MAX_SEAL_FAILURES -gt 0 && $SEAL_FAILURES -ge $MAX_SEAL_FAILURES ]]; then
+      log ""
+      log "=== Loop Aborted ==="
+      log "$SEAL_FAILURES consecutive zblind seal failures."
+      log "Every iteration of this run is unsealed, so the run has no" \
+          "provenance record at all."
+      log "Fix bin/zblind (see its output above) or set" \
+          "ZLOOP_MAX_SEAL_FAILURES=0 to accept an unsealed run."
+      print_totals
+      bin/zstate | jq '{action, phase, genesis}' >&2 || true
+      exit 4
+    fi
+  fi
   for death_sha in $(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}"); do
     bin/zblind reveal "$death_sha" \
       || log "[zloop] zblind reveal failed for ${death_sha:0:7} (continuing)"
