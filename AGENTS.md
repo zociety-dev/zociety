@@ -19,7 +19,8 @@ Note: It's "zociety" not "society".
 ```bash
 # Direct execution
 bin/zloop 60
-bin/zloop --max 60 --timeout 600 --verbose   # flags override ZLOOP_* env
+bin/zloop --max 60 --budget 600 --verbose    # flags override ZLOOP_* env
+bin/zloop --budget 600 --interval 30         # 10m of work per turn, 30s between turns
 bin/zloop --quiet 60                         # buffered output, no live render
 bin/zloop --stop action,file 60              # pick stop modes (default: action)
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
@@ -42,11 +43,11 @@ Zociety's own loop with dynamic completion checking:
   1 continue, 2 abort the loop (unknown mode or predicate error)
 - No static promise strings - uses exit codes
 - Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`
-- `--max N` and `ZLOOP_TIMEOUT` are unconditional safety caps, not modes;
+- `--max N` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional safety caps, not modes;
   the predicates run once more after the final permitted iteration, so
   finishing on the last iteration exits 0 (`Loop Complete`), not 1
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
-- Each iteration has a 5-minute timeout (configurable via `ZLOOP_TIMEOUT`)
+- Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so
   `bin/zloop 1 > out.txt` leaves only the answer in the file
 - Default render (via `bin/zagent --render compact` and `bin/zrender`): a
@@ -56,6 +57,15 @@ Zociety's own loop with dynamic completion checking:
   from the result event (`duration 4m58s · turns 17 · $0.83`) and run totals
   at the end. `--quiet` is the old buffered output; `--verbose` is the raw
   stream-json events with partial messages
+- Three separate time knobs; do not conflate them. `--interval` is cadence
+  (quiet between turns, what `watch -n` and cron mean, and it bounds no
+  work), `--budget` is the working budget handed to the agent in its prompt so
+  it can scope the turn and commit before time runs out, and `--timeout` is the
+  guillotine that SIGTERMs a hung agent mid-token, losing anything uncommitted.
+  The guillotine defaults to twice the budget and must exceed it. A hard kill
+  is reported as a WARNING, not as a normal turn, and `ZLOOP_MAX_TIMEOUTS`
+  consecutive kills abort the run (exit 3) rather than let a misconfigured loop
+  burn iterations that can never finish
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
 - Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message
 - Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
@@ -69,6 +79,7 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zprompt [--budget N]` | The per-iteration prompt handed to the agent; shared by `bin/zloop` and `bin/zga-loop` so the budget paragraph cannot drift |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
@@ -114,7 +125,10 @@ archive a cycle into a feature branch.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ZLOOP_TIMEOUT` | 300 | Timeout per iteration in seconds |
+| `ZLOOP_BUDGET` | 300 | Seconds of work an iteration is told it has. Passed to the agent in its prompt so it can scope the turn and commit in time |
+| `ZLOOP_INTERVAL` | 1 | Seconds of quiet between iterations (cadence, as `watch -n` means it). Bounds no work |
+| `ZLOOP_TIMEOUT` | 2x budget | Hard kill: `timeout` SIGTERMs the agent mid-token and uncommitted work is lost. A backstop for a hung process, not the working budget. Must exceed `ZLOOP_BUDGET` |
+| `ZLOOP_MAX_TIMEOUTS` | 3 | Consecutive hard kills that abort the run with exit 3 (0 = never abort) |
 | `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_QUIET` | 0 | Same as `--quiet`: buffered result only, no live render (1 = on) |
@@ -164,6 +178,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
 | `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zprompt` | Per-iteration agent prompt (single source for the working-budget paragraph) |
 | `bin/zrender` | Compact live render of claude's stream-json (used by `bin/zagent --render compact`) |
 | `bin/zstop-action` | Stop predicate: action is `stop` or `promise` |
 | `bin/zstop-budget` | Stop predicate: `ZSTOP_BUDGET` heap-deaths since loop start |
