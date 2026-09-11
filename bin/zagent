@@ -23,10 +23,11 @@
 #   GEMINI_MODEL           Default model for gemini (passed as -m).
 #
 # The model reaches the client as a CLI flag only. The child runs with
-# ANTHROPIC_MODEL, GEMINI_MODEL, ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY
-# removed from its environment (env -u), so the agent's shell cannot read
-# which model it is, which client, or the key that seals the record. The
-# loop records the model per turn with bin/zblind; see
+# ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (the CI step variable bin/zga-loop
+# inherits), ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY removed from its
+# environment (env -u), so the agent's shell cannot read which model it is,
+# which client, or the key that seals the record. The loop records the model
+# per turn with bin/zblind; see
 # docs/challenges/cross-agent-deference.md.
 #
 # compact is claude-only: bin/zrender reads claude's event schema. For gemini
@@ -100,7 +101,7 @@ if [[ -z "$MODEL" ]]; then
     gemini) MODEL="${GEMINI_MODEL:-}" ;;
   esac
 fi
-SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY)
+SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY)
 
 case "$CLIENT" in
   claude)

@@ -367,8 +367,11 @@ The repository uses pre-commit hooks for:
   `Agent: claude-code[/<model>]` trailer when `CLAUDECODE` is set (Claude
   Code exports `CLAUDECODE=1` into its shells; verified with `env`, which
   shows no model variable, so the suffix comes from `ANTHROPIC_MODEL` when
-  exported). `core.hooksPath` is not used: the hook runs through the
-  pre-commit framework's `prepare-commit-msg` stage.
+  exported). Event commits (`bin/zevent`: `[type]` subject, `{"z":1` body)
+  are exempt, since a trailer after the JSON body would hide the event from
+  `bin/zstate`; loop turns are attributed by `refs/notes/agent` instead.
+  `core.hooksPath` is not used: the hook runs through the pre-commit
+  framework's `prepare-commit-msg` stage (which `--no-verify` does not skip).
 
 Install with: `pre-commit install --hook-type pre-commit --hook-type prepare-commit-msg` (`bin/setup` does this). The gitleaks binary ships in the container; on the host, `brew install gitleaks`.
 

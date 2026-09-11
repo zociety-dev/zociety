@@ -17,11 +17,13 @@
 # previous rev*-attempt* tag; seal without ZOCIETY_BLIND_KEY writes only the
 # agent note and exits 0; reveal without the key (or the wrong one) fails;
 # bin/zjoin assigns member-1, member-2 and emits no model field; bin/zagent
-# passes the model as a flag and scrubs ANTHROPIC_MODEL, GEMINI_MODEL,
+# passes the model as a flag and scrubs ANTHROPIC_MODEL, GEMINI_MODEL, MODEL,
 # ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY from the client's environment;
 # .githooks/prepare-commit-msg adds the Agent: trailer only when CLAUDECODE
-# is set and never on merges or over an existing trailer; and
-# bin/nfprov-blame.py classifies noted, trailer-only and plain commits.
+# is set and never on merges, over an existing trailer or on bin/zevent event
+# commits (and bin/zstate still finds an event even with a stray trailer
+# after its body); and bin/nfprov-blame.py classifies noted, trailer-only and
+# plain commits.
 # Needs gpg and python3: run it as bin/zociety bin/test-zblind.
 
 set -e
@@ -75,7 +77,7 @@ KEY="zblind-fixture-passphrase" # gitleaks:allow
 
 # Isolation: this harness may itself run from a Claude Code shell
 # (CLAUDECODE=1) with a model or key exported; every case sets what it needs.
-unset CLAUDECODE ANTHROPIC_MODEL GEMINI_MODEL ZOCIETY_AGENT_CLIENT ZOCIETY_BLIND_KEY
+unset CLAUDECODE ANTHROPIC_MODEL GEMINI_MODEL MODEL ZOCIETY_AGENT_CLIENT ZOCIETY_BLIND_KEY
 
 cleanup() {
   gpgconf --kill gpg-agent >/dev/null 2>&1 || true
@@ -107,7 +109,7 @@ printf '%s\n' '#!/bin/bash' \
   'else' \
   '  echo "fake claude ran"' \
   'fi' \
-  '{ echo "args: $*"; env | grep -E "^(ANTHROPIC_MODEL|GEMINI_MODEL|ZOCIETY_AGENT_CLIENT|ZOCIETY_BLIND_KEY)=" | sed "s/^/env: /"; } > "$FAKE_CLAUDE_LOG"' \
+  '{ echo "args: $*"; env | grep -E "^(ANTHROPIC_MODEL|GEMINI_MODEL|MODEL|ZOCIETY_AGENT_CLIENT|ZOCIETY_BLIND_KEY)=" | sed "s/^/env: /"; } > "$FAKE_CLAUDE_LOG"' \
   'exit 0' > "$FAKEBIN/claude"
 chmod +x "$FAKEBIN/claude"
 export PATH="$FAKEBIN:$PATH"
@@ -377,14 +379,17 @@ echo ""
 
 echo "=== Case 6: zagent passes the model as a flag and scrubs the env ==="
 fresh_repo agent
-run env ANTHROPIC_MODEL=claude-test-1 GEMINI_MODEL=gemini-test ZOCIETY_AGENT_CLIENT=claude ZOCIETY_BLIND_KEY="$KEY" \
+# MODEL is the CI step variable (.github/workflows/autonomous-loop.yml) that
+# bin/zga-loop and its children inherit; it must not reach the agent either.
+run env ANTHROPIC_MODEL=claude-test-1 GEMINI_MODEL=gemini-test MODEL=claude-ci ZOCIETY_AGENT_CLIENT=claude ZOCIETY_BLIND_KEY="$KEY" \
   bin/zagent --render text "say hi"
 assert_rc 0
 assert_eq "stdout" "$(cat "$OUT")" "fake claude ran"
 LOG=$(cat "$FAKE_LOG")
 assert_has "argv" "$LOG" '\-\-model claude-test-1'
 assert_lacks "env" "$LOG" '^env: '
-run env ANTHROPIC_MODEL=claude-test-1 ZOCIETY_BLIND_KEY="$KEY" bin/zagent --model claude-flag --render compact "say hi"
+assert_lacks "env (MODEL)" "$LOG" 'claude-ci'
+run env ANTHROPIC_MODEL=claude-test-1 MODEL=claude-ci ZOCIETY_BLIND_KEY="$KEY" bin/zagent --model claude-flag --render compact "say hi"
 assert_rc 0
 LOG=$(cat "$FAKE_LOG")
 assert_has "argv (flag wins)" "$LOG" '\-\-model claude-flag'
@@ -425,6 +430,43 @@ run env CLAUDECODE=1 git merge -q --no-ff -m "merge side" side
 assert_rc 0
 assert_eq "merge subject" "$(git log -1 --format=%s)" "merge side"
 assert_lacks "merge commit" "$(git log -1 --format=%B)" '^Agent:'
+echo ""
+
+echo "=== Case 7b: event commits get no trailer; zstate ignores a stray one ==="
+# Same fixture and hooks dir as case 7. A bin/zevent commit made from a Claude
+# Code shell (CLAUDECODE=1; --no-verify does not skip prepare-commit-msg) must
+# keep its JSON body as the last thing in the message, or bin/zstate cannot
+# see it: this is how every loop member ended up named member-1.
+run env CLAUDECODE=1 bin/zevent join member-1 "joining cycle" '{"role":"agent","greeting":"joining cycle"}'
+assert_rc 0
+assert_eq "event subject" "$(git log -1 --format=%s)" "[join] member-1: joining cycle"
+assert_lacks "event commit" "$(git log -1 --format=%B)" '^Agent:'
+assert_has "event body intact" "$(git log -1 --format=%b)" '^\{"z":1,'
+run bin/zstate
+assert_rc 0
+assert_eq "zstate last_event" "$(jq -r .last_event "$OUT")" join
+assert_eq "zstate members" "$(jq -r .genesis.members "$OUT")" 1
+run env CLAUDECODE=1 git commit -q --allow-empty -m "plain commit between events"
+assert_rc 0
+assert_has "plain commit still attributed" "$(git log -1 --format=%B)" '^Agent: claude-code$'
+# Stray trailers after the envelope (what the hook used to do), on a compact
+# and on a pretty-printed body: zstate reads only the JSON object.
+EV2=$(jq -nc '{z:1,event:"join",cycle:1,seq:2,agent:"member-2",ts:"2026-09-10T00:00:00Z",runtime:{env:"test",id:"t"},state:{members:2,rules:0,stuff:0,complete:false},data:{role:"agent"}}')
+run git commit -q --allow-empty -m "[join] member-2: joining cycle" -m "$EV2" -m "Agent: claude-code"
+assert_rc 0
+assert_has "compact body carries trailer" "$(git log -1 --format=%b)" '^Agent: claude-code$'
+run bin/zstate
+assert_rc 0
+assert_eq "zstate sees member-2 past a trailer" "$(jq -r .last_agent "$OUT")" member-2
+assert_eq "zstate members" "$(jq -r .genesis.members "$OUT")" 2
+EV3=$(printf '%s' "$EV2" | jq '.seq = 3 | .agent = "member-3" | .state.members = 3')
+run git commit -q --allow-empty -m "[join] member-3: joining cycle" -m "$EV3" -m "Agent: claude-code"
+assert_rc 0
+assert_has "pretty body is multi-line" "$(git log -1 --format=%b)" '^  "z": 1,$'
+run bin/zstate
+assert_rc 0
+assert_eq "zstate sees member-3 past a trailer" "$(jq -r .last_agent "$OUT")" member-3
+assert_eq "zstate members" "$(jq -r .genesis.members "$OUT")" 3
 echo ""
 
 #############################################

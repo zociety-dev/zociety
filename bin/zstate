@@ -19,8 +19,13 @@ set -e
 find_last_event() {
   local count=0
   for HASH in $(git log --format=%H -n 100 2>/dev/null); do
-    BODY=$(git log -1 --format=%b "$HASH" 2>/dev/null)
-    # Try to parse body as JSON with z:1 schema marker
+    # Only the JSON envelope: from the first line starting with "{" to the end
+    # of that object (one line when compact, the bare "}" line when
+    # pretty-printed). Anything after it, e.g. a stray Agent: trailer, is
+    # ignored so it can never hide the event.
+    BODY=$(git log -1 --format=%b "$HASH" 2>/dev/null \
+      | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {exit}')
+    # Try to parse the envelope as JSON with z:1 schema marker
     EVENT=$(echo "$BODY" | jq -ce 'select(.z == 1)' 2>/dev/null) && {
       echo "$EVENT"
       return 0
