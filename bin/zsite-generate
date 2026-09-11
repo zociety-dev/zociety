@@ -75,8 +75,11 @@ CYCLES_JSON+="]"
 # ============================================================
 echo "Extracting learnings..."
 
-# Fetch learnings branch if not available
-git fetch origin learnings:learnings 2>/dev/null || true
+# Fetch learnings branch if not available. --no-tags is load-bearing: a plain
+# fetch auto-follows tags, so this line silently re-downloads every rev* tag
+# from origin and the archive stops being a pure function of the local tags
+# (bin/test-zsite-archive Case 5 deletes a tag; the fetch put it back).
+git fetch --no-tags origin learnings:learnings 2>/dev/null || true
 
 LEARNINGS_HTML=""
 if git show learnings:LEARNINGS.md &>/dev/null; then
