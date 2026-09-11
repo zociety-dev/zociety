@@ -1,0 +1,196 @@
+#!/bin/bash
+# zblind: Seal the model behind each loop turn; reveal it at heap-death
+#
+# Usage:
+#   bin/zblind seal <from-sha> <to-sha> <model> <client> <runner>
+#   bin/zblind reveal <heap-death-sha>
+#   bin/zblind -h | --help
+#
+# Commands:
+#   seal      For every commit in from..to write two git notes:
+#               refs/notes/blind   {model, client, runner, ts} as compact JSON,
+#                                  gpg --symmetric (armored) with the
+#                                  passphrase ZOCIETY_BLIND_KEY
+#               refs/notes/agent   plaintext "kind: ai" + "runner: <runner>"
+#                                  and nothing else, so provenance can tell
+#                                  agent turns from human commits during a
+#                                  live cycle without learning the model.
+#             Without ZOCIETY_BLIND_KEY the agent note is still written, the
+#             seal is skipped with a warning on stderr, and the exit is 0.
+#             An empty range is a no-op. Idempotent: notes are overwritten.
+#   reveal    Decrypt every refs/notes/blind note from the previous
+#             rev*-attempt* tag (root when none) up to and including
+#             <heap-death-sha>. For each sealed commit, "model: <model>" and
+#             "client: <client>" are appended to its refs/notes/agent note;
+#             on the heap-death commit itself a plaintext "models: a,b" line
+#             (distinct, sorted, comma-separated) plus "runners: ..." is
+#             appended to the default note (refs/notes/commits, the cycle
+#             note bin/zheap-death writes). A missing key or a note that
+#             does not decrypt is a loud failure (exit 1). Commits without a
+#             blind note (human commits, turns before the blind existed) are
+#             skipped, not failed.
+#
+# Both commands push refs/notes/blind and refs/notes/agent (reveal also
+# refs/notes/commits) to origin when a remote exists; a failed push is
+# reported and ignored, as bin/zheap-death does.
+#
+# Environment:
+#   ZOCIETY_BLIND_KEY   Symmetric passphrase shared by every runner (local and
+#                       CI). Never written to disk: fed to gpg on a pipe via
+#                       --passphrase-fd. bin/zagent removes it from the agent's
+#                       environment.
+#
+# Callers: bin/zloop and bin/zga-loop seal after every iteration and reveal
+# for every [heap-death] commit the iteration produced. The loop writes the
+# record, never the agent; see docs/challenges/cross-agent-deference.md.
+
+set -eo pipefail
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zblind: $*" >&2
+  exit 1
+}
+
+# gpg_with_key <gpg args...>: run gpg with the passphrase from
+# ZOCIETY_BLIND_KEY on fd 3 (a pipe from a process substitution, never a
+# file). stdin/stdout are the caller's, so plaintext and ciphertext stream
+# through without touching disk either.
+gpg_with_key() {
+  gpg --batch --quiet --no-tty --pinentry-mode loopback --passphrase-fd 3 "$@" \
+    3< <(printf '%s\n' "$ZOCIETY_BLIND_KEY")
+}
+
+push_notes() {
+  git remote get-url origin &>/dev/null || return 0
+  local ref
+  for ref in "$@"; do
+    git push origin "$ref" --quiet 2>/dev/null \
+      || echo "  ($ref push failed - continuing)" >&2
+  done
+}
+
+# Distinct, sorted, comma-separated values from stdin (one per line).
+distinct_list() {
+  sort -u | grep -v '^$' | paste -sd, - || true
+}
+
+cmd_seal() {
+  local from="$1" to="$2" model="$3" client="$4" runner="$5"
+  [[ -n "$from" && -n "$to" && -n "$model" && -n "$client" && -n "$runner" ]] \
+    || { usage >&2; die "seal needs <from-sha> <to-sha> <model> <client> <runner>"; }
+  git rev-parse --verify -q "${from}^{commit}" >/dev/null || die "seal: '$from' is not a commit"
+  git rev-parse --verify -q "${to}^{commit}" >/dev/null || die "seal: '$to' is not a commit"
+
+  local shas sha n=0 sealed=0 payload
+  shas=$(git rev-list --reverse "${from}..${to}")
+  [[ -n "$shas" ]] || return 0
+
+  for sha in $shas; do
+    n=$((n + 1))
+    git notes --ref=agent add -f -m "kind: ai
+runner: $runner" "$sha" >/dev/null 2>&1
+    [[ -n "${ZOCIETY_BLIND_KEY:-}" ]] || continue
+    payload=$(jq -nc --arg model "$model" --arg client "$client" --arg runner "$runner" \
+      '{model: $model, client: $client, runner: $runner, ts: (now | todate)}')
+    printf '%s' "$payload" \
+      | gpg_with_key --symmetric --armor --yes --output - \
+      | git notes --ref=blind add -f -F - "$sha" >/dev/null 2>&1 \
+      || die "seal: gpg or git notes failed on ${sha:0:7}"
+    sealed=$((sealed + 1))
+  done
+
+  if [[ -z "${ZOCIETY_BLIND_KEY:-}" ]]; then
+    echo "zblind: ZOCIETY_BLIND_KEY unset; seal skipped for $n commit(s) (refs/notes/agent written, runner $runner)" >&2
+    push_notes refs/notes/agent
+    return 0
+  fi
+  echo "zblind: sealed $sealed commit(s) as $runner" >&2
+  push_notes refs/notes/blind refs/notes/agent
+}
+
+cmd_reveal() {
+  local death="$1"
+  [[ -n "$death" ]] || { usage >&2; die "reveal needs <heap-death-sha>"; }
+  [[ -n "${ZOCIETY_BLIND_KEY:-}" ]] || die "reveal: ZOCIETY_BLIND_KEY unset; cannot decrypt refs/notes/blind"
+  death=$(git rev-parse --verify -q "${death}^{commit}") || die "reveal: '$1' is not a commit"
+
+  # Range: previous cycle tag (nearest rev*-attempt* reachable from the
+  # parent; the heap-death commit itself may already carry this cycle's tag)
+  # to the heap-death commit inclusive. No tag: from the root.
+  local prev range
+  prev=$(git describe --tags --abbrev=0 --match 'rev*-attempt*' "${death}^" 2>/dev/null || true)
+  if [[ -n "$prev" ]]; then
+    range="${prev}..${death}"
+  else
+    range="$death"
+  fi
+
+  local sha cipher plain model client runner sealed=0
+  local models="" runners=""
+  for sha in $(git rev-list --reverse "$range"); do
+    cipher=$(git notes --ref=blind show "$sha" 2>/dev/null) || continue
+    plain=$(printf '%s\n' "$cipher" | gpg_with_key --decrypt 2>/dev/null) \
+      || die "reveal: cannot decrypt refs/notes/blind on ${sha:0:7} (wrong ZOCIETY_BLIND_KEY?)"
+    model=$(printf '%s' "$plain" | jq -er '.model') || die "reveal: bad payload on ${sha:0:7}"
+    client=$(printf '%s' "$plain" | jq -er '.client') || die "reveal: bad payload on ${sha:0:7}"
+    runner=$(printf '%s' "$plain" | jq -r '.runner // "unknown"')
+    sealed=$((sealed + 1))
+    models+="$model"$'\n'
+    runners+="$runner"$'\n'
+
+    # Per-commit agent note: add the plaintext model once.
+    if ! git notes --ref=agent show "$sha" 2>/dev/null | grep -q '^model:'; then
+      if git notes --ref=agent show "$sha" >/dev/null 2>&1; then
+        git notes --ref=agent append -m "model: $model
+client: $client" "$sha" >/dev/null 2>&1
+      else
+        git notes --ref=agent add -m "kind: ai
+runner: $runner
+model: $model
+client: $client" "$sha" >/dev/null 2>&1
+      fi
+    fi
+  done
+
+  local model_list runner_list
+  model_list=$(printf '%s' "$models" | distinct_list)
+  runner_list=$(printf '%s' "$runners" | distinct_list)
+  [[ -n "$model_list" ]] || model_list="none"
+  [[ -n "$runner_list" ]] || runner_list="none"
+
+  if git notes show "$death" 2>/dev/null | grep -q '^models:'; then
+    echo "zblind: ${death:0:7} already carries a models: line; cycle note left as is" >&2
+  else
+    git notes append -m "models: $model_list
+runners: $runner_list" "$death" >/dev/null 2>&1
+  fi
+  echo "zblind: revealed $sealed sealed commit(s) in $range: models=$model_list runners=$runner_list" >&2
+  push_notes refs/notes/blind refs/notes/agent refs/notes/commits
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  "")
+    usage >&2
+    exit 1
+    ;;
+  seal)
+    shift
+    cmd_seal "${1:-}" "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+    ;;
+  reveal)
+    shift
+    cmd_reveal "${1:-}"
+    ;;
+  *)
+    usage >&2
+    die "unknown command '$1'"
+    ;;
+esac

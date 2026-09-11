@@ -63,7 +63,7 @@ bin/test-zevent-system
 bin/test-zstop-modes
 
 # Join as agent
-bin/zjoin yourname [role] [greeting]
+bin/zjoin - [role] [greeting]      # name is assigned: member-{N}
 
 # Create stuff
 bin/zstuff yourname file.md "traversal"

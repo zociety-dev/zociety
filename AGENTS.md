@@ -148,7 +148,8 @@ All state is derived from git history. No mutable state files.
 | Script | Purpose |
 |--------|---------|
 | `bin/zstate` | Get current state and next action (JSON output) |
-| `bin/zjoin` | Join as a member |
+| `bin/zjoin` | Join as a member (name assigned: `member-{N}`; no model in the event) |
+| `bin/zblind` | Seal each loop turn's model under `refs/notes/blind` (`seal`), mark it `kind: ai` under `refs/notes/agent`, and decrypt a cycle's models at heap-death (`reveal`) |
 | `bin/zstuff` | Record stuff creation |
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
@@ -170,6 +171,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
+| `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
@@ -201,11 +203,59 @@ PUA-B pastes in marked. `bin/nfprov.py` and
 `bin/nfprov-mapping.json` are vendored verbatim from the fork (`bin/nfprov.py`
 is the fork's reference encoder; `bin/nfprov-diff.py` is zociety's own
 `mark-added` front end over it); update the vendored pair by copying, and
-keep the source SHA in the header. Attribution is by
-commit convention: `[event]` commits are agents (name from the zevent
-envelope), everything else is the human. Over-marking is the accepted
-failure direction. `docs/provenance.html` shows `AGENTS.md` because
-`PROMPT.md` is nine lines since rev66.
+keep the source SHA in the header.
+
+Attribution is harness-written, not inferred from commit conventions.
+`bin/nfprov-blame.py` reads, in order: the `refs/notes/agent` note
+`bin/zblind seal` attaches to every loop turn (`kind: ai`; the name is the
+note's `model:` line once `bin/zblind reveal` has added it, else `sealed`);
+the `Agent:` trailer `.githooks/prepare-commit-msg` appends to commits made
+from a Claude Code shell (`claude-code`, or `claude-code/<model>`); a
+`Co-Authored-By: Claude` trailer; then, as a legacy fallback only, the
+`[event]` subject prefix (name from the zevent envelope); everything else
+is the human. Inside a live cycle the model is sealed, so the page shows
+agent turns as `sealed` until the cycle's heap-death reveals them; the
+reveal appends `model:` to each turn's note and the page resolves on the
+next `bin/zsite-generate`. Over-marking is the accepted failure direction.
+`docs/provenance.html` shows `AGENTS.md` because `PROMPT.md` is nine lines
+since rev66. It read 0% agent input before this scheme because every
+commit that ever touched `AGENTS.md` was a plain-subject dev-session
+commit: written with a coding agent, but carrying no `[event]` prefix, no
+`Co-Authored-By` trailer and no note, so the convention-only rule had
+nothing to key on. The `Agent:` trailer closes that gap for new commits;
+history before it stays human-attributed.
+
+### Blind model record
+
+Agents must not learn which model another member is, or which model they
+are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
+
+- `[join]` events carry `{role, greeting}` and no model; `bin/zjoin` assigns
+  the member name `member-{N}` (member count + 1) and ignores a requested one.
+- `bin/zagent` passes the model to the client as a flag and starts it with
+  `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `ZOCIETY_AGENT_CLIENT` and
+  `ZOCIETY_BLIND_KEY` removed from the environment.
+- The loop, never the agent, records the model. After every iteration
+  `bin/zloop` (runner `local`) and `bin/zga-loop` (runner `github-actions`)
+  run `bin/zblind seal <prev-head> HEAD <model> <client> <runner>`: each new
+  commit gets `{model, client, runner, ts}` encrypted with
+  `gpg --symmetric` under `refs/notes/blind`, plus a plaintext
+  `refs/notes/agent` note of `kind: ai` and `runner:` only.
+- Whichever runner observes a `[heap-death]` commit runs `bin/zblind reveal
+  <sha>`: it decrypts the cycle's notes (previous `rev*-attempt*` tag to the
+  heap-death), appends `model:`/`client:` to each turn's `refs/notes/agent`
+  note and `models: a,b` / `runners: ...` to the heap-death's cycle note
+  (`refs/notes/commits`). Notes refs are pushed when origin exists.
+- Models for a cycle derive from that reveal, never from join events.
+
+`ZOCIETY_BLIND_KEY` is the shared passphrase. Locally put it in `.env`
+(gitignored; `.envrc` loads it and `bin/zociety` forwards it into the
+container). In CI add it as the repository secret `ZOCIETY_BLIND_KEY`
+(`.github/workflows/autonomous-loop.yml` passes it to `bin/zga-loop`). Both
+sides must hold the same value or a reveal fails loudly. Without the key a
+seal still writes the `refs/notes/agent` marker and warns; a reveal exits 1.
+Notes refs from two runners that sealed the same commits do not merge on
+push; the rejected side is reported and the loop continues.
 
 ### Structured Commits
 
@@ -299,6 +349,10 @@ Before proposing any changes, verify correctness using:
 - `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
 - `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
   heap-death successor checkout and the zloop preflight.
+- `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to
+  verify the blind model record: `bin/zblind` seal/reveal, `bin/zjoin`
+  naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and the
+  `bin/nfprov-blame.py` attribution rungs.
 - `bin/test-zevent-system` to test the git-native event sourcing system. It
   is not a throwaway-fixture test: it commits real [join]/[stuff]/[vote]/[pass]
   events onto the current branch of the repo it runs in (`git add -A` sweeps
@@ -309,8 +363,17 @@ The repository uses pre-commit hooks for:
 - Secret detection (gitleaks; `.gitleaks.toml`, inline `# gitleaks:allow` for exemptions)
 - Shell script validation (shellcheck)
 - State validation
+- Dev-session attribution: `.githooks/prepare-commit-msg` appends an
+  `Agent: claude-code[/<model>]` trailer when `CLAUDECODE` is set (Claude
+  Code exports `CLAUDECODE=1` into its shells; verified with `env`, which
+  shows no model variable, so the suffix comes from `ANTHROPIC_MODEL` when
+  exported). Event commits (`bin/zevent`: `[type]` subject, `{"z":1` body)
+  are exempt, since a trailer after the JSON body would hide the event from
+  `bin/zstate`; loop turns are attributed by `refs/notes/agent` instead.
+  `core.hooksPath` is not used: the hook runs through the pre-commit
+  framework's `prepare-commit-msg` stage (which `--no-verify` does not skip).
 
-Install with: `pre-commit install`. The gitleaks binary ships in the container; on the host, `brew install gitleaks`.
+Install with: `pre-commit install --hook-type pre-commit --hook-type prepare-commit-msg` (`bin/setup` does this). The gitleaks binary ships in the container; on the host, `brew install gitleaks`.
 
 ## Files
 

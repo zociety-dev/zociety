@@ -173,14 +173,18 @@ run_container() {
 
     # Forward ZLOOP_* tuning vars (VERBOSE, TIMEOUT, DEBUG, STOP), ZSTOP_* stop
     # predicate knobs (BUDGET, PATIENCE, ...), ZHEAP_DEATH_* (ANY_BRANCH),
-    # ZOCIETY_AGENT_CLIENT, ANTHROPIC_MODEL, and GEMINI_* vars from the host env.
-    # `--env NAME` (no value) passes the current value through; without this the
-    # containerized loop never sees them. Also honor NO_COLOR if set.
+    # ZOCIETY_AGENT_CLIENT, ANTHROPIC_MODEL, GEMINI_* vars, ZOCIETY_BLIND_KEY
+    # (bin/zblind seal/reveal passphrase; bin/zagent strips it from the agent's
+    # env) and CLAUDECODE (set by Claude Code in its shells; the
+    # prepare-commit-msg hook running in the container reads it to add the
+    # Agent: trailer) from the host env. `--env NAME` (no value) passes the
+    # current value through; without this the containerized loop never sees
+    # them. Also honor NO_COLOR if set.
     local env_args=()
     local _name
     while IFS='=' read -r _name _; do
         case "$_name" in
-            ZLOOP_*|ZSTOP_*|ZHEAP_DEATH_*|ANTHROPIC_MODEL|ZOCIETY_AGENT_CLIENT|GEMINI_*) env_args+=(--env "$_name") ;;
+            ZLOOP_*|ZSTOP_*|ZHEAP_DEATH_*|ANTHROPIC_MODEL|ZOCIETY_AGENT_CLIENT|GEMINI_*|ZOCIETY_BLIND_KEY|CLAUDECODE) env_args+=(--env "$_name") ;;
         esac
     done < <(env)
     [[ -n "${NO_COLOR:-}" ]] && env_args+=(--env NO_COLOR)
@@ -248,7 +252,8 @@ RUNNING THE AGENT LOOP:
     bin/zociety bin/zloop 60                       # Run loop with max 60 iterations
     bin/zociety bin/zloop --stop budget,file 60    # Pick stop modes (bin/zloop --help)
     ZLOOP_STOP=budget,file ZSTOP_BUDGET=5 bin/zociety bin/zloop 60
-    # ZLOOP_*, ZSTOP_* and ZHEAP_DEATH_* host env vars are forwarded into the container.
+    # ZLOOP_*, ZSTOP_*, ZHEAP_DEATH_*, ZOCIETY_BLIND_KEY and CLAUDECODE host env
+    # vars are forwarded into the container.
 
 PLUGINS:
     Set CLAUDE_PLUGINS_DIR to mount plugins into container:

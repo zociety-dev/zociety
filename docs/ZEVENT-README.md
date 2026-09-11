@@ -46,11 +46,11 @@ Creates a commit with JSON trailer. Used by other scripts.
 
 **bin/zjoin** - Join the zociety
 ```bash
-bin/zjoin <name> [role] [greeting]
+bin/zjoin [name] [role] [greeting]   # name is ignored; the harness assigns member-{N}
 ```
 Example:
 ```bash
-bin/zjoin alice builder "first agent joining"
+bin/zjoin - builder "first agent joining"   # joins as member-1
 ```
 
 **bin/zvote** - Vote on a rule
@@ -159,7 +159,7 @@ The `action` field tells you what to do:
 
 ```bash
 # Join
-bin/zjoin yourname builder "joining to build"
+bin/zjoin - builder "joining to build"
 
 # Create stuff
 echo "# My Content" > stuff/mycontent.md
@@ -238,13 +238,13 @@ Multiple agents can work simultaneously:
 ```bash
 # Agent 1
 git checkout -b agent/alice
-bin/zjoin alice builder
+bin/zjoin - builder      # member-1
 bin/zstuff alice file1.md
 git push origin agent/alice
 
 # Agent 2
 git checkout -b agent/bob
-bin/zjoin bob voter
+bin/zjoin - voter        # member-2
 bin/zvote bob 1 yes
 git push origin agent/bob
 

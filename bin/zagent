@@ -6,7 +6,9 @@
 #
 # Options:
 #   -c, --client CLIENT    Specify AI CLI client: claude or gemini (default: $ZOCIETY_AGENT_CLIENT or claude)
-#   -m, --model MODEL      Specify the LLM model to use
+#   -m, --model MODEL      Specify the LLM model to use (default: $ANTHROPIC_MODEL
+#                          for claude, $GEMINI_MODEL for gemini; else the
+#                          client's own default)
 #   -r, --render MODE      Output rendering: text (default; the client's
 #                          buffered result), compact (stream-json rendered
 #                          live by bin/zrender: tool lines and a cost footer
@@ -17,8 +19,16 @@
 #
 # Environment:
 #   ZOCIETY_AGENT_CLIENT   Defaults to "claude" if not specified.
-#   ANTHROPIC_MODEL        Passed to Claude if specified.
-#   GEMINI_MODEL           Passed to Gemini CLI if specified.
+#   ANTHROPIC_MODEL        Default model for claude (passed as --model).
+#   GEMINI_MODEL           Default model for gemini (passed as -m).
+#
+# The model reaches the client as a CLI flag only. The child runs with
+# ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (the CI step variable bin/zga-loop
+# inherits), ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY removed from its
+# environment (env -u), so the agent's shell cannot read which model it is,
+# which client, or the key that seals the record. The loop records the model
+# per turn with bin/zblind; see
+# docs/challenges/cross-agent-deference.md.
 #
 # compact is claude-only: bin/zrender reads claude's event schema. For gemini
 # it falls back to text with a note on stderr.
@@ -83,6 +93,16 @@ if [[ -z "$PROMPT" ]]; then
   exit 2
 fi
 
+# Model: the flag, else the client's env default. Captured here and handed
+# over as a flag; the variables themselves never reach the child (see header).
+if [[ -z "$MODEL" ]]; then
+  case "$CLIENT" in
+    claude) MODEL="${ANTHROPIC_MODEL:-}" ;;
+    gemini) MODEL="${GEMINI_MODEL:-}" ;;
+  esac
+fi
+SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY)
+
 case "$CLIENT" in
   claude)
     CLAUDE_ARGS=(
@@ -106,10 +126,10 @@ case "$CLIENT" in
       # pipefail: the pipeline fails when claude fails. `&& exit 0` keeps
       # errexit out of the way so claude's own status (PIPESTATUS[0]), not the
       # rightmost non-zero one, is what the caller sees.
-      claude "${CLAUDE_ARGS[@]}" | "$SCRIPT_DIR/zrender" && exit 0
+      "${SCRUB[@]}" claude "${CLAUDE_ARGS[@]}" | "$SCRIPT_DIR/zrender" && exit 0
       exit "${PIPESTATUS[0]}"
     fi
-    exec claude "${CLAUDE_ARGS[@]}"
+    exec "${SCRUB[@]}" claude "${CLAUDE_ARGS[@]}"
     ;;
 
   gemini)
@@ -131,7 +151,7 @@ case "$CLIENT" in
         ;;
     esac
 
-    exec gemini "${GEMINI_ARGS[@]}"
+    exec "${SCRUB[@]}" gemini "${GEMINI_ARGS[@]}"
     ;;
 
   *)
