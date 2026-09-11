@@ -15,6 +15,11 @@
 #   ZLOOP_STOP=action   Stop modes passed to bin/zloop-complete (no --stop flag
 #                       here; set it in the workflow env). See bin/zloop --help.
 #   ZSTOP_*             Per-mode knobs; see bin/zstop-<mode> --help
+#   ZOCIETY_BLIND_KEY   Passphrase for bin/zblind (workflow secret). After
+#                       every iteration the commits it made are sealed with
+#                       the model as runner "github-actions", and every
+#                       [heap-death] among them is revealed. Unset: only the
+#                       plaintext refs/notes/agent marker is written.
 
 set -euo pipefail
 
@@ -49,7 +54,6 @@ iteration: $ITERATION
 max: $MAX_ITERATIONS
 start: $START_SHA
 mode: $STOP_MODES
-runner: github-actions
 EOF
     cp .zociety/zloop.state .claude/zloop.state 2>/dev/null || true
 
@@ -109,6 +113,7 @@ EOF
     AGENT_ARGS+=("$PROMPT")
 
     # Run one agent iteration
+    PREV_HEAD=$(git rev-parse HEAD)
     if bin/zagent "${AGENT_ARGS[@]}" 2>&1; then
         # Push after successful iteration (if there are changes)
         if ! git diff --quiet HEAD 2>/dev/null; then
@@ -122,6 +127,17 @@ EOF
     else
         echo "Warning: Agent iteration failed, continuing..."
     fi
+
+    # Blind model record (same as bin/zloop, runner github-actions): seal the
+    # commits this iteration made, reveal for every heap-death among them.
+    # Runs after the push above; bin/zblind pushes the notes refs itself.
+    CUR_HEAD=$(git rev-parse HEAD)
+    bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "${ZOCIETY_AGENT_CLIENT:-claude}" github-actions \
+        || echo "Warning: zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7}, continuing..."
+    for death_sha in $(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}"); do
+        bin/zblind reveal "$death_sha" \
+            || echo "Warning: zblind reveal failed for ${death_sha:0:7}, continuing..."
+    done
 
     # Small delay to avoid rate limits
     sleep 2

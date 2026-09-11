@@ -9,6 +9,10 @@
 #
 # Optional secrets:
 #   - GPG_SIGNING_KEY: Base64-encoded GPG key for verified commits
+#   - ZOCIETY_BLIND_KEY: passphrase bin/zblind seals each turn's model with
+#     (refs/notes/blind); must equal the local runners' key so either side
+#     can reveal at heap-death. Unset: turns are still marked as agent turns
+#     (refs/notes/agent) but no model is recorded.
 
 name: Autonomous Loop
 
@@ -85,6 +89,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '30' }}
           MODEL: ${{ github.event.inputs.model || 'claude-haiku-4-5-20251001' }}
+          ZOCIETY_BLIND_KEY: ${{ secrets.ZOCIETY_BLIND_KEY }}
         run: bin/zga-loop "$MAX_ITERATIONS" "$MODEL"
 
       - name: Report Final State
