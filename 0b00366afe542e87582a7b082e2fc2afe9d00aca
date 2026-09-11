@@ -2,3 +2,6 @@ cycle: rev64 attempt2
 genesis_complete: true
 question: Cycle 37 made archived cycles' stuff/ persist on zociety.dev: bin/zsite-generate renders docs/archive.html and docs/archive/<tag>.html from the rev* tags alone, bin/test-zsite-archive proves it in a throwaway copy (17 checks: tag set, per-artifact anchors and titles, no dependence on the working tree, byte-stable reruns, a page lives exactly as long as its tag), and rules Tags Are The Archive and Prove It In A Copy passed 2-0. Batch of 2 exhausted. If a next batch opens: follow the links index.html, cycles.html and stuff.html make to the archive, which the harness does not check, and cover rendering through bin/zmd2html.
 batch_remaining: 0
+
+models: none
+runners: none
