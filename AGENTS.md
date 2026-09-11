@@ -31,6 +31,12 @@ bin/zociety bin/zloop --stop budget,file 60
 ```
 
 Zociety's own loop with dynamic completion checking:
+- Identity at birth: started on any branch that is not `cycle/*`, the run
+  names its first cycle (`bin/zcycle-id current`: last tag, attempt+1, or
+  rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
+  before the first iteration. Cut no branch by hand; that step also
+  satisfies the no-main-commits hook. `ZLOOP_BRANCH=0` opts out (runs on
+  the current branch, as before). Already on a `cycle/*` branch: unchanged
 - Before each iteration `bin/zloop-complete` dispatches the stop predicates
   (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
@@ -63,9 +69,11 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
+| `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
+| `bin/test-zcycle-id` | Dry-run harness for cycle identity: `zcycle-id`, the heap-death successor checkout, the zloop preflight |
 
 ### Stop Modes
 
@@ -98,9 +106,9 @@ marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
 
 In `budget` mode `bin/zheap-death` defaults `batch_size` to
 `ZSTOP_BUDGET - <heap-deaths so far>` so its event data agrees with the loop.
-`bin/zheap-death` refuses to run off `main` (override with
-`ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot archive a cycle into a
-feature branch.
+`bin/zheap-death` refuses to run off `main` or a `cycle/rev{N}-attempt{M}`
+branch (override with `ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot
+archive a cycle into a feature branch.
 
 ### zloop Environment Variables
 
@@ -113,6 +121,7 @@ feature branch.
 | `ZLOOP_VERBOSE` | 0 | Same as `--verbose`: raw stream-json events (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
+| `ZLOOP_BRANCH` | 1 | 0 skips the cycle-branch preflight: run on whatever branch is checked out (`main` then needs `ALLOW_MAIN=1`) |
 
 ### ZSTOP Environment Variables
 
@@ -144,7 +153,8 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode) |
+| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event |
+| `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
@@ -220,8 +230,15 @@ bin/zstate | jq .                       # current state
 
 ### Branches
 
-- `main` - current cycle
-- `cycle/rev{N}-attempt{N}` - archived cycles
+- `main` - current cycle in CI (`bin/zga-loop`); advances via cycle PRs
+- `cycle/rev{N}-attempt{N}` - one branch per cycle, live and archived. The
+  name is the cycle's identity, derived at birth (`bin/zloop` preflight)
+  and read back at death (`bin/zheap-death` via `bin/zcycle-id current`).
+  Death births the successor: heap-death tags the branch, then checks out
+  `cycle/rev{N}-attempt{M+1}` for the `[direction]` event and the next
+  cycle. The machine only ever bumps `attempt`; to bump `rev` (after a
+  `PROMPT.md` change), check out `cycle/rev{N+1}-attempt1` yourself before
+  starting the loop
 - `learnings` - orphan branch with accumulated insights
 
 ## Genesis Thresholds
@@ -280,6 +297,8 @@ To maintain a clean, stable, and traceable commit history, use a standard
 Before proposing any changes, verify correctness using:
 - `shellcheck <script>` for shell script validation.
 - `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
+- `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
+  heap-death successor checkout and the zloop preflight.
 - `bin/test-zevent-system` to test the git-native event sourcing system.
 
 The repository uses pre-commit hooks for:
@@ -305,8 +324,12 @@ Install with: `pre-commit install`. The gitleaks binary ships in the container; 
 - `stuff/` - Things made this cycle
 
 ### Git-based (permanent)
-- Tags: `rev{N}-attempt{N}-iterations{N}of{N}`
-- Branches: `cycle/rev{N}-attempt{N}`
+- Tags: `rev{N}-attempt{N}-iterations{N}of{N}` - written by `bin/zheap-death`
+  at the cycle's last commit; the id comes from `bin/zcycle-id current`
+  (the branch name when on `cycle/*`, else the last tag with attempt+1, or
+  rev+1 if `PROMPT.md` changed)
+- Branches: `cycle/rev{N}-attempt{N}` - the cycle's identity, named at
+  birth; heap-death checks out attempt+1 as its successor (see Branches)
 - Orphan branch: `learnings`
 
 ---
