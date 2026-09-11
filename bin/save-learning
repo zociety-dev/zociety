@@ -12,8 +12,12 @@ BRANCH="learnings"
 CURRENT=$(git branch --show-current)
 CURRENT_COMMIT=$(git rev-parse HEAD)
 
-# Always return to the original branch, even if a step below fails
-trap 'git checkout "$CURRENT" --quiet 2>/dev/null || git checkout "$CURRENT_COMMIT" --quiet' EXIT
+# Always return to the original branch, even if a step below fails.
+# Force (-f) as a last resort: if the commit above failed, the working tree
+# can be left with staged-but-uncommitted changes that make a plain
+# `git checkout` refuse to switch branches, stranding the caller on
+# `learnings` indefinitely.
+trap 'git checkout "$CURRENT" --quiet 2>/dev/null || git checkout -f "$CURRENT" --quiet 2>/dev/null || git checkout -f "$CURRENT_COMMIT" --quiet' EXIT
 
 # Check if learnings branch exists
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
