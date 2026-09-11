@@ -1,29 +1,39 @@
 #!/bin/bash
 # zjoin: Join the zociety
-# Usage: bin/zjoin <n> [role] [greeting] [model]
+# Usage: bin/zjoin [name] [role] [greeting]
 #
 # Arguments:
-#   name     - Agent name (required)
+#   name     - Ignored. The harness assigns the member name: member-{N}, N
+#              being the current member count (bin/zstate genesis.members)
+#              plus one. Kept as a positional so old callers still work; pass
+#              "" or "-" to skip it. A non-empty value gets a note on stderr.
 #   role     - Agent role (default: agent)
 #   greeting - Greeting message (default: joining cycle)
-#   model    - AI model identifier. Defaults to $ANTHROPIC_MODEL (the var that
-#              pins the running model, see bin/zloop / bin/zociety), or "unknown"
-#              when unset -- the loop can't know the CLI's resolved default.
+#
+# The join event carries {role, greeting} and no model: the model behind a
+# turn is sealed by the loop (bin/zblind) and revealed at heap-death, so no
+# member can read another's model, or its own, from the event log. See
+# docs/challenges/cross-agent-deference.md.
 
 set -e
 
-NAME="$1"
+REQUESTED="${1:-}"
 ROLE="${2:-agent}"
 GREETING="${3:-joining cycle}"
-MODEL="${4:-${ANTHROPIC_MODEL:-unknown}}"
 
-if [[ -z "$NAME" ]]; then
-  echo "Usage: bin/zjoin <n> [role] [greeting] [model]" >&2
-  echo "  model: AI model identifier; defaults to \$ANTHROPIC_MODEL or 'unknown'" >&2
-  exit 1
+if [[ "$REQUESTED" == "-h" || "$REQUESTED" == "--help" ]]; then
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
 fi
 
-DATA=$(jq -nc --arg role "$ROLE" --arg greeting "$GREETING" --arg model "$MODEL" \
-  '{role: $role, greeting: $greeting, model: $model}')
+if [[ -n "$REQUESTED" && "$REQUESTED" != "-" ]]; then
+  echo "zjoin: name '$REQUESTED' ignored; members are named by the harness (member-{N})" >&2
+fi
+
+COUNT=$(bin/zstate | jq -r '.genesis.members // 0')
+NAME="member-$((COUNT + 1))"
+
+DATA=$(jq -nc --arg role "$ROLE" --arg greeting "$GREETING" \
+  '{role: $role, greeting: $greeting}')
 
 bin/zevent join "$NAME" "$GREETING" "$DATA"
