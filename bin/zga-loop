@@ -130,10 +130,10 @@ EOF
         # Push whatever we have (with retry)
         if ! git push origin HEAD 2>/dev/null; then
             echo "Push failed, trying pull-rebase-push..."
-            git pull --rebase && git push origin HEAD || {
+            if ! { git pull --rebase && git push origin HEAD; }; then
                 echo "Warning: final push failed after rebase"
                 exit 1
-            }
+            fi
         fi
         exit 0  # Success if we made progress, even without completing
     fi
@@ -165,10 +165,12 @@ EOF
         if ! git diff --quiet HEAD 2>/dev/null; then
             echo ""
             echo "Pushing changes..."
-            git push origin HEAD || {
+            if ! git push origin HEAD; then
                 echo "Push failed, trying pull-rebase-push..."
-                git pull --rebase && git push origin HEAD
-            } || echo "Warning: push failed, continuing..."
+                if ! { git pull --rebase && git push origin HEAD; }; then
+                    echo "Warning: push failed, continuing..."
+                fi
+            fi
         fi
     elif [[ $exit_code -eq 124 ]]; then
         TIMEOUTS=$((TIMEOUTS + 1))

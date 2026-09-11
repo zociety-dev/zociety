@@ -85,6 +85,7 @@ Zociety's own loop with dynamic completion checking:
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
 | `bin/test-zcycle-id` | Dry-run harness for cycle identity: `zcycle-id`, the heap-death successor checkout, the zloop preflight |
+| `bin/test-zga-loop` | Dry-run harness for `bin/zga-loop`: throwaway bare origin + clone + fake `claude`; budget delivery, hard kill and abort, push after commit, knob validation |
 
 ### Stop Modes
 
@@ -186,6 +187,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
+| `bin/test-zga-loop` | Dry-run harness for the GitHub Actions runner (local bare origin, fake `claude`) |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
@@ -362,6 +364,8 @@ To maintain a clean, stable, and traceable commit history, use a standard
 Before proposing any changes, verify correctness using:
 - `shellcheck <script>` for shell script validation.
 - `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
+- `bin/test-zga-loop` to verify the GitHub Actions runner against a throwaway
+  bare origin: budget delivery, hard kill and abort, push after commit.
 - `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
   heap-death successor checkout and the zloop preflight.
 - `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to

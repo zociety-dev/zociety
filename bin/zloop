@@ -372,6 +372,10 @@ log "Max iterations: $MAX_ITERATIONS"
 log "Budget per iteration: ${BUDGET_SECS}s (told to the agent)"
 log "Interval between iterations: ${INTERVAL_SECS}s"
 log "Hard kill: ${TIMEOUT_SECS}s$([[ ${#TIMEOUT_CMD[@]} -eq 0 ]] && echo ' (unenforced: no timeout(1))')"
+# Muscle memory from before the split reaches for -t to mean "how long a
+# turn gets". Say what it means now, once, whenever it is typed.
+[[ "$TIMEOUT_SOURCE" == "flag" ]] \
+  && log "Note: --timeout is the hard kill; --budget is the working time, --interval the cadence"
 log "Stop modes: $STOP_MODES"
 log "Start: $START_SHA"
 case "$RENDER" in

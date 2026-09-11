@@ -874,6 +874,8 @@ assert_err '^\[zloop\] WARNING: iteration 1 hard-killed at 2s \(1 consecutive\)$
 assert_err 'not committed is lost'
 assert_no_err 'backing off'
 assert_agent_dead
+# Typing --timeout gets the one-line reminder of what it now means.
+assert_err '^Note: --timeout is the hard kill; --budget is the working time, --interval the cadence$'
 echo ""
 
 echo "=== Case 35c: ZLOOP_MAX_TIMEOUTS consecutive hard kills abort the run (exit 3) ==="
