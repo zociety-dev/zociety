@@ -18,7 +18,7 @@ set -e
 # Uses jq to parse regardless of pretty-print formatting
 find_last_event() {
   local count=0
-  for HASH in $(git log --format=%H -n 100 2>/dev/null); do
+  for HASH in $(git log --format=%H -n 1000 2>/dev/null); do
     # Only the JSON envelope: from the first line starting with "{" to the end
     # of that object (one line when compact, the bare "}" line when
     # pretty-printed). Anything after it, e.g. a stray Agent: trailer, is
@@ -31,7 +31,7 @@ find_last_event() {
       return 0
     }
     ((count++))
-    [[ $count -ge 50 ]] && break
+    [[ $count -ge 1000 ]] && break
   done
   return 1
 }
