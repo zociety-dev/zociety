@@ -62,3 +62,13 @@ repos:
         stages: [pre-commit]
         pass_filenames: false
         always_run: true
+      # Dev-session attribution: "Agent: claude-code" trailer when CLAUDECODE
+      # is set (.githooks/prepare-commit-msg). pre-commit passes the message
+      # file as the filename for this stage; needs
+      # `pre-commit install --hook-type prepare-commit-msg` (bin/setup).
+      - id: agent-trailer
+        name: Agent trailer for coding-agent sessions
+        entry: .githooks/prepare-commit-msg
+        language: script
+        stages: [prepare-commit-msg]
+        always_run: true

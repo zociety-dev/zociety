@@ -32,8 +32,9 @@ fi
 
 # Install pre-commit hooks if pre-commit is available
 if command -v pre-commit &> /dev/null; then
-  pre-commit install
-  echo "✓ Pre-commit hooks installed"
+  # prepare-commit-msg carries the Agent: trailer hook (.githooks/prepare-commit-msg)
+  pre-commit install --hook-type pre-commit --hook-type prepare-commit-msg
+  echo "✓ Pre-commit hooks installed (pre-commit, prepare-commit-msg)"
 else
   echo "⚠ pre-commit not found (optional: pip install pre-commit)"
 fi

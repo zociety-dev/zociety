@@ -1,0 +1,43 @@
+#!/bin/bash
+# prepare-commit-msg: Attribute dev-session commits made from a coding agent
+#
+# Appends the trailer
+#
+#   Agent: claude-code            (or claude-code/<model> when ANTHROPIC_MODEL
+#                                  is set)
+#
+# to the commit message when the CLAUDECODE environment variable is set.
+# Claude Code exports CLAUDECODE=1 into every shell it spawns (verified with
+# `env` inside a Claude Code Bash tool, 2026-09: CLAUDECODE=1 plus assorted
+# CLAUDE_CODE_* housekeeping vars; no variable carries the model, so the
+# model suffix relies on ANTHROPIC_MODEL, which the user exports by hand).
+# bin/zociety forwards CLAUDECODE and ANTHROPIC_MODEL into the container so
+# the marker reaches the hook there too.
+#
+# No-op when CLAUDECODE is unset, for merge and squash commits, and when the
+# message already carries an Agent: trailer (a message from -F/-m/-c/-C that
+# was attributed upstream). bin/nfprov-blame.py reads the trailer as the
+# second attribution rung, after refs/notes/agent.
+#
+# Invoked by git as prepare-commit-msg <file> [<source> [<sha>]] or by the
+# pre-commit framework (stage prepare-commit-msg: the file as the only
+# argument, the source in PRE_COMMIT_COMMIT_MSG_SOURCE).
+
+set -e
+
+MSG_FILE="${1:-}"
+SOURCE="${2:-${PRE_COMMIT_COMMIT_MSG_SOURCE:-}}"
+
+[[ -n "${CLAUDECODE:-}" ]] || exit 0
+[[ -n "$MSG_FILE" && -f "$MSG_FILE" ]] || exit 0
+
+case "$SOURCE" in
+  merge|squash) exit 0 ;;
+esac
+
+if git interpret-trailers --parse "$MSG_FILE" | grep -qi '^Agent:'; then
+  exit 0
+fi
+
+AGENT="claude-code${ANTHROPIC_MODEL:+/$ANTHROPIC_MODEL}"
+git interpret-trailers --in-place --trailer "Agent: $AGENT" "$MSG_FILE"

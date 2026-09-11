@@ -21,21 +21,29 @@ commit; unpaired new lines are attributed wholly. If git's history
 simplification leaves the walked result different from REF:FILE, one extra
 step attributes the residue to REF's tip commit.
 
-Who is an agent. A commit is agent-authored (kind "ai") if its subject
-matches `^\\[[a-z-]+\\] ` or its body carries a `Co-Authored-By: Claude ...`
-trailer. The agent name is resolved in this order:
-  1. the `"agent"` field of the bin/zevent JSON envelope in the commit body
-     (the whole body, or a JSON object embedded in it);
-  2. the subject token between `] ` and the first `:` when it looks like a
-     name -- a single word such as "opus", "system", "3", or a Title-Cased
-     phrase such as "Claude Sonnet 4" -- and is not a revision marker like
-     "rev66";
-  3. the Co-Authored-By name ("Claude Opus 4.5");
-  4. the bracket word ("[evolve] rev66: stable ..." with no trailer ->
-     "evolve", "[fix] made bin scripts executable" -> "fix").
-Every other commit is human (kind "human"). Humans are reported under the
-single name "human" (the same person commits as delano, zociety and
-zociety-dev); the git author name is kept in each span's `author` field
+Who is an agent. Ground truth written by the harness is read first, commit
+conventions after. The rungs, first match wins (kind "ai" unless the last):
+  1. a refs/notes/agent note on the commit saying `kind: ai` (written by
+     bin/zblind seal for every loop turn). Name: the note's `model:` line
+     once bin/zblind reveal has added it, else "sealed" -- inside a live
+     cycle the model is encrypted under refs/notes/blind and unknown here;
+  2. an `Agent:` trailer in the body (.githooks/prepare-commit-msg adds
+     `Agent: claude-code` or `claude-code/<model>` to commits made from a
+     Claude Code shell). Name: the trailer value;
+  3. a `Co-Authored-By: Claude ...` trailer. Name: "Claude Opus 4.5";
+  4. legacy fallback, a subject matching `^\\[[a-z-]+\\] ` (bin/zevent
+     commits before the notes existed, and by-hand `[fix]` prefixes). Name:
+     the `"agent"` field of the bin/zevent JSON envelope in the body (the
+     whole body, or a JSON object embedded in it); else the subject token
+     between `] ` and the first `:` when it looks like a name -- a single
+     word such as "opus", "system", "3", or a Title-Cased phrase such as
+     "Claude Sonnet 4" -- and is not a revision marker like "rev66"; else
+     the bracket word ("[evolve] rev66: stable ..." -> "evolve");
+  5. everything else is human (kind "human").
+Notes come from `git log --notes=agent` (`%N`); a repository without
+refs/notes/agent behaves as if rung 1 never matches. Humans are reported
+under the single name "human" (the same person commits as delano, zociety
+and zociety-dev); the git author name is kept in each span's `author` field
 and the html `data-author` attribute. Over-marking is the accepted failure
 direction (delano/nerd-fonts#15): a human who commits with a `[fix]`
 prefix is counted as an agent, a rewritten sentence is marked in full even
@@ -86,9 +94,14 @@ AGENT_TOKEN = re.compile(r"^[A-Za-z0-9][\w.-]*$")
 AGENT_PHRASE = re.compile(r"^[A-Z0-9][\w.-]*( [A-Z0-9][\w.-]*){1,3}$")
 REVISION_TOKEN = re.compile(r"^rev\d+$", re.IGNORECASE)
 COAUTHOR_TRAILER = re.compile(r"^Co-Authored-By:\s*(Claude[^<\n]*?)\s*(?:<|$)", re.IGNORECASE | re.MULTILINE)
+AGENT_TRAILER = re.compile(r"^Agent:[ \t]*(\S[^\n]*?)[ \t]*$", re.IGNORECASE | re.MULTILINE)
+NOTE_KIND_AI = re.compile(r"^kind:[ \t]*ai[ \t]*$", re.MULTILINE)
+NOTE_MODEL = re.compile(r"^model:[ \t]*(\S[^\n]*?)[ \t]*$", re.MULTILINE)
 ENVELOPE_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 ENVELOPE_AGENT = re.compile(r'"agent"\s*:\s*"([^"\\]+)"')
-LOG_FORMAT = "%H%x1f%an%x1f%ad%x1f%s%x1f%B"  # records are NUL-separated (-z)
+NOTES_REF = "agent"  # refs/notes/agent, written by bin/zblind
+LOG_FORMAT = "%H%x1f%an%x1f%ad%x1f%s%x1f%B%x1f%N"  # records are NUL-separated (-z)
+SEALED_NAME = "sealed"
 HUMAN_NAME = "human"
 SUBJECT_ATTR_MAX = 120
 
@@ -141,24 +154,34 @@ def subject_agent(subject: str) -> tuple[str, str | None] | None:
     return bracket, None
 
 
-def classify(subject: str, body: str, author: str) -> tuple[str, str]:
-    """(kind, name) for a commit, per the module docstring."""
-    prefixed = subject_agent(subject)
+def classify(subject: str, body: str, author: str, note: str = "") -> tuple[str, str]:
+    """(kind, name) for a commit, per the module docstring.
+
+    `note` is the commit's refs/notes/agent note ("" when absent)."""
+    # 1. harness-written note (bin/zblind seal / reveal)
+    if NOTE_KIND_AI.search(note):
+        model = NOTE_MODEL.search(note)
+        return "ai", model.group(1) if model else SEALED_NAME
+    # 2. harness-written trailer (.githooks/prepare-commit-msg)
+    trailer = AGENT_TRAILER.search(body)
+    if trailer:
+        return "ai", trailer.group(1)
+    # 3. coding-agent co-author trailer
     coauthor = COAUTHOR_TRAILER.search(body)
-    if prefixed is None and coauthor is None:
+    if coauthor:
+        return "ai", coauthor.group(1).strip()
+    # 4. legacy convention: [event] subject prefix
+    prefixed = subject_agent(subject)
+    if prefixed is None:
         return "human", author
-    name = envelope_agent(body)
-    if name is None and prefixed is not None:
-        name = prefixed[1]
-    if name is None and coauthor is not None:
-        name = coauthor.group(1).strip()
-    if name is None and prefixed is not None:
-        name = prefixed[0]
+    name = envelope_agent(body) or prefixed[1] or prefixed[0]
     return "ai", name or "ai"
 
 
-def make_commit(sha: str, author: str, date: str, subject: str, body: str = "") -> Commit:
-    kind, agent = classify(subject, body, author)
+def make_commit(
+    sha: str, author: str, date: str, subject: str, body: str = "", note: str = ""
+) -> Commit:
+    kind, agent = classify(subject, body, author, note)
     return Commit(sha, author, date, subject, kind, agent)
 
 
@@ -179,20 +202,23 @@ def parse_log(raw: bytes) -> list[Commit]:
     for record in raw.decode("utf-8", "replace").split("\x00"):
         if not record.strip():
             continue
-        sha, author, date, subject, body = record.split("\x1f", 4)
-        commits.append(make_commit(sha, author, date, subject, body))
+        sha, author, date, subject, body, note = record.split("\x1f", 5)
+        commits.append(make_commit(sha, author, date, subject, body, note))
     return commits
 
 
+# --notes=agent fills %N from refs/notes/agent; an absent ref only costs a
+# warning on stderr and leaves %N empty (rung 1 never matches).
+LOG_ARGS = ("log", "-z", f"--format={LOG_FORMAT}", f"--notes={NOTES_REF}", "--date=short")
+
+
 def file_history(repo: Path, path: str, ref: str) -> list[Commit]:
-    raw = run_git(
-        repo, "log", "-z", f"--format={LOG_FORMAT}", "--date=short", "--reverse", ref, "--", path
-    )
+    raw = run_git(repo, *LOG_ARGS, "--reverse", ref, "--", path)
     return parse_log(raw)
 
 
 def tip_commit(repo: Path, ref: str) -> Commit:
-    raw = run_git(repo, "log", "-z", "-1", f"--format={LOG_FORMAT}", "--date=short", ref)
+    raw = run_git(repo, *LOG_ARGS, "-1", ref)
     return parse_log(raw)[0]
 
 
@@ -428,26 +454,43 @@ def selftest() -> int:
         if not condition:
             failures.append(message)
 
-    # Attribution rule, straight from the docstring.
+    # Attribution rule, straight from the docstring: one block per rung.
     envelope = '{\n  "z": 1,\n  "event": "vote",\n  "agent": "nova",\n  "state": {"members": 1}\n}\n'
     trailer = "notes\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\n"
-    for subject, body, author, expected in (
-        ("[stuff] opus: added stuff/index.md", "", "zociety", ("ai", "opus")),
-        ("[direction] system: Cycle 35 produced stubs", "", "zociety", ("ai", "system")),
-        ("[evolve] rev66: stable PROMPT.md", "", "zociety", ("ai", "evolve")),
-        ("[evolve] rev66: stable PROMPT.md", trailer, "zociety", ("ai", "Claude Opus 4.5")),
-        ("[fix] made bin scripts executable", "", "delano", ("ai", "fix")),
-        ("[vote] 3: yes on rule 2", "", "zociety", ("ai", "3")),
-        ("[vote] 3: yes on rule 2", envelope, "zociety", ("ai", "nova")),
-        ("[vote] 3: yes on rule 2", "prose then " + envelope, "zociety", ("ai", "nova")),
-        ("[join] Claude Sonnet 4: Hello!", "", "zociety", ("ai", "Claude Sonnet 4")),
-        ("[evolve] fix self-sustaining loop: heap-death first", "", "delano", ("ai", "evolve")),
-        ("Improve zloop: add debug mode", trailer, "zociety", ("ai", "Claude Opus 4.5")),
-        ("Primer founds Zociety", "", "delano", ("human", "delano")),
-        ("docs: close spec gaps", "body without envelope", "zociety-dev", ("human", "zociety-dev")),
+    agent_trailer = "Route git through the container\n\nAgent: claude-code\n"
+    agent_model_trailer = "body\n\nAgent: claude-code/claude-opus-4-5\nCo-Authored-By: Claude Opus 4.5 <x>\n"
+    sealed_note = "kind: ai\nrunner: local\n"
+    revealed_note = "kind: ai\nrunner: github-actions\n\nmodel: claude-haiku-4-5\nclient: claude\n"
+    for subject, body, author, note, expected in (
+        # 1. refs/notes/agent beats every convention below
+        ("[vote] 3: yes on rule 2", envelope, "zociety", sealed_note, ("ai", "sealed")),
+        ("[vote] 3: yes on rule 2", envelope, "zociety", revealed_note, ("ai", "claude-haiku-4-5")),
+        ("docs: plain subject", agent_trailer, "zociety", revealed_note, ("ai", "claude-haiku-4-5")),
+        ("docs: plain subject", "", "delano", sealed_note, ("ai", "sealed")),
+        ("docs: plain subject", "", "delano", "kind: human\n", ("human", "delano")),
+        # 2. Agent: trailer beats Co-Authored-By and the subject prefix
+        ("Route git through the container", agent_trailer, "zociety-dev", "", ("ai", "claude-code")),
+        ("[fix] typo", agent_model_trailer, "delano", "", ("ai", "claude-code/claude-opus-4-5")),
+        # 3. Co-Authored-By beats the subject prefix
+        ("[evolve] rev66: stable PROMPT.md", trailer, "zociety", "", ("ai", "Claude Opus 4.5")),
+        ("Improve zloop: add debug mode", trailer, "zociety", "", ("ai", "Claude Opus 4.5")),
+        # 4. legacy [event] prefix: envelope > subject token > bracket word
+        ("[stuff] opus: added stuff/index.md", "", "zociety", "", ("ai", "opus")),
+        ("[direction] system: Cycle 35 produced stubs", "", "zociety", "", ("ai", "system")),
+        ("[evolve] rev66: stable PROMPT.md", "", "zociety", "", ("ai", "evolve")),
+        ("[fix] made bin scripts executable", "", "delano", "", ("ai", "fix")),
+        ("[vote] 3: yes on rule 2", "", "zociety", "", ("ai", "3")),
+        ("[vote] 3: yes on rule 2", envelope, "zociety", "", ("ai", "nova")),
+        ("[vote] 3: yes on rule 2", "prose then " + envelope, "zociety", "", ("ai", "nova")),
+        ("[join] Claude Sonnet 4: Hello!", "", "zociety", "", ("ai", "Claude Sonnet 4")),
+        ("[evolve] fix self-sustaining loop: heap-death first", "", "delano", "", ("ai", "evolve")),
+        # 5. human
+        ("Primer founds Zociety", "", "delano", "", ("human", "delano")),
+        ("docs: close spec gaps", "body without envelope", "zociety-dev", "", ("human", "zociety-dev")),
+        ("docs: mentions Agent: inline, not a trailer", "see the Agent: field", "delano", "", ("human", "delano")),
     ):
-        got = classify(subject, body, author)
-        check(got == expected, f"classify({subject!r}, {body[:12]!r}) = {got}, want {expected}")
+        got = classify(subject, body, author, note)
+        check(got == expected, f"classify({subject!r}, {body[:12]!r}, note={note[:8]!r}) = {got}, want {expected}")
 
     env = {
         **os.environ,
@@ -507,9 +550,21 @@ def selftest() -> int:
         final = "# Title\nalpha beta gamma\nthe dog sat\nx < y & z\nopus typed this\nand this\n"
         commit(final, "[evolve] rev9: drop the doomed line", author="zociety")
 
+        # No refs/notes/agent yet: the legacy rungs classify commit 5 as "evolve".
         b = blame(repo, "doc.md", "HEAD")
         check(b.text == final, "reconstructed text != final content")
         check(len(b.commits) == 5, f"expected 5 commits, got {len(b.commits)}")
+        check(b.commits[4].agent == "evolve", f"no notes ref: commit 5 agent {b.commits[4].agent}")
+
+        # Rung 1 through git: bin/zblind seal writes the marker, reveal appends
+        # the model. The noted commit is the 0-char [evolve] one, so the
+        # character expectations below are unchanged.
+        evolve_sha = b.commits[4].sha
+        git("notes", "--ref=agent", "add", "-m", "kind: ai\nrunner: local", evolve_sha)
+        sealed = blame(repo, "doc.md", "HEAD")
+        check(sealed.commits[4].agent == SEALED_NAME, f"sealed note: agent {sealed.commits[4].agent}")
+        git("notes", "--ref=agent", "append", "-m", "model: claude-haiku-4-5\nclient: claude", evolve_sha)
+        b = blame(repo, "doc.md", "HEAD")
 
         # Per-character expectation. H=commit1 delano, O=opus, h=commit3 delano,
         # S=sonnet, E=evolve (nothing survives from it).
@@ -527,7 +582,7 @@ def selftest() -> int:
         kinds = [c.kind for c in b.commits]
         check(kinds == ["human", "ai", "human", "ai", "ai"], f"kinds {kinds}")
         names = [c.agent for c in b.commits]
-        check(names == ["delano", "opus", "zociety-dev", "sonnet", "evolve"], f"agents {names}")
+        check(names == ["delano", "opus", "zociety-dev", "sonnet", "claude-haiku-4-5"], f"agents {names}")
 
         for mode in ("vs", "pua"):
             marked, segments = render_marked(b, mode)
@@ -559,7 +614,7 @@ def selftest() -> int:
                 {"name": "human", "kind": "human", "chars": 36, "commits": 2},
                 {"name": "opus", "kind": "ai", "chars": 15, "commits": 1},
                 {"name": "sonnet", "kind": "ai", "chars": 3, "commits": 1},
-                {"name": "evolve", "kind": "ai", "chars": 0, "commits": 1},
+                {"name": "claude-haiku-4-5", "kind": "ai", "chars": 0, "commits": 1},
             ], f"{mode}: agents {data['agents']}")
             check(data["spans"][0] == {
                 "start": 0, "end": len("# Title\nalpha beta gamma\nthe "), "kind": "human",
@@ -580,7 +635,7 @@ def selftest() -> int:
         for f in failures:
             print(f"FAIL: {f}", file=sys.stderr)
         return 1
-    print("ok: nfprov-blame selftest passed (5-commit repo x 2 modes + classify cases)")
+    print("ok: nfprov-blame selftest passed (5-commit repo with agent notes x 2 modes + classify rungs)")
     return 0
 
 
