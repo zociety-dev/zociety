@@ -8,6 +8,9 @@
 #   - docs/index.html (main page with stats)
 #   - docs/cycles.html (cycle history timeline)
 #   - docs/learnings.html (accumulated insights)
+#   - docs/stuff.html (current cycle's stuff/*.md, when any)
+#   - docs/archive.html + docs/archive/<tag>.html (every rev* tag's
+#     stuff/*.md, read with `git show <tag>:<path>`)
 #   - docs/PROMPT.md (current prompt)
 #   - docs/provenance.html + docs/CLAUDE.marked.md + docs/fonts/
 #     (P+ provenance demo via bin/nfprov-blame.py; fonts from site/fonts/)
@@ -141,6 +144,38 @@ if [[ -d stuff ]]; then
 fi
 if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
     STUFF_NAV_LINK='<a href="stuff.html">📦 This Cycle</a>'
+fi
+
+# ============================================================
+# Gather Archived-Cycle Stuff
+# ============================================================
+# Additive: every rev* tag whose tree holds stuff/*.md gets a page at
+# docs/archive/<tag>.html, listed on docs/archive.html. The artifacts are
+# read with `git show <tag>:<path>`, never from the working tree: a tag
+# points at the cycle's last commit, written by bin/zheap-death before it
+# clears stuff/, so the archive is a pure function of git history and a
+# cycle's pages stay on the site after its heap-death.
+echo "Gathering archived-cycle stuff..."
+
+ARCHIVE_NAV_LINK=""
+ARCHIVE_TAGS=()
+# archive_files <tag>: top-level stuff/*.md paths in the tag's tree, sorted
+archive_files() {
+    git ls-tree --name-only "$1" stuff/ 2>/dev/null | grep '\.md$' | sort || true
+}
+# archive_title <tag> <path>: first ATX h1 of the artifact (HTML-escaped),
+# else its basename
+archive_title() {
+    local title
+    title=$(git show "$1:$2" 2>/dev/null | grep -m1 '^# ' | sed 's/^# //' || true)
+    [[ -z "$title" ]] && title=$(basename "$2")
+    printf '%s' "$title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
+}
+for tag in $(git tag | grep '^rev' | sort -V); do
+    [[ -n "$(archive_files "$tag")" ]] && ARCHIVE_TAGS+=("$tag")
+done
+if [[ ${#ARCHIVE_TAGS[@]} -gt 0 ]]; then
+    ARCHIVE_NAV_LINK='<a href="archive.html">🗄️ Archive</a>'
 fi
 
 # ============================================================
@@ -280,6 +315,7 @@ cat > "$DOCS_DIR/index.html" << EOF
   <div class="nav">
     <a href="cycles.html">📊 Cycle History</a>
     $STUFF_NAV_LINK
+    $ARCHIVE_NAV_LINK
     <a href="learnings.html">💡 Learnings</a>
     $PROVENANCE_NAV_LINK
     <a href="PROMPT.md">📜 PROMPT.md</a>
@@ -418,6 +454,11 @@ for tag in $(git tag | grep '^rev' | sort -V); do
     ATTEMPT=$(echo "$tag" | grep -oP 'attempt\d+' | sed 's/attempt//' || echo "1")
     ITERATIONS=$(echo "$tag" | grep -oP 'iterations\d+' | sed 's/iterations//' || echo "?")
     TAG_DATE=$(git log -1 --format=%ai "$tag" 2>/dev/null | cut -d' ' -f1 || echo "unknown")
+    ARTIFACT_COUNT=$(archive_files "$tag" | grep -c . || true)
+    ARCHIVE_LINE=""
+    if [[ "$ARTIFACT_COUNT" -gt 0 ]]; then
+        ARCHIVE_LINE=", <a href=\"archive/$tag.html\">$ARTIFACT_COUNT stuff artifact$([[ "$ARTIFACT_COUNT" -eq 1 ]] || echo s)</a>"
+    fi
 
     cat >> "$DOCS_DIR/cycles.html" << EOF
     <div class="cycle">
@@ -426,7 +467,7 @@ for tag in $(git tag | grep '^rev' | sort -V); do
         <span class="cycle-date">$TAG_DATE</span>
       </div>
       <div class="cycle-details">
-        Revision $REV, Attempt $ATTEMPT, $ITERATIONS iterations
+        Revision $REV, Attempt $ATTEMPT, $ITERATIONS iterations$ARCHIVE_LINE
       </div>
     </div>
 EOF
@@ -492,19 +533,9 @@ cat > "$DOCS_DIR/learnings.html" << EOF
 EOF
 
 # ============================================================
-# Generate This-Cycle Stuff Page
+# Stuff Page Styles (shared by stuff.html and archive/<tag>.html)
 # ============================================================
-if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
-    echo "Generating stuff.html..."
-
-    cat > "$DOCS_DIR/stuff.html" << EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>This Cycle - zociety</title>
-  <style>
+STUFF_PAGE_CSS=$(cat << 'STUFF_CSS'
     :root {
       --bg: #0d1117;
       --text: #c9d1d9;
@@ -558,6 +589,30 @@ if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
       padding: 0.25rem 1rem;
       opacity: 0.85;
     }
+STUFF_CSS
+)
+
+# ============================================================
+# Generate This-Cycle Stuff Page
+# ============================================================
+STUFF_ARCHIVE_NOTE=""
+if [[ ${#ARCHIVE_TAGS[@]} -gt 0 ]]; then
+    STUFF_ARCHIVE_NOTE=' Earlier cycles stay readable in the
+  <a href="archive.html">archive</a>.'
+fi
+
+if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
+    echo "Generating stuff.html..."
+
+    cat > "$DOCS_DIR/stuff.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>This Cycle - zociety</title>
+  <style>
+$STUFF_PAGE_CSS
   </style>
 </head>
 <body>
@@ -566,7 +621,7 @@ if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
   <p>The stuff made during the current cycle, rendered straight from the
   <code>stuff/</code> artifacts committed as <code>[stuff]</code> events.
   When the cycle reaches heap death these are archived with the cycle branch
-  and this page re-derives itself for the next cycle.</p>
+  and this page re-derives itself for the next cycle.$STUFF_ARCHIVE_NOTE</p>
   <div class="toc">
     <strong>Artifacts</strong>
     <ul>
@@ -603,6 +658,116 @@ STUFF_TOC_END
 STUFF_FOOT
 else
     echo "Skipping stuff.html (no current-cycle stuff/*.md)"
+    rm -f "$DOCS_DIR/stuff.html"
+fi
+
+# ============================================================
+# Generate Archive Pages (archive.html + archive/<tag>.html)
+# ============================================================
+# docs/archive/ is wiped first so a page only exists while its tag does.
+rm -rf "$DOCS_DIR/archive"
+if [[ ${#ARCHIVE_TAGS[@]} -gt 0 ]]; then
+    echo "Generating archive.html and archive/ (${#ARCHIVE_TAGS[@]} cycles)..."
+    mkdir -p "$DOCS_DIR/archive"
+
+    cat > "$DOCS_DIR/archive.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive - zociety</title>
+  <style>
+$STUFF_PAGE_CSS
+    .cycle {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .cycle-header { display: flex; justify-content: space-between; align-items: baseline; }
+    .cycle-tag { font-family: 'SF Mono', Consolas, monospace; font-weight: bold; }
+    .cycle-date { opacity: 0.6; font-size: 0.9rem; }
+    .cycle ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>🗄️ Archive</h1>
+  <p>Every archived cycle's <code>stuff/</code>, newest first. Each page is
+  rendered from the cycle's <code>rev*</code> tag
+  (<code>git show &lt;tag&gt;:stuff/…</code>), the last commit before
+  heap-death cleared the tree, so nothing here depends on the working copy
+  and nothing disappears when a cycle ends. Cycles whose tag holds no
+  <code>stuff/*.md</code> are not listed.</p>
+EOF
+
+    for ((i = ${#ARCHIVE_TAGS[@]} - 1; i >= 0; i--)); do
+        tag="${ARCHIVE_TAGS[$i]}"
+        TAG_DATE=$(git log -1 --format=%ai "$tag" 2>/dev/null | cut -d' ' -f1 || echo "unknown")
+        PAGE="$DOCS_DIR/archive/$tag.html"
+
+        # Index entry
+        {
+            printf '  <div class="cycle">\n'
+            printf '    <div class="cycle-header"><a class="cycle-tag" href="archive/%s.html">%s</a> <span class="cycle-date">%s</span></div>\n' \
+                "$tag" "$tag" "$TAG_DATE"
+            printf '    <ul>\n'
+            while IFS= read -r f; do
+                [[ -z "$f" ]] && continue
+                base=$(basename "$f")
+                printf '      <li><a href="archive/%s.html#artifact-%s">%s</a> <code>%s</code></li>\n' \
+                    "$tag" "${base%.md}" "$(archive_title "$tag" "$f")" "$base"
+            done < <(archive_files "$tag")
+            printf '    </ul>\n  </div>\n'
+        } >> "$DOCS_DIR/archive.html"
+
+        # Per-cycle page, same shape as stuff.html
+        cat > "$PAGE" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$tag - zociety archive</title>
+  <style>
+$STUFF_PAGE_CSS
+  </style>
+</head>
+<body>
+  <div class="back"><a href="../archive.html">← Back to archive</a> · <a href="../index.html">zociety</a></div>
+  <h1>📦 $tag</h1>
+  <p>The stuff this cycle made, archived $TAG_DATE and rendered from
+  <code>git show $tag:stuff/…</code>.</p>
+  <div class="toc">
+    <strong>Artifacts</strong>
+    <ul>
+EOF
+        while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            base=$(basename "$f")
+            printf '      <li><a href="#artifact-%s">%s</a> <code>%s</code></li>\n' \
+                "${base%.md}" "$(archive_title "$tag" "$f")" "$base" >> "$PAGE"
+        done < <(archive_files "$tag")
+        printf '    </ul>\n  </div>\n' >> "$PAGE"
+        while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            base=$(basename "$f")
+            {
+                printf '  <div class="artifact" id="artifact-%s">\n' "${base%.md}"
+                printf '    <div class="source">%s:%s</div>\n' "$tag" "$f"
+                git show "$tag:$f" | bin/zmd2html
+                printf '  </div>\n'
+            } >> "$PAGE"
+        done < <(archive_files "$tag")
+        printf '</body>\n</html>\n' >> "$PAGE"
+    done
+
+    printf '</body>\n</html>\n' >> "$DOCS_DIR/archive.html"
+else
+    echo "Skipping archive (no rev* tag holds stuff/*.md)"
+    rm -f "$DOCS_DIR/archive.html"
 fi
 
 # ============================================================

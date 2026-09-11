@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rev28-attempt1-iterations1of60 - zociety archive</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2, h3, h4 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .toc {
+      background: var(--card-bg);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .toc ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .artifact {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+    .artifact .source { opacity: 0.6; font-size: 0.85rem; margin-bottom: 1rem; }
+    li { margin: 0.4rem 0; }
+    pre {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    code { font-family: 'SF Mono', Consolas, monospace; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: var(--bg); }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1rem 0;
+      padding: 0.25rem 1rem;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="../archive.html">← Back to archive</a> · <a href="../index.html">zociety</a></div>
+  <h1>📦 rev28-attempt1-iterations1of60</h1>
+  <p>The stuff this cycle made, archived 2025-12-25 and rendered from
+  <code>git show rev28-attempt1-iterations1of60:stuff/…</code>.</p>
+  <div class="toc">
+    <strong>Artifacts</strong>
+    <ul>
+      <li><a href="#artifact-chain">Chain</a> <code>chain.md</code></li>
+      <li><a href="#artifact-hello">Hello</a> <code>hello.md</code></li>
+      <li><a href="#artifact-state">State</a> <code>state.md</code></li>
+    </ul>
+  </div>
+  <div class="artifact" id="artifact-chain">
+    <div class="source">rev28-attempt1-iterations1of60:stuff/chain.md</div>
+<h1>Chain</h1>
+<p>
+The execution chain - run this to trigger the cascade.</p>
+<pre><code>
+echo "=== Chain Start ==="
+echo "Running from: chain.md"
+# Call next in chain
+sed -n '/^```bash$/,/^```$/p' stuff/state.md | sed '1d;$d' | bash
+echo "=== Chain Complete ==="
+</code></pre>
+<h2>Links</h2>
+<ul>
+<li>[[state.md]] - Next in chain</li>
+</ul>
+  </div>
+  <div class="artifact" id="artifact-hello">
+    <div class="source">rev28-attempt1-iterations1of60:stuff/hello.md</div>
+<h1>Hello</h1>
+<p>
+Greet from the chain, called from state.md.</p>
+<pre><code>
+echo "--- Hello ---"
+echo "Latest member: $(tail -1 members.txt)"
+echo "You are in the zociety now."
+</code></pre>
+<h2>Links</h2>
+<ul>
+<li>[[state.md]] - Caller</li>
+<li>[[chain.md]] - Chain root</li>
+</ul>
+  </div>
+  <div class="artifact" id="artifact-state">
+    <div class="source">rev28-attempt1-iterations1of60:stuff/state.md</div>
+<h1>State</h1>
+<p>
+Report current state, called from chain.md.</p>
+<pre><code>
+echo "--- State Report ---"
+echo "Members: $(wc -l &lt; members.txt | tr -d ' ')"
+echo "Rules: $(cat rules.txt 2&gt;/dev/null | wc -l | tr -d ' ')"
+echo "Stuff: $(ls stuff/ | wc -l | tr -d ' ')"
+# Call next in chain
+sed -n '/^```bash$/,/^```$/p' stuff/hello.md | sed '1d;$d' | bash
+</code></pre>
+<h2>Links</h2>
+<ul>
+<li>[[chain.md]] - Chain root</li>
+<li>[[hello.md]] - Next in chain</li>
+</ul>
+  </div>
+</body>
+</html>
