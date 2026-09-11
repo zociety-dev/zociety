@@ -12,6 +12,12 @@
 # Requires: ANTHROPIC_API_KEY in environment
 #
 # Environment:
+#   ZLOOP_BUDGET=300    Seconds of work an iteration is told it has, via
+#                       bin/zprompt (same paragraph bin/zloop sends). There is
+#                       no timeout(1) guillotine here: the workflow's
+#                       timeout-minutes bounds the whole job, so the budget is
+#                       advisory and the agent must land its own commits.
+#   ZLOOP_INTERVAL=2    Seconds between iterations (rate-limit breathing room)
 #   ZLOOP_STOP=action   Stop modes passed to bin/zloop-complete (no --stop flag
 #                       here; set it in the workflow env). See bin/zloop --help.
 #   ZSTOP_*             Per-mode knobs; see bin/zstop-<mode> --help
@@ -26,12 +32,19 @@ set -euo pipefail
 MAX_ITERATIONS="${1:-30}"
 MODEL="${2:-claude-haiku-4-5-20251001}"
 STOP_MODES="${ZLOOP_STOP:-action}"
+BUDGET_SECS="${ZLOOP_BUDGET:-300}"
+INTERVAL_SECS="${ZLOOP_INTERVAL:-2}"
 ITERATION=0
-PROMPT="Read PROMPT.md and follow its instructions."
+# Shared with bin/zloop (see bin/zprompt): the agent is told its budget here
+# too. CI iterations that do not know their time limit fail the same way local
+# ones did -- killed mid-work by the job timeout with nothing committed.
+PROMPT=$(bin/zprompt --budget "$BUDGET_SECS")
 
 echo "=== Zociety GA Loop ==="
 echo "Max iterations: $MAX_ITERATIONS"
 echo "Model: $MODEL"
+echo "Budget per iteration: ${BUDGET_SECS}s (told to the agent)"
+echo "Interval between iterations: ${INTERVAL_SECS}s"
 echo "Stop modes: $STOP_MODES"
 echo ""
 
@@ -139,6 +152,6 @@ EOF
             || echo "Warning: zblind reveal failed for ${death_sha:0:7}, continuing..."
     done
 
-    # Small delay to avoid rate limits
-    sleep 2
+    # Small delay to avoid rate limits (cadence, as bin/zloop --interval)
+    sleep "$INTERVAL_SECS"
 done

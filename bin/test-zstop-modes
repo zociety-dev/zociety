@@ -94,7 +94,10 @@ if [[ $stream -eq 1 ]]; then
 else
   echo "fake claude ran"
 fi
-echo "$(date +%s) $*" >> "$FAKE_CLAUDE_LOG"
+# One line per invocation: assert_claude_runs counts lines, and the prompt
+# zloop passes carries the working budget over several lines.
+echo "$(date +%s) $*" | tr '\n' ' ' >> "$FAKE_CLAUDE_LOG"
+echo >> "$FAKE_CLAUDE_LOG"
 if [[ -n "${FAKE_CLAUDE_SLEEP:-}" ]]; then
   # Long-running agent for the interrupt cases: record the pid so the case can
   # check it died, then become a single sleep process (no bash in between to
@@ -860,16 +863,160 @@ assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(exit 3\)$'
 assert_err '^\[zloop\] zagent exited 3 \(1 consecutive\); backing off 1s$'
 echo ""
 
-echo "=== Case 35b: iteration timeout (124) survives the pipe and does not count as a failure ==="
+echo "=== Case 35b: a hard kill (124) survives the pipe, warns, and is not a failure ==="
 fresh_repo render-timeout
 export FAKE_CLAUDE_SLEEP=30
-run bin/zloop --timeout 1 --max 1
+run bin/zloop --budget 1 --timeout 2 --max 1
 unset FAKE_CLAUDE_SLEEP
 assert_rc 1
 assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(exit 124\)$'
-assert_err '^\[zloop\] Iteration timed out after 1s$'
-assert_no_err 'consecutive'
+assert_err '^\[zloop\] WARNING: iteration 1 hard-killed at 2s \(1 consecutive\)$'
+assert_err 'not committed is lost'
+assert_no_err 'backing off'
 assert_agent_dead
+echo ""
+
+echo "=== Case 35c: ZLOOP_MAX_TIMEOUTS consecutive hard kills abort the run (exit 3) ==="
+fresh_repo timeout-abort
+export FAKE_CLAUDE_SLEEP=30
+run env ZLOOP_MAX_TIMEOUTS=2 bin/zloop --budget 1 --timeout 2 --max 5
+unset FAKE_CLAUDE_SLEEP
+assert_rc 3
+assert_err '^\[zloop\] WARNING: iteration 2 hard-killed at 2s \(2 consecutive\)$'
+assert_err '^=== Loop Aborted ===$'
+assert_err '^2 consecutive hard kills at 2s with a 1s budget\.$'
+# Aborted on the second kill: the third iteration never started.
+assert_claude_runs 2
+echo ""
+
+echo "=== Case 35d: ZLOOP_MAX_TIMEOUTS=0 never aborts on hard kills ==="
+fresh_repo timeout-noabort
+export FAKE_CLAUDE_SLEEP=30
+run env ZLOOP_MAX_TIMEOUTS=0 bin/zloop --budget 1 --timeout 2 --max 2
+unset FAKE_CLAUDE_SLEEP
+assert_rc 1
+assert_err '^=== Max Iterations Reached ===$'
+assert_no_err '^=== Loop Aborted ===$'
+assert_claude_runs 2
+echo ""
+
+echo "=== Case 35e: --timeout at or below --budget is a usage error ==="
+fresh_repo timeout-lte-budget
+run bin/zloop --budget 60 --timeout 60 --max 1
+assert_rc 2
+assert_err '^zloop: --timeout \(60 s\) must exceed --budget \(60 s\)'
+assert_claude_runs 0
+echo ""
+
+echo "=== Case 35f: the budget reaches the agent's prompt; the hard kill defaults to 2x ==="
+fresh_repo budget-in-prompt
+run bin/zloop --budget 45 --max 1
+assert_rc 1
+assert_err '^Budget per iteration: 45s \(told to the agent\)$'
+assert_err '^Interval between iterations: 1s$'
+assert_err '^Hard kill: 90s$'
+assert_eq "prompt carries the budget" \
+  "$(grep -c 'about 45 seconds of wall-clock time' "$FAKE_LOG")" 1
+echo ""
+
+echo "=== Case 35g: the default budget (no flags) is 300s and reaches the prompt ==="
+fresh_repo budget-default
+run env -u ZLOOP_BUDGET -u ZLOOP_TIMEOUT bin/zloop --max 1
+assert_rc 1
+assert_err '^Budget per iteration: 300s \(told to the agent\)$'
+assert_err '^Hard kill: 600s$'
+assert_eq "prompt carries the default budget" \
+  "$(grep -c 'about 300 seconds of wall-clock time' "$FAKE_LOG")" 1
+echo ""
+
+echo "=== Case 35h: budget and interval via the environment ==="
+fresh_repo budget-env
+run env ZLOOP_BUDGET=40 ZLOOP_INTERVAL=5 bin/zloop --max 1
+assert_rc 1
+assert_err '^Budget per iteration: 40s \(told to the agent\)$'
+assert_err '^Interval between iterations: 5s$'
+assert_err '^Hard kill: 80s$'
+assert_eq "prompt carries the env budget" \
+  "$(grep -c 'about 40 seconds of wall-clock time' "$FAKE_LOG")" 1
+echo ""
+
+# The regression this guards: ZLOOP_TIMEOUT's old default (300) equals the new
+# budget default, so an inherited env var must warn and carry on, never die --
+# unlike an explicit --timeout, which the operator typed (case 35e).
+echo "=== Case 35i: an inherited ZLOOP_TIMEOUT <= budget warns instead of dying ==="
+fresh_repo timeout-env-migration
+run env ZLOOP_TIMEOUT=300 bin/zloop --max 1
+assert_rc 1
+assert_err '^\[zloop\] ZLOOP_TIMEOUT=300s is not above the 300s budget\.$'
+assert_err 'ZLOOP_TIMEOUT is now the hard kill, not the working budget'
+assert_err '^Hard kill: 600s$'
+assert_claude_runs 1
+echo ""
+
+# --interval must actually be slept, not merely printed in the banner: the
+# fixture stamps an epoch per invocation, so two iterations three seconds apart
+# prove the delay happened.
+echo "=== Case 35j: --interval is honoured between iterations ==="
+fresh_repo interval-honoured
+run bin/zloop --interval 3 --max 2
+assert_rc 1
+assert_claude_runs 2
+interval_gap=$(awk 'NR==1{a=$1} NR==2{print $1 - a}' "$FAKE_LOG")
+if [[ "${interval_gap:-0}" -ge 3 ]]; then
+  pass "interval honoured: ${interval_gap}s between iterations (want >= 3)"
+else
+  fail "interval not honoured: ${interval_gap:-?}s between iterations (want >= 3)"
+fi
+echo ""
+
+# The macOS default: no timeout(1) on PATH. The run must say the guillotine is
+# unenforced rather than silently losing its only backstop against a hung agent.
+echo "=== Case 35k: no timeout(1) on PATH warns and runs unbounded ==="
+fresh_repo no-timeout-cmd
+# Drop only the PATH entries that provide timeout(1) (homebrew coreutils on
+# macOS, /usr/bin on Linux) rather than whitelisting a minimal PATH: zloop
+# shells out to git, jq and claude, and a hand-built PATH starves them.
+notimeout_path=""
+while IFS= read -r d; do
+  if [[ -z "$d" || -x "$d/timeout" ]]; then
+    continue
+  fi
+  notimeout_path="${notimeout_path:+$notimeout_path:}$d"
+done < <(printf '%s\n' "${PATH//:/$'\n'}")
+if PATH="$notimeout_path" command -v timeout >/dev/null 2>&1; then
+  fail "could not build a PATH without timeout(1); skipping"
+else
+  run env PATH="$notimeout_path" bin/zloop --budget 30 --max 1
+  assert_rc 1
+  assert_err '^\[zloop\] no timeout\(1\) on PATH: iterations run unbounded'
+  assert_err '^Hard kill: 60s \(unenforced: no timeout\(1\)\)$'
+  assert_claude_runs 1
+fi
+echo ""
+
+# A kill streak is only cleared by a clean iteration. An unrelated failure in
+# between must not reset it, or a run alternating 124/1 loops forever.
+echo "=== Case 35l: a non-124 failure does not reset the hard-kill streak ==="
+fresh_repo timeout-mixed
+cat > "$TMP/alternate.sh" <<'EOF'
+#!/bin/bash
+# Odd invocations hard-kill (sleep past the guillotine), even ones exit 9.
+n=0
+[[ -f "$FAKE_CLAUDE_LOG" ]] && n=$(wc -l < "$FAKE_CLAUDE_LOG" | tr -d ' ')
+echo "$(date +%s) alternate" >> "$FAKE_CLAUDE_LOG"
+if (( n % 2 == 0 )); then
+  exec sleep 30
+fi
+exit 9
+EOF
+chmod +x "$TMP/alternate.sh"
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+cp "$TMP/alternate.sh" "$FAKEBIN/claude"
+run env ZLOOP_MAX_TIMEOUTS=2 ZLOOP_BACKOFF_MAX=1 bin/zloop --budget 1 --timeout 2 --max 6
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+assert_rc 3
+assert_err '^\[zloop\] WARNING: iteration 3 hard-killed at 2s \(2 consecutive\)$'
+assert_err '^=== Loop Aborted ===$'
 echo ""
 
 echo "=== Case 36: bin/zrender heartbeat, error footer and metrics file ==="

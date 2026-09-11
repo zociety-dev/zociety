@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# zprompt - The per-iteration prompt every loop runner hands the agent
+#
+# Usage:
+#   bin/zprompt [--budget N]
+#   bin/zprompt -h | --help
+#
+# Options:
+#   --budget N   Seconds of work the iteration has. Omit (or 0) for a run
+#                with no budget: the time paragraph is left out entirely
+#                rather than stating a number nobody enforces.
+#
+# Prints the prompt on stdout. Single source of truth so bin/zloop (local) and
+# bin/zga-loop (GitHub Actions) cannot drift: an agent that is not told its
+# budget cannot scope a turn to it or commit before the time runs out, and
+# every iteration then dies mid-work with nothing to show. That was a real
+# failure (rev64-attempt4), and duplicating the paragraph is how it returns.
+#
+# See bin/zloop --help (Time) for what the budget is and is not.
+
+set -euo pipefail
+
+BUDGET=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --budget)
+      [[ $# -ge 2 ]] || { echo "zprompt: $1 requires a value" >&2; exit 2; }
+      [[ "$2" =~ ^[0-9]+$ ]] \
+        || { echo "zprompt: --budget expects a non-negative integer, got '$2'" >&2; exit 2; }
+      BUDGET="$2"
+      shift
+      ;;
+    *)
+      echo "zprompt: unknown argument '$1'" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+printf '%s\n' "Read PROMPT.md and follow its instructions."
+
+if [[ "$BUDGET" -gt 0 ]]; then
+  printf '\n%s\n' "You have about ${BUDGET} seconds of wall-clock time for this turn. Scope
+your work to fit it and commit before it runs out: an uncommitted change does
+not survive the turn. Prefer one small finished contribution over a large
+unfinished one. If the work does not fit, commit what does and leave a note in
+the commit message saying what remains."
+fi
