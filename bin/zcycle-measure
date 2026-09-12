@@ -11,7 +11,6 @@ CYCLE="${1:-$(bin/zstate | jq -r .cycle)}"
 events=$(git log --format=%B | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {s=0}' \
   | jq -sc --argjson cycle "$CYCLE" '[.[] | select(.z == 1 and .cycle == $cycle)]')
 artifacts=$(printf '%s' "$events" | jq '[.[] | select(.event == "stuff") | .data.file] | unique')
-artifact_count=$(printf '%s' "$artifacts" | jq 'length')
 prior_artifacts=$(git log --format=%B | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {s=0}' \
   | jq -sc --argjson cycle "$CYCLE" '[.[] | select(.z == 1 and .cycle < $cycle and .event == "stuff") | .data.file] | unique')
 
