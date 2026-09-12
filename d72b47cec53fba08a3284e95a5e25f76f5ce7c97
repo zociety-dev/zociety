@@ -2,3 +2,6 @@ cycle: rev65 attempt1
 genesis_complete: true
 question: How can we implement incremental build generation or paginated indexes to scale our git-native archive as the number of cycles continues to grow?
 batch_remaining: 2
+
+models: gemini-3-5-flash
+runners: local
