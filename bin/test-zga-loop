@@ -112,7 +112,7 @@ fresh_repo() {
   mkdir -p bin .claude
   cp -R "$SRC_BIN/." bin/
   echo "# fixture prompt" > PROMPT.md
-  printf '.claude/\n' > .gitignore
+  printf '.claude/\n.zociety/\n' > .gitignore
   git add .gitignore PROMPT.md bin
   git commit -q -m "genesis fixture"
   git push -q -u origin main
@@ -211,9 +211,14 @@ assert_rc 0
 assert_out '^Budget per iteration: 45s \(told to the agent\)$'
 assert_out '^Interval between iterations: 0s$'
 assert_out '^Hard kill: 90s$'
+# Under the 120s floor: loud, but not a refusal (same rule as bin/zloop).
+assert_out '^WARNING: budget 45s is below 120s\. heap-death and contribute turns typically need 180s\+'
+assert_out '^Iteration 1 finished in [0-9]+s \(exit 0\)$'
 assert_out '^=== Max Iterations Reached ===$'
 assert_claude_runs 1
 assert_eq "prompt carries the budget" "$(grep -c 'about 45 seconds of wall-clock time' "$FAKE_LOG")" 1
+assert_eq "prompt inlines PROMPT.md" "$(grep -c '# fixture prompt' "$FAKE_LOG")" 1
+assert_eq "prompt has Do now" "$(grep -c '## Do now' "$FAKE_LOG")" 1
 assert_eq "prompt carries the context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 1
 assert_eq "model reaches the client" "$(grep -c -- '--model fake-model' "$FAKE_LOG")" 1
 assert_origin_has '^\[heap-death\] fake: synthetic heap-death$'
@@ -284,9 +289,16 @@ run env ZLOOP_INTERVAL=0 ZLOOP_MAX_TIMEOUTS=1 bin/zga-loop 2 fake-model
 unset FAKE_CLAUDE_EXIT
 assert_rc 0
 assert_out '^Warning: Agent iteration failed \(exit 7\), continuing\.\.\.$'
+assert_out '^Iteration 1 finished in [0-9]+s \(exit 7\)$'
 assert_no_out 'hard-killed'
 assert_out '^=== Max Iterations Reached ===$'
 assert_claude_runs 2
+# Memory (as bin/zloop): the second turn is told the first failed and how.
+assert_eq "iteration 1 has no previous iteration" "$(sed -n 1p "$FAKE_LOG" | grep -c '## Previous iteration')" 0
+assert_eq "iteration 2 remembers the failure" "$(sed -n 2p "$FAKE_LOG" | grep -c '## Previous iteration (1 of this run) Attempted: join · exit 7 · 0 commit(s)')" 1
+assert_eq "iteration 2 gets the closing summary" "$(sed -n 2p "$FAKE_LOG" | grep -c 'Closing summary:   fake claude ran')" 1
+assert_eq "iteration 2 is told not to re-diagnose" "$(sed -n 2p "$FAKE_LOG" | grep -c 'do not re-diagnose')" 1
+assert_eq "no record left behind" "$([[ -e .zociety/zloop.prev ]] && echo present || echo absent)" absent
 echo ""
 
 echo "=== Case 8: the context block is regenerated per iteration, with commands and thresholds ==="
@@ -313,6 +325,9 @@ assert_eq "iteration 1 prompt has 0 members" "$(sed -n 1p "$FAKE_LOG" | grep -c 
 assert_eq "iteration 3 prompt has 2 members" "$(sed -n 3p "$FAKE_LOG" | grep -c '\"members\":2')" 1
 assert_eq "prompt carries command usage, not just names" "$(grep -c 'bin/zjoin \[name\] \[role\] \[greeting\] - Join the zociety' "$FAKE_LOG")" 3
 assert_eq "prompt carries the genesis thresholds" "$(grep -c 'Genesis completes at 3+ members' "$FAKE_LOG")" 3
+assert_eq "iteration 2 remembers a good turn" "$(sed -n 2p "$FAKE_LOG" | grep -c '## Previous iteration (1 of this run) Attempted: join · exit 0 · 1 commit(s)')" 1
+assert_eq "iteration 3 remembers the leg iteration 2 took" "$(sed -n 3p "$FAKE_LOG" | grep -c '## Previous iteration (2 of this run) Attempted: contribute:member · exit 0 · 1 commit(s)')" 1
+assert_eq "a good turn gets no retry instruction" "$(grep -c 'do not re-diagnose' "$FAKE_LOG")" 0
 echo ""
 
 # A CI run that fails to seal every iteration leaves the cycle with nothing to

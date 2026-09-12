@@ -3,6 +3,8 @@
 #
 # Usage:
 #   bin/zprompt [--budget N] [--no-context]
+#   bin/zprompt --record --iteration N --action A --exit N --elapsed N \
+#               --budget N --commits N [--result FILE] [--render MODE]
 #   bin/zprompt -h | --help
 #
 # Options:
@@ -10,11 +12,47 @@
 #                  with no budget: the time paragraph is left out entirely
 #                  rather than stating a number nobody enforces.
 #   --no-context   Omit the generated "where things stand" block.
+#   --record       Write the previous-iteration record, .zociety/zloop.prev,
+#                  instead of printing a prompt (see Memory below). Takes
+#                  --iteration N, --action A (bin/zstate .next before the
+#                  turn), --exit N, --elapsed N, --budget N, --commits N
+#                  (PREV_HEAD..HEAD) and optionally --result FILE (the agent's
+#                  stdout; its last 15 non-blank lines become the closing
+#                  summary) and --render raw (FILE is stream-json: the result
+#                  event's text is the summary).
 #
 # Prints the prompt on stdout. Single source of truth so bin/zloop (local) and
 # bin/zga-loop (GitHub Actions) cannot drift.
 #
-# Two things go in besides "read PROMPT.md":
+# Four things go in besides PROMPT.md:
+#
+#   PROMPT.md itself. It is short (18 lines), and every iteration still spent
+#   its first 20-30s on `cat PROMPT.md`, `sed -n 1,200p PROMPT.md` and a grep
+#   of AGENTS.md before its first real command. When it is at most
+#   ZPROMPT_INLINE_MAX lines (default 200) it is reproduced verbatim at the
+#   top with an instruction not to cat it; longer than that, the old "Read
+#   PROMPT.md" line is emitted instead. The file is never modified: it is the
+#   cycle's constitution and bin/zcycle-id bumps the rev when it changes.
+#
+#   Do now. The action bin/zstate .next names, the exact command for it
+#   (arguments included) and the one or two things worth reading first, if
+#   any -- usually nothing, because the listing the agent would have gone
+#   looking for (stuff/ files, rule votes so far) is inlined under it. So the
+#   first tool call can be the action, and the prompt says so.
+#
+#   Memory. The loop records each iteration's outcome (--record) and the
+#   next prompt gets a "Previous iteration" section: action attempted, exit
+#   code, commits made, wall time against the budget, the agent's closing
+#   summary. When the same action is up again after a failure the section
+#   says to start from that summary and not re-diagnose; after two or more
+#   consecutive failures of the same action it says to fix the tool or record
+#   why it cannot be done rather than try a third time. Without this three
+#   consecutive heap-death turns each hit the same bin/save-learning failure
+#   and each re-diagnosed it from scratch, 20-30 turns apiece. The record is
+#   .zociety/zloop.prev (gitignored, run-scoped: the loop removes it at start
+#   and on exit). Fields: iteration, action, exit, elapsed, budget, commits,
+#   ok (exit 0 and at least one commit), streak (consecutive failures of this
+#   action, 0 when ok), summary.
 #
 #   Context. Every fresh iteration used to spend its first 40-50s and 8-12
 #   tool calls re-deriving the same facts: find PROMPT.md, bin/zstate, ls bin,
@@ -25,8 +63,7 @@
 #   direction and heap-death, the short genesis leg (bin/zstate .next/.needs,
 #   the field PROMPT.md tells the agent to obey), recent log, one usage line
 #   per agent command and the genesis thresholds -- so the turn starts at the
-#   decision, not the archaeology. PROMPT.md is untouched: it is the cycle's
-#   constitution and bin/zcycle-id bumps the rev when it changes.
+#   decision, not the archaeology.
 #
 #   Both loops regenerate this per iteration, not once per run: the block is
 #   the state after the previous turn's commits, and a run-wide prompt goes
@@ -44,9 +81,25 @@ set -euo pipefail
 
 BUDGET=0
 CONTEXT=1
+RECORD=0
+REC_ITERATION=""
+REC_ACTION=""
+REC_EXIT=""
+REC_ELAPSED=""
+REC_COMMITS=""
+REC_RESULT=""
+REC_RENDER="text"
+PREV_FILE=".zociety/zloop.prev"
+INLINE_MAX="${ZPROMPT_INLINE_MAX:-200}"
+SUMMARY_LINES=15
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+need_int() {
+  [[ "$2" =~ ^[0-9]+$ ]] \
+    || { echo "zprompt: $1 expects a non-negative integer, got '$2'" >&2; exit 2; }
 }
 
 while [[ $# -gt 0 ]]; do
@@ -57,13 +110,35 @@ while [[ $# -gt 0 ]]; do
       ;;
     --budget)
       [[ $# -ge 2 ]] || { echo "zprompt: $1 requires a value" >&2; exit 2; }
-      [[ "$2" =~ ^[0-9]+$ ]] \
-        || { echo "zprompt: --budget expects a non-negative integer, got '$2'" >&2; exit 2; }
+      need_int --budget "$2"
       BUDGET="$2"
       shift
       ;;
     --no-context)
       CONTEXT=0
+      ;;
+    --record)
+      RECORD=1
+      ;;
+    --iteration|--exit|--elapsed|--commits)
+      [[ $# -ge 2 ]] || { echo "zprompt: $1 requires a value" >&2; exit 2; }
+      need_int "$1" "$2"
+      case "$1" in
+        --iteration) REC_ITERATION="$2" ;;
+        --exit)      REC_EXIT="$2" ;;
+        --elapsed)   REC_ELAPSED="$2" ;;
+        --commits)   REC_COMMITS="$2" ;;
+      esac
+      shift
+      ;;
+    --action|--result|--render)
+      [[ $# -ge 2 ]] || { echo "zprompt: $1 requires a value" >&2; exit 2; }
+      case "$1" in
+        --action) REC_ACTION="$2" ;;
+        --result) REC_RESULT="$2" ;;
+        --render) REC_RENDER="$2" ;;
+      esac
+      shift
       ;;
     *)
       echo "zprompt: unknown argument '$1'" >&2
@@ -74,7 +149,73 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-printf '%s\n' "Read PROMPT.md and follow its instructions."
+#############################################
+# --record: write .zociety/zloop.prev
+#############################################
+
+if [[ "$RECORD" -eq 1 ]]; then
+  for v in REC_ITERATION REC_ACTION REC_EXIT REC_ELAPSED REC_COMMITS; do
+    [[ -n "${!v}" ]] || { echo "zprompt: --record needs --iteration, --action, --exit, --elapsed and --commits" >&2; exit 2; }
+  done
+  ok=0
+  [[ "$REC_EXIT" -eq 0 && "$REC_COMMITS" -gt 0 ]] && ok=1
+  # Consecutive failures of this same action. Read from the record being
+  # replaced so the loops keep no state of their own.
+  streak=0
+  if [[ $ok -eq 0 ]]; then
+    prev_action=$(jq -r '.action // empty' "$PREV_FILE" 2>/dev/null) || prev_action=""
+    prev_streak=$(jq -r '.streak // 0' "$PREV_FILE" 2>/dev/null) || prev_streak=0
+    [[ "$prev_streak" =~ ^[0-9]+$ ]] || prev_streak=0
+    if [[ "$prev_action" == "$REC_ACTION" && "$prev_streak" -gt 0 ]]; then
+      streak=$((prev_streak + 1))
+    else
+      streak=1
+    fi
+  fi
+  summary=""
+  if [[ -n "$REC_RESULT" && -r "$REC_RESULT" ]]; then
+    if [[ "$REC_RENDER" == "raw" ]]; then
+      # stream-json: the result event carries the closing text.
+      summary=$(grep '"type":"result"' "$REC_RESULT" | tail -n1 \
+        | jq -r '.result // empty' 2>/dev/null || true)
+    else
+      summary=$(cat "$REC_RESULT")
+    fi
+    summary=$(printf '%s\n' "$summary" | grep -v '^[[:space:]]*$' \
+      | tail -n "$SUMMARY_LINES" | cut -c1-240 || true)
+  fi
+  mkdir -p "$(dirname "$PREV_FILE")"
+  jq -nc \
+    --argjson iteration "$REC_ITERATION" \
+    --arg action "$REC_ACTION" \
+    --argjson exit "$REC_EXIT" \
+    --argjson elapsed "$REC_ELAPSED" \
+    --argjson budget "$BUDGET" \
+    --argjson commits "$REC_COMMITS" \
+    --argjson ok "$ok" \
+    --argjson streak "$streak" \
+    --arg summary "$summary" \
+    '{iteration: $iteration, action: $action, exit: $exit, elapsed: $elapsed,
+      budget: $budget, commits: $commits, ok: ($ok == 1), streak: $streak,
+      summary: $summary}' > "$PREV_FILE.tmp"
+  mv "$PREV_FILE.tmp" "$PREV_FILE"
+  exit 0
+fi
+
+#############################################
+# The prompt
+#############################################
+
+# PROMPT.md: inline when short (see header), else the read instruction.
+prompt_lines=$(wc -l < PROMPT.md 2>/dev/null | tr -d ' ') || prompt_lines=""
+if [[ "$CONTEXT" -eq 1 && "$prompt_lines" =~ ^[0-9]+$ && "$prompt_lines" -le "$INLINE_MAX" ]]; then
+  printf '%s\n' "Follow PROMPT.md. It is reproduced verbatim between the markers below; do not cat or re-read it."
+  printf '%s\n' "----- PROMPT.md -----"
+  cat PROMPT.md
+  printf '%s\n' "----- end PROMPT.md -----"
+else
+  printf '%s\n' "Read PROMPT.md and follow its instructions."
+fi
 
 if [[ "$CONTEXT" -eq 1 ]]; then
   state=$(bin/zstate 2>/dev/null | jq -c . 2>/dev/null) || state=""
@@ -113,13 +254,106 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   # the whole failure this field exists to fix (iterations piling onto
   # bin/zjoin while rules never started).
   nxt=""
+  next_raw=""
   if [[ -n "$state" ]]; then
+    next_raw=$(printf '%s' "$state" | jq -r '.next // .action // empty' 2>/dev/null) || next_raw=""
     nxt=$(printf '%s' "$state" | jq -r '
       if .next == null then empty
       else .next + (if (.needs // empty) then
         " (still needed: \(.needs.members) member(s), \(.needs.rules) passed rule(s), \(.needs.stuff) stuff)"
         else "" end)
       end' 2>/dev/null) || nxt=""
+  fi
+
+  # Do now (see header): the command for the action, so the first tool call
+  # is the action. <agent> is the member name bin/zjoin assigned (member-N).
+  # stuff_listing: up to 20 files under stuff/, indented; empty when none.
+  stuff_listing() {
+    find stuff -maxdepth 1 -type f 2>/dev/null | sed 's|^stuff/|  |' | sort | head -n 20 || true
+  }
+  run=""
+  read_first="nothing"
+  listing=""
+  case "$next_raw" in
+    join|contribute:member)
+      run='bin/zjoin "" <role> "<greeting>"  (the harness assigns your member name)'
+      ;;
+    contribute:rule)
+      run='bin/zvote <agent> <rule_number> yes|no "<reason>" per vote (a yes on an unused number proposes that rule; put its text in the reason), then bin/zpass <agent> <rule_number> "<description>" <for> <against> once it has the votes'
+      read_first="nothing; rule activity so far is listed below"
+      listing=$(git --no-pager log --format='  %s' --grep='^\[vote\]' --grep='^\[pass\]' -10 2>/dev/null) || listing=""
+      [[ -n "$listing" ]] && listing="Rule activity so far:"$'\n'"$listing"
+      ;;
+    contribute:stuff)
+      run='write one new file under stuff/, then bin/zstuff <agent> stuff/<file> [traversal]'
+      read_first="nothing; the stuff/ files that already exist are listed below"
+      listing=$(stuff_listing)
+      [[ -n "$listing" ]] && listing="Existing stuff/:"$'\n'"$listing"
+      ;;
+    contribute)
+      run='genesis is complete, so contribute toward the latest direction (below): write one new file under stuff/, then bin/zstuff <agent> stuff/<file>; or vote and pass a rule with bin/zvote then bin/zpass'
+      read_first="nothing; the stuff/ files that already exist are listed below"
+      listing=$(stuff_listing)
+      [[ -n "$listing" ]] && listing="Existing stuff/:"$'\n'"$listing"
+      ;;
+    complete)
+      run='bin/zcomplete <agent>'
+      ;;
+    heap-death)
+      run='bin/zheap-death <agent> "<question the next cycle should answer>"  (archives the cycle, commits, pushes and births the next branch; draw the question from what this cycle produced)'
+      read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the question"
+      listing=$(stuff_listing)
+      [[ -n "$listing" ]] && listing="This cycle's stuff/:"$'\n'"$listing"
+      ;;
+    promise)
+      run='bin/zpromise'
+      ;;
+    stop)
+      run='nothing; the loop stops here'
+      ;;
+  esac
+
+  printf '\n%s\n' "## Do now (generated for this turn; this is the current state, do not re-derive it)"
+  [[ -n "$nxt" ]] && printf '%s\n' "Action: $nxt"
+  [[ -n "$run" ]] && printf '%s\n' "Run: $run"
+  printf '%s\n' "Read first: $read_first."
+  [[ -n "$listing" ]] && printf '%s\n' "$listing"
+  printf '%s\n' "PROMPT.md is above and AGENTS.md is not needed for this: do not re-read either. Make the action your first tool call; <agent> is your member name (member-N) or a short handle."
+
+  # Previous iteration (see Memory in the header).
+  prev=$(jq -c . "$PREV_FILE" 2>/dev/null) || prev=""
+  if [[ -n "$prev" ]]; then
+    p_it=$(printf '%s' "$prev" | jq -r '.iteration // "?"')
+    p_action=$(printf '%s' "$prev" | jq -r '.action // "?"')
+    p_exit=$(printf '%s' "$prev" | jq -r '.exit // "?"')
+    p_elapsed=$(printf '%s' "$prev" | jq -r '.elapsed // 0')
+    p_budget=$(printf '%s' "$prev" | jq -r '.budget // 0')
+    p_commits=$(printf '%s' "$prev" | jq -r '.commits // 0')
+    p_ok=$(printf '%s' "$prev" | jq -r 'if .ok then 1 else 0 end')
+    p_streak=$(printf '%s' "$prev" | jq -r '.streak // 0')
+    p_summary=$(printf '%s' "$prev" | jq -r '.summary // empty')
+    time_note="${p_elapsed}s"
+    if [[ "$p_budget" =~ ^[0-9]+$ && "$p_budget" -gt 0 ]]; then
+      time_note="${p_elapsed}s of a ${p_budget}s budget"
+      [[ "$p_elapsed" -gt "$p_budget" ]] && time_note="$time_note (OVER by $((p_elapsed - p_budget))s)"
+    fi
+    printf '\n%s\n' "## Previous iteration ($p_it of this run)"
+    printf '%s\n' "Attempted: $p_action · exit $p_exit · $p_commits commit(s) · $time_note"
+    if [[ -n "$p_summary" ]]; then
+      lines=$SUMMARY_LINES
+      [[ "$p_ok" -eq 1 ]] && lines=5
+      printf '%s\n' "Closing summary:"
+      printf '%s\n' "$p_summary" | tail -n "$lines" | sed 's/^/  /'
+    fi
+    if [[ "$p_ok" -eq 0 && -n "$next_raw" && "$next_raw" == "$p_action" ]]; then
+      if [[ "$p_streak" -ge 2 ]]; then
+        printf '%s\n' "This action has failed $p_streak times in a row. Do not attempt it a third time the same way: fix the underlying tool (the failure is in the summary above), or commit a note recording why it cannot be done, and stop there."
+      else
+        printf '%s\n' "Same action again, and it failed last time. Start from the summary above: do not re-diagnose, do not re-run what it already showed."
+      fi
+    elif [[ "$p_ok" -eq 0 ]]; then
+      printf '%s\n' "It left no commit; the action for this turn is the one under Do now."
+    fi
   fi
 
   printf '\n%s\n' "## Where things stand (generated for this turn; do not re-derive it)"
@@ -139,7 +373,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   # The thresholds an iteration otherwise greps AGENTS.md for. Kept in step
   # with bin/zstate's genesis check and the "Genesis Thresholds" section.
   printf '%s\n' "Genesis completes at 3+ members, 2+ passed rules, 3+ stuff items (bin/zstate .genesis)."
-  printf '%s\n' "Protocol: AGENTS.md. Read the section you need, not the file."
+  printf '%s\n' "Protocol reference: AGENTS.md. Nothing routine needs it; if you must, read one section, not the file."
 fi
 
 if [[ "$BUDGET" -gt 0 ]]; then

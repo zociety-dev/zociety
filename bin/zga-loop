@@ -14,6 +14,9 @@
 # Environment:
 #   ZLOOP_BUDGET=300    Seconds of work an iteration is told it has, via
 #                       bin/zprompt (same paragraph bin/zloop sends)
+#   ZLOOP_BUDGET_FLOOR=120  Budgets below this get a WARNING at start, as in
+#                       bin/zloop: heap-death and contribute turns need 180s+
+#                       and every iteration will overrun. Never a refusal
 #   ZLOOP_INTERVAL=2    Seconds between iterations (rate-limit breathing room)
 #   ZLOOP_TIMEOUT=      Hard kill per iteration (default: 2x the budget), the
 #                       same guillotine bin/zloop applies. Before this the
@@ -35,6 +38,15 @@
 #                       [heap-death] among them is revealed. Unset: only the
 #                       plaintext refs/notes/agent marker is written.
 #
+# Memory: as in bin/zloop, after every iteration `bin/zprompt --record`
+# writes .zociety/zloop.prev (action attempted, exit, wall time against the
+# budget, commits made, the agent's closing lines) and the next prompt carries
+# a "Previous iteration" section built from it. The agent's output is tee'd
+# into a temp file for that (via process substitution and a pid wait, not a
+# pipe, so an orphan holding the agent's stdout after a hard kill cannot hang
+# the run); the CI log is unchanged. The finish line reads
+# "Iteration N finished in Xs (budget Ys, OVER by Zs) (exit E)" when over.
+#
 # Orientation: bin/zprompt is regenerated before every iteration (same as
 # bin/zloop), not once per run. Its context block is the state after the
 # previous iteration's commits and its push; a prompt built once hands a late
@@ -50,10 +62,12 @@ INTERVAL_SECS="${ZLOOP_INTERVAL:-2}"
 TIMEOUT_SECS="${ZLOOP_TIMEOUT:-}"
 MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
 MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
+BUDGET_FLOOR="${ZLOOP_BUDGET_FLOOR:-120}"
+PREV_FILE=.zociety/zloop.prev
 ITERATION=0
 TIMEOUTS=0
 SEAL_FAILURES=0
-for v in BUDGET_SECS INTERVAL_SECS MAX_TIMEOUTS MAX_SEAL_FAILURES; do
+for v in BUDGET_SECS INTERVAL_SECS MAX_TIMEOUTS MAX_SEAL_FAILURES BUDGET_FLOOR; do
     [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "zga-loop: $v expects a non-negative integer, got '${!v}'" >&2; exit 2; }
 done
 # Same rule as bin/zloop: the guillotine must sit above the budget, else every
@@ -88,7 +102,16 @@ echo "Budget per iteration: ${BUDGET_SECS}s (told to the agent)"
 echo "Interval between iterations: ${INTERVAL_SECS}s"
 echo "Hard kill: ${TIMEOUT_SECS}s"
 echo "Stop modes: $STOP_MODES"
+if [[ "$BUDGET_SECS" -lt "$BUDGET_FLOOR" ]]; then
+    echo ""
+    echo "WARNING: budget ${BUDGET_SECS}s is below ${BUDGET_FLOOR}s. heap-death and contribute turns typically need 180s+, so this run WILL overrun its budget on every iteration (the finish line says by how much). Raise ZLOOP_BUDGET unless the overrun is intended."
+fi
 echo ""
+
+# The agent's stdout per iteration, for bin/zprompt --record (see Memory).
+RESULT_FILE=$(mktemp "${TMPDIR:-/tmp}/zga-result.XXXXXX")
+rm -f "$PREV_FILE"
+trap 'rm -f "$RESULT_FILE" "$RESULT_FILE.done" "$PREV_FILE"' EXIT
 
 # Ensure we have latest
 git pull --rebase || git pull --ff-only || true
@@ -121,7 +144,7 @@ EOF
         echo "=== Loop Complete ==="
         echo "Iterations: $ITERATION"
         bin/zstate | jq '{action, phase, genesis}'
-        rm -f .zociety/zloop.state .claude/zloop.state
+        rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE"
 
         # Final push
         git push origin HEAD || echo "Warning: final push failed"
@@ -130,7 +153,7 @@ EOF
         echo ""
         echo "=== Loop Aborted ==="
         echo "zloop-complete exited 2 (modes: $STOP_MODES); see message above"
-        rm -f .zociety/zloop.state .claude/zloop.state
+        rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE"
         exit 2
     fi
 
@@ -154,8 +177,12 @@ EOF
 
     echo ""
     echo "=== Iteration $ITERATION/$MAX_ITERATIONS ==="
-    bin/zstate | jq -c '{action, phase}'
+    # bin/zstate once: the status line and the action the memory record names.
+    iter_state=$(bin/zstate 2>/dev/null) || iter_state="{}"
+    iter_action=$(printf '%s' "$iter_state" | jq -r '.next // .action // "unknown"' 2>/dev/null) || iter_action="unknown"
+    printf '%s' "$iter_state" | jq -c '{action, phase}'
     echo ""
+    iter_start=$SECONDS
 
     # Orientation for this turn, regenerated now so the context block reflects
     # the previous iteration's commits. See Orientation in the header.
@@ -176,7 +203,31 @@ EOF
     # a row abort the run: an iteration that never finishes cannot contribute.
     PREV_HEAD=$(git rev-parse HEAD)
     exit_code=0
-    ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" 2>&1 || exit_code=$?
+    # tee keeps the closing lines for the memory record. As in bin/zloop, the
+    # agent is backgrounded with tee in a process substitution and waited on
+    # by pid, not piped: a plain `agent | tee` blocks until every holder of
+    # the agent's stdout exits, so a hard-killed turn whose orphaned child
+    # kept the pipe open would hang the run instead of counting as 124. tee
+    # leaves a marker when it has drained; the record waits for that briefly.
+    : > "$RESULT_FILE"
+    rm -f "$RESULT_FILE.done"
+    ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" </dev/null \
+        > >(tee "$RESULT_FILE"; : > "$RESULT_FILE.done") 2>&1 &
+    wait $! || exit_code=$?
+    for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        [[ -e "$RESULT_FILE.done" ]] && break
+        sleep 0.1
+    done
+    iter_secs=$((SECONDS - iter_start))
+    over=""
+    [[ $iter_secs -gt $BUDGET_SECS ]] && over=" (budget ${BUDGET_SECS}s, OVER by $((iter_secs - BUDGET_SECS))s)"
+    echo "Iteration $ITERATION finished in ${iter_secs}s${over} (exit $exit_code)"
+    # Memory for the next prompt (see header). Best-effort.
+    iter_commits=$(git rev-list --count "${PREV_HEAD}..HEAD" 2>/dev/null) || iter_commits=0
+    bin/zprompt --record --iteration "$ITERATION" --action "$iter_action" \
+        --exit "$exit_code" --elapsed "$iter_secs" --budget "$BUDGET_SECS" \
+        --commits "$iter_commits" --result "$RESULT_FILE" \
+        || echo "WARNING: bin/zprompt --record failed; the next turn gets no memory of this one"
     if [[ $exit_code -eq 0 ]]; then
         TIMEOUTS=0
         # Push after successful iteration (if there are changes)
@@ -197,7 +248,7 @@ EOF
             echo ""
             echo "=== Loop Aborted ==="
             echo "$TIMEOUTS consecutive hard kills at ${TIMEOUT_SECS}s with a ${BUDGET_SECS}s budget; raise ZLOOP_BUDGET or shrink the work per turn"
-            rm -f .zociety/zloop.state .claude/zloop.state
+            rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE"
             git push origin HEAD || echo "Warning: final push failed"
             exit 3
         fi
@@ -221,7 +272,7 @@ EOF
             echo ""
             echo "=== Loop Aborted ==="
             echo "$SEAL_FAILURES consecutive zblind seal failures; the run has no provenance record at all. Fix bin/zblind or set ZLOOP_MAX_SEAL_FAILURES=0 to accept an unsealed run"
-            rm -f .zociety/zloop.state .claude/zloop.state
+            rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE"
             git push origin HEAD || echo "Warning: final push failed"
             exit 4
         fi
