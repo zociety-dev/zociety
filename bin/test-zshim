@@ -1,0 +1,316 @@
+#!/bin/bash
+# test-zshim: Dry-run harness for the git PATH shim's routing (bin/shims/git)
+#
+# Usage:
+#   bin/test-zshim [--keep]
+#   bin/test-zshim -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway directory behind (path printed) for inspection
+#
+# Runs bin/shims/git with ZSHIM_DRY_RUN=1, which prints the routing decision
+# (host|container) instead of exec'ing git, so no container is ever started.
+# ZOCIETY_ROOT points at a throwaway directory under mktemp and the cases run
+# from inside it, so the real worktree is never the target. Cases: the
+# read-only verbs, the mixed verbs (branch, tag, notes, remote, config,
+# worktree, stash) in their read and write forms, global options before the
+# verb, and the out-of-worktree passthrough.
+
+set -e
+
+SRC_BIN="$(cd "$(dirname "$0")" && pwd)"
+SHIM="$SRC_BIN/shims/git"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --keep)
+      KEEP=1
+      ;;
+    *)
+      echo "test-zshim: unknown argument '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zshim-test.XXXXXX")
+# The shim compares $PWD against ZOCIETY_ROOT textually, and macOS mktemp
+# hands back /var/... for what cd reports as /private/var/...: canonicalise.
+TMP=$(cd "$TMP" && pwd -P)
+ROOT="$TMP/root"
+ERR="$TMP/err"
+
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then
+    echo "Kept: $TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
+}
+trap cleanup EXIT
+
+PASSED=0
+FAILED=0
+
+#############################################
+# Fixtures
+#############################################
+
+mkdir -p "$ROOT/sub" "$TMP/elsewhere"
+export ZOCIETY_ROOT="$ROOT"
+export ZSHIM_DRY_RUN=1
+cd "$ROOT"
+
+#############################################
+# Assertions
+#############################################
+
+pass() {
+  echo "  ✓ $1"
+  PASSED=$((PASSED + 1))
+}
+
+fail() {
+  echo "  ✗ $1"
+  FAILED=$((FAILED + 1))
+}
+
+# route <want> <git args...>: the shim, run from $PWD, decides <want>
+route() {
+  local want="$1" got rc=0
+  shift
+  got=$("$SHIM" "$@" 2>"$ERR") || rc=$?
+  if [[ $rc -eq 0 && "$got" == "$want" ]]; then
+    pass "git $* -> $got"
+  else
+    fail "git $* -> '$got' rc=$rc (want $want)"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+host()      { route host "$@"; }
+container() { route container "$@"; }
+
+#############################################
+# Cases
+#############################################
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety git Shim Routing Harness      ║"
+echo "╚════════════════════════════════════════╝"
+echo "Throwaway: $TMP"
+echo ""
+
+echo "=== Case 1: read-only verbs stay on the host ==="
+host log --oneline -3
+host status
+host diff --cached
+host show HEAD
+host rev-parse --abbrev-ref HEAD
+host ls-files
+host
+host --version
+echo ""
+
+echo "=== Case 2: writing verbs go to the container ==="
+container commit -m "x"
+container add -A
+container push origin main
+container fetch
+container checkout -b feat
+container merge main
+container rebase main
+echo ""
+
+echo "=== Case 3: branch reads stay on the host ==="
+host branch
+host branch --show-current
+host branch -a -v
+host branch -avv
+host branch --list
+host branch -r --no-color
+host branch --all --verbose --no-abbrev
+host branch --contains HEAD
+host branch --contains
+host branch --no-merged main
+host branch --merged=main
+host branch --points-at HEAD --sort=-committerdate --format='%(refname)'
+host branch --column --color=never -i
+echo ""
+
+echo "=== Case 4: branch writes go to the container ==="
+container branch newname
+container branch newname main
+container branch -d x
+container branch -D x
+container branch -m a b
+container branch -M a b
+container branch -c a b
+container branch -C a b
+container branch --set-upstream-to=origin/x
+container branch -u origin/x
+container branch --unset-upstream
+container branch --edit-description
+container branch -f x main
+container branch --force x
+container branch --track x origin/x
+container branch -t x
+container branch -av x
+container branch -dv x
+container branch --list -d x
+container branch -- newname
+echo ""
+
+echo "=== Case 5: tag ==="
+host tag -l
+host tag --list
+container tag
+container tag v1
+container tag -l 'v*'
+container tag -d v1
+container tag -a v1 -m msg
+container tag -l -d v1
+echo ""
+
+echo "=== Case 6: notes ==="
+host notes list
+host notes show HEAD
+host notes --ref models show HEAD
+host notes --ref=models list
+container notes
+container notes add -m x
+container notes append -m x
+container notes remove HEAD
+container notes --ref models add -m x
+echo ""
+
+echo "=== Case 7: remote ==="
+host remote
+host remote -v
+host remote --verbose
+host remote show origin
+host remote show -n origin
+host remote get-url origin
+host remote get-url --push origin
+container remote add origin url
+container remote remove origin
+container remote set-url origin url
+container remote rename a b
+container remote prune origin
+container remote update
+container remote -v add origin url
+echo ""
+
+echo "=== Case 8: config ==="
+host config --get user.name
+host config --get-all remote.origin.url
+host config --list
+host config -l
+host config --global --get user.name
+container config user.name x
+container config --unset user.name
+container config --add x y
+container config --edit
+container config --get-regexp 'user.*'
+echo ""
+
+echo "=== Case 9: worktree ==="
+host worktree list
+host worktree list --porcelain
+container worktree
+container worktree add ../x
+container worktree remove x
+container worktree prune
+echo ""
+
+echo "=== Case 10: stash ==="
+host stash list
+host stash show
+host stash show -p 'stash@{0}'
+container stash
+container stash push -m x
+container stash pop
+container stash drop
+container stash apply
+container stash clear
+echo ""
+
+echo "=== Case 11: global options before the verb are skipped ==="
+host --no-pager branch --show-current
+host -c core.pager=cat log -1
+host -C sub branch --show-current
+container -C sub branch x
+container --no-pager commit -m x
+container -c user.name=x branch -d y
+echo ""
+
+echo "=== Case 12: from a subdirectory of the worktree, same rules ==="
+cd "$ROOT/sub"
+host branch --show-current
+container branch x
+cd "$ROOT"
+echo ""
+
+echo "=== Case 13: outside the worktree everything is a passthrough ==="
+cd "$TMP/elsewhere"
+host commit -m x
+host branch -d x
+host push
+cd "$ROOT"
+unset ZOCIETY_ROOT
+host commit -m x
+export ZOCIETY_ROOT="$ROOT"
+echo ""
+
+echo "=== Case 14: a fake git on PATH that execs the shim terminates ==="
+# Not a dry run: the shim must actually exec. fakegit/git is first on PATH
+# and execs the shim, which would pick fakegit/git as "the real git" and
+# loop forever without the ZSHIM_SEEN guard. Watchdog instead of timeout(1),
+# which macOS lacks; exec keeps the PID, so the whole chain is $pid.
+mkdir -p "$TMP/fakegit"
+printf '%s\n' '#!/bin/bash' "exec \"$SHIM\" \"\$@\"" > "$TMP/fakegit/git"
+chmod +x "$TMP/fakegit/git"
+cd "$TMP/elsewhere"
+env -u ZSHIM_DRY_RUN PATH="$TMP/fakegit:$PATH" "$TMP/fakegit/git" --version \
+  > "$TMP/out" 2>"$ERR" &
+pid=$!
+for _ in $(seq 1 100); do
+  kill -0 "$pid" 2>/dev/null || break
+  sleep 0.1
+done
+if kill -0 "$pid" 2>/dev/null; then
+  kill "$pid" 2>/dev/null || true
+  fail "fake git -> shim -> fake git did not terminate within 10s"
+else
+  rc=0
+  wait "$pid" || rc=$?
+  if [[ $rc -eq 0 ]] && grep -q '^git version ' "$TMP/out"; then
+    pass "fake git -> shim -> real git: $(cat "$TMP/out")"
+  else
+    fail "fake git -> shim exited rc=$rc without a git version"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+fi
+cd "$ROOT"
+echo ""
+
+#############################################
+# Summary
+#############################################
+
+echo "=== Results: $PASSED passed, $FAILED failed ==="
+if [[ $FAILED -gt 0 ]]; then
+  exit 1
+fi
+echo "All shim routing cases passed."

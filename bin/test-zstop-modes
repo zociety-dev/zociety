@@ -139,7 +139,7 @@ fresh_repo() {
   # in the fixture and only add noise; point at an empty hooks dir instead.
   git config core.hooksPath "$TMP/nohooks"
   echo "# fixture prompt" > PROMPT.md
-  printf '.claude/\n' > .gitignore
+  printf '.claude/\n.zociety/\n' > .gitignore
   git add .gitignore PROMPT.md
   git commit -q -m "genesis fixture"
   rm -f "$FAKE_LOG" "$FAKE_LOG.err" "$FAKE_LOG.pid"
@@ -869,7 +869,7 @@ export FAKE_CLAUDE_SLEEP=30
 run bin/zloop --budget 1 --timeout 2 --max 1
 unset FAKE_CLAUDE_SLEEP
 assert_rc 1
-assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(exit 124\)$'
+assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(budget 1s, OVER by [0-9]+s\) \(exit 124\)$'
 assert_err '^\[zloop\] WARNING: iteration 1 hard-killed at 2s \(1 consecutive\)$'
 assert_err 'not committed is lost'
 assert_no_err 'backing off'
@@ -1040,7 +1040,16 @@ fresh_repo prompt-context
 heap_death '{"batch_remaining":1}'
 bin/zevent direction tester "Cycle 1 asked: does the harness prove anything?" '{"question":"does it?","batch_total":2,"batch_remaining":1}' >/dev/null 2>&1
 prompt=$(bin/zprompt --budget 30)
-assert_eq "prompt opens with PROMPT.md" "$(printf '%s\n' "$prompt" | head -n1)" "Read PROMPT.md and follow its instructions."
+# PROMPT.md is short, so it is reproduced verbatim instead of asked for: the
+# turns that prompted this spent 20-30s on cat/sed of PROMPT.md first.
+assert_eq "prompt opens by inlining PROMPT.md" "$(printf '%s\n' "$prompt" | head -n1)" "Follow PROMPT.md. It is reproduced verbatim between the markers below; do not cat or re-read it."
+assert_eq "prompt carries PROMPT.md's text" "$(printf '%s\n' "$prompt" | grep -c '^# fixture prompt$')" 1
+assert_eq "prompt has the Do now header" "$(printf '%s\n' "$prompt" | grep -c '^## Do now (generated for this turn; this is the current state')" 1
+assert_eq "Do now names the action" "$(printf '%s\n' "$prompt" | grep -c '^Action: contribute:member (still needed: 3 member(s)')" 1
+assert_eq "Do now gives the command" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zjoin "" <role> "<greeting>"')" 1
+assert_eq "Do now says what to read first" "$(printf '%s\n' "$prompt" | grep -c '^Read first: nothing\.$')" 1
+assert_eq "prompt says not to re-read PROMPT.md or AGENTS.md" "$(printf '%s\n' "$prompt" | grep -c 'AGENTS.md is not needed for this: do not re-read either')" 1
+assert_eq "no previous iteration without a record" "$(printf '%s\n' "$prompt" | grep -c '^## Previous iteration')" 0
 assert_eq "prompt has the context header" "$(printf '%s\n' "$prompt" | grep -c '^## Where things stand')" 1
 assert_eq "prompt carries zstate action" "$(printf '%s\n' "$prompt" | grep -c '^bin/zstate: .*"action":"contribute"')" 1
 # PROMPT.md tells the agent to obey .next, so the block names the short leg
@@ -1068,6 +1077,15 @@ run bin/zloop --budget 30 --max 1
 assert_rc 1
 assert_eq "zloop passes the context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 1
 assert_eq "zloop passes the direction" "$(grep -c 'Latest direction: \[direction\] tester:' "$FAKE_LOG")" 1
+assert_eq "iteration 1 has no previous iteration" "$(grep -c '## Previous iteration' "$FAKE_LOG")" 0
+echo ""
+
+# A PROMPT.md longer than ZPROMPT_INLINE_MAX is asked for, not inlined.
+echo "=== Case 35m2: a long PROMPT.md falls back to the read instruction ==="
+fresh_repo prompt-long
+assert_eq "over the inline cap: read instruction" "$(ZPROMPT_INLINE_MAX=0 bin/zprompt | head -n1)" "Read PROMPT.md and follow its instructions."
+assert_eq "over the inline cap: no PROMPT.md text" "$(ZPROMPT_INLINE_MAX=0 bin/zprompt | grep -c '^# fixture prompt$')" 0
+assert_eq "still has Do now" "$(ZPROMPT_INLINE_MAX=0 bin/zprompt | grep -c '^## Do now')" 1
 echo ""
 
 echo "=== Case 35n: bin/zprompt --no-context and no budget is the bare instruction ==="
@@ -1107,6 +1125,98 @@ assert_eq "iteration 1 prompt has 0 members" "$(sed -n 1p "$FAKE_LOG" | grep -c 
 assert_eq "iteration 2 prompt has 1 member" "$(sed -n 2p "$FAKE_LOG" | grep -c '"members":1')" 1
 assert_eq "iteration 3 prompt has 2 members" "$(sed -n 3p "$FAKE_LOG" | grep -c '"members":2')" 1
 assert_eq "every iteration got a context block" "$(grep -c '## Where things stand' "$FAKE_LOG")" 3
+# Memory of a turn that worked: the facts, no retry instruction.
+assert_eq "iteration 1 has no previous iteration" "$(sed -n 1p "$FAKE_LOG" | grep -c '## Previous iteration')" 0
+assert_eq "iteration 2 remembers iteration 1" "$(sed -n 2p "$FAKE_LOG" | grep -c '## Previous iteration (1 of this run) Attempted: join · exit 0 · 1 commit(s) · [0-9]*s of a 30s budget')" 1
+assert_eq "iteration 3 remembers the leg iteration 2 took" "$(sed -n 3p "$FAKE_LOG" | grep -c '## Previous iteration (2 of this run) Attempted: contribute:member · exit 0 · 1 commit(s)')" 1
+# (No closing summary here: the joining fake speaks plain text, and the
+# compact render passes only stream-json result text through to stdout.)
+assert_eq "a good turn gets no retry instruction" "$(grep -c 'do not re-diagnose' "$FAKE_LOG")" 0
+assert_absent .zociety/zloop.prev
+echo ""
+
+# The failure this exists for: three heap-death turns in a row hit the same
+# bin/save-learning error and each re-diagnosed it from scratch, because no
+# turn knew the previous one had failed. Now the second turn is told to start
+# from the first turn's summary, and the third is told to stop retrying.
+echo "=== Case 35p: a failed iteration is remembered, and a repeat failure escalates ==="
+fresh_repo prompt-memory
+export FAKE_CLAUDE_EXIT=7
+run env ZLOOP_BACKOFF_MAX=1 bin/zloop --budget 30 --max 3
+unset FAKE_CLAUDE_EXIT
+assert_rc 1
+assert_claude_runs 3
+assert_eq "iteration 1 has no previous iteration" "$(sed -n 1p "$FAKE_LOG" | grep -c '## Previous iteration')" 0
+assert_eq "iteration 2 remembers the failure" "$(sed -n 2p "$FAKE_LOG" | grep -c '## Previous iteration (1 of this run) Attempted: join · exit 7 · 0 commit(s) · [0-9]*s of a 30s budget')" 1
+assert_eq "iteration 2 gets the closing summary" "$(sed -n 2p "$FAKE_LOG" | grep -c 'Closing summary:   fake claude ran')" 1
+assert_eq "iteration 2 is told not to re-diagnose" "$(sed -n 2p "$FAKE_LOG" | grep -c 'Same action again, and it failed last time. Start from the summary above: do not re-diagnose')" 1
+assert_eq "iteration 2 is not yet told to stop" "$(sed -n 2p "$FAKE_LOG" | grep -c 'times in a row')" 0
+assert_eq "iteration 3 remembers iteration 2" "$(sed -n 3p "$FAKE_LOG" | grep -c '## Previous iteration (2 of this run) Attempted: join · exit 7 · 0 commit(s)')" 1
+assert_eq "iteration 3 escalates" "$(sed -n 3p "$FAKE_LOG" | grep -c 'This action has failed 2 times in a row. Do not attempt it a third time the same way: fix the underlying tool')" 1
+assert_eq "iteration 3 is not told to merely retry" "$(sed -n 3p "$FAKE_LOG" | grep -c 'do not re-diagnose')" 0
+assert_absent .zociety/zloop.prev
+# --verbose: stdout is stream-json; the summary is the result event's text.
+fresh_repo prompt-memory-raw
+export FAKE_CLAUDE_EXIT=7
+run env ZLOOP_BACKOFF_MAX=1 bin/zloop --verbose --budget 30 --max 2
+unset FAKE_CLAUDE_EXIT
+assert_rc 1
+assert_eq "raw render: summary is the result text" "$(sed -n 2p "$FAKE_LOG" | grep -c 'Closing summary:   fake claude ran')" 1
+assert_eq "raw render: summary is not the event stream" "$(sed -n 2p "$FAKE_LOG" | grep -c 'Closing summary:   {')" 0
+echo ""
+
+# The same record on the CLI: a failure of a different action is reported
+# without the retry instruction; the streak counts only the same action.
+echo "=== Case 35q: bin/zprompt --record and the streak rules ==="
+fresh_repo prompt-record
+printf 'save-learning: checkout failed\nbin/zheap-death: aborting\n' > "$TMP/result.txt"
+run bin/zprompt --record --iteration 1 --action heap-death --exit 1 --elapsed 142 --budget 60 --commits 0 --result "$TMP/result.txt"
+assert_rc 0
+assert_eq "record fields" "$(jq -c '{action, exit, elapsed, budget, commits, ok, streak}' .zociety/zloop.prev)" '{"action":"heap-death","exit":1,"elapsed":142,"budget":60,"commits":0,"ok":false,"streak":1}'
+prompt=$(bin/zprompt --budget 60)
+assert_eq "section names the attempt and the overrun" "$(printf '%s\n' "$prompt" | grep -c '^Attempted: heap-death · exit 1 · 0 commit(s) · 142s of a 60s budget (OVER by 82s)$')" 1
+assert_eq "summary is indented under it" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death: aborting$')" 1
+assert_eq "a different action gets no retry instruction" "$(printf '%s\n' "$prompt" | grep -c 'do not re-diagnose')" 0
+assert_eq "but is told the failure left nothing" "$(printf '%s\n' "$prompt" | grep -c '^It left no commit; the action for this turn is the one under Do now\.$')" 1
+run bin/zprompt --record --iteration 2 --action join --exit 1 --elapsed 5 --budget 60 --commits 0
+assert_eq "streak restarts on a new action" "$(jq -r .streak .zociety/zloop.prev)" 1
+run bin/zprompt --record --iteration 3 --action join --exit 0 --elapsed 5 --budget 60 --commits 0
+assert_eq "exit 0 without a commit is still a failure" "$(jq -c '[.ok, .streak]' .zociety/zloop.prev)" '[false,2]'
+assert_eq "two failures of the current action escalate" "$(bin/zprompt | grep -c '^This action has failed 2 times in a row\.')" 1
+run bin/zprompt --record --iteration 4 --action join --exit 0 --elapsed 5 --budget 60 --commits 1
+assert_eq "a commit clears the streak" "$(jq -c '[.ok, .streak]' .zociety/zloop.prev)" '[true,0]'
+assert_eq "within budget: no OVER" "$(bin/zprompt | grep -c '^Attempted: join · exit 0 · 1 commit(s) · 5s of a 60s budget$')" 1
+run bin/zprompt --record --iteration 5 --action join
+assert_rc 2
+assert_err '^zprompt: --record needs --iteration, --action, --exit, --elapsed and --commits$'
+run bin/zprompt --record --iteration x --action join --exit 0 --elapsed 5 --commits 1
+assert_rc 2
+assert_err "^zprompt: --iteration expects a non-negative integer, got 'x'$"
+echo ""
+
+# A 60s budget is accepted (the operator may want it) but not silently: the
+# live run this guards had 5 of 5 iterations over budget by 22-266s.
+echo "=== Case 35r: a budget under 120s warns loudly; an overrun is named on the finish line ==="
+fresh_repo budget-floor
+export FAKE_CLAUDE_SLEEP=2
+run bin/zloop --budget 1 --timeout 10 --max 1
+unset FAKE_CLAUDE_SLEEP
+assert_rc 1
+assert_err '^\[zloop\] WARNING: budget 1s is below 120s\. heap-death and contribute$'
+assert_err 'turns typically need 180s\+, so this run WILL overrun its budget on every'
+assert_err '^\[zloop\] Iteration 1 finished in [2-4]s \(budget 1s, OVER by [1-3]s\) \(exit 0\)$'
+assert_agent_dead
+fresh_repo budget-floor-ok
+run bin/zloop --budget 120 --max 1
+assert_rc 1
+assert_no_err 'WARNING: budget'
+assert_err '^\[zloop\] Iteration 1 finished in [0-9]+s \(exit 0\)$'
+run env ZLOOP_BUDGET_FLOOR=200 bin/zloop --budget 120 --max 1
+assert_rc 1
+assert_err '^\[zloop\] WARNING: budget 120s is below 200s\.'
+run env ZLOOP_BUDGET_FLOOR=soon bin/zloop --budget 120 --max 1
+assert_rc 2
+assert_err "^zloop: ZLOOP_BUDGET_FLOOR expects a non-negative integer, got 'soon'$"
 echo ""
 
 echo "=== Case 36: bin/zrender heartbeat, error footer and metrics file ==="

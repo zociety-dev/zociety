@@ -22,7 +22,7 @@ else
   # Show header + last N sections (sections separated by ---)
   echo "$CONTENT" | awk -v n="$LIMIT" '
     BEGIN { section=0 }
-    /^---$/ { section++ }
+    /^---$/ { section++; next }
     { lines[section] = lines[section] $0 "\n" }
     END {
       # Print header (section 0)

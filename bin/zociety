@@ -322,7 +322,12 @@ case "${1:-}" in
             exit 1
         fi
         log_cmd "Exec: ${cmd[*]}"
-        podman exec -it "$CONTAINER_NAME" "${cmd[@]}"
+        # A pty (-t) turns every \n into \r\n, so a caller capturing
+        # $(bin/zociety exec git ...) gets ids with a trailing CR. Allocate
+        # one only when we actually sit on a terminal.
+        exec_tty=(-i)
+        [[ -t 0 && -t 1 ]] && exec_tty=(-it)
+        podman exec "${exec_tty[@]}" "$CONTAINER_NAME" "${cmd[@]}"
         ;;
     setup-token)
         setup_token

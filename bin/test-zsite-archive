@@ -20,6 +20,11 @@
 #   3. deleting stuff/ from the working tree changes no archive byte
 #   4. running the generator twice changes no archive byte
 #   5. deleting the newest tag removes its page and its index entry
+#   6. a synthetic repo with 120 rev* tags (four stuff/*.md each, one of
+#      them empty, one without an h1) generates within SCALE_BUDGET_SECONDS
+#      and gets every page, artifact, title and escape right: the generator
+#      gathers the archive in a fixed number of git calls, and this case
+#      catches a slide back to per-tag or per-artifact subprocesses
 
 set -e
 
@@ -127,6 +132,58 @@ generate
 check "page removed with tag" test ! -e "$PAGE"
 check "index entry removed with tag" bash -c "! grep -q 'archive/$NEWEST.html' docs/archive.html"
 check "other pages intact" test "$(ls docs/archive | wc -l | tr -d ' ')" -eq $((EXPECTED_COUNT - 1))
+
+# Budget for Case 6. The batched generator takes about 10s for this repo on
+# a 2024 laptop (about 1s of git, the rest one bin/zmd2html per artifact);
+# the per-tag fan-out it replaced took about 60s. Override for slow hosts.
+SCALE_TAGS=120
+SCALE_BUDGET_SECONDS="${SCALE_BUDGET_SECONDS:-30}"
+
+# synthetic_repo <dir> <ntags>: a repo whose only history is <ntags>
+# annotated rev* tags, each on its own commit holding stuff/a.md (h1 with
+# characters that need escaping), stuff/b.md (no h1), stuff/empty.md (0
+# bytes) and stuff/Zeta-<n>.md, all distinct per tag. Built with one
+# git fast-import so the fixture itself is not a fan-out. Nothing is
+# checked out: bin/ and PROMPT.md are copied in untracked, which is all
+# bin/zsite-generate reads from the working tree once stuff/ is absent.
+synthetic_repo() {
+  local dir="$1" n="$2" i a b z
+  git init -q "$dir"
+  cp -R "$TMP/repo/bin" "$dir/bin"
+  cp "$TMP/repo/PROMPT.md" "$dir/PROMPT.md"
+  for ((i = 1; i <= n; i++)); do
+    a=$(printf '# Title %d & <b>\n\nbody %d' "$i" "$i")
+    b=$(printf 'no heading in %d' "$i")
+    z=$(printf '# Zeta %d' "$i")
+    printf 'commit refs/heads/main\nmark :%d\ncommitter Zociety Test <test@zociety.dev> %d +0000\ndata 12\n[stuff] %04d\ndeleteall\n' \
+      "$i" $((1700000000 + i * 86400)) "$i"
+    printf 'M 100644 inline stuff/a.md\ndata %d\n%s\n' "${#a}" "$a"
+    printf 'M 100644 inline stuff/b.md\ndata %d\n%s\n' "${#b}" "$b"
+    printf 'M 100644 inline stuff/empty.md\ndata 0\n\n'
+    printf 'M 100644 inline stuff/Zeta-%d.md\ndata %d\n%s\n\n' "$i" "${#z}" "$z"
+    printf 'tag rev%d-attempt1-iterations1of1\nfrom :%d\ntagger Zociety Test <test@zociety.dev> %d +0000\ndata 8\nrev %04d\n' \
+      "$i" "$i" $((1700000000 + i * 86400)) "$i"
+  done | LC_ALL=C git -C "$dir" fast-import --quiet
+}
+
+echo "Case 6: $SCALE_TAGS synthetic tags generate within ${SCALE_BUDGET_SECONDS}s"
+synthetic_repo "$TMP/synth" "$SCALE_TAGS"
+cd "$TMP/synth"
+check "fixture holds $SCALE_TAGS rev* tags" test "$(git for-each-ref 'refs/tags/rev*' | wc -l | tr -d ' ')" -eq "$SCALE_TAGS"
+START=$SECONDS
+generate
+ELAPSED=$((SECONDS - START))
+check "generated in ${ELAPSED}s (budget ${SCALE_BUDGET_SECONDS}s)" test "$ELAPSED" -le "$SCALE_BUDGET_SECONDS"
+check "one page per synthetic tag" test "$(ls docs/archive | wc -l | tr -d ' ')" -eq "$SCALE_TAGS"
+LAST="rev$SCALE_TAGS-attempt1-iterations1of1"
+PAGE="docs/archive/$LAST.html"
+check "newest synthetic page lists 4 artifacts" test "$(grep -c 'class="artifact"' "$PAGE")" -eq 4
+check "empty artifact is present" grep -q 'id="artifact-empty"' "$PAGE"
+check "h1 title is HTML-escaped" grep -qF ">Title $SCALE_TAGS &amp; &lt;b&gt;</a>" "$PAGE"
+check "artifact without h1 falls back to its filename" grep -qF '>b.md</a> <code>b.md</code>' "$PAGE"
+check "body comes from the tag, not the tree" grep -qF "body $SCALE_TAGS" "$PAGE"
+check "index lists the newest tag first" test "$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | head -1)" = "href=\"archive/$LAST.html\""
+cd "$TMP/repo"
 
 echo
 echo "passed $PASS, failed $FAIL"

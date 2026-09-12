@@ -255,12 +255,25 @@ if [[ -n "$LAST_TAG" ]] && ! git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/nu
   INSIGHT=$(git diff "$LAST_TAG" -- PROMPT.md 2>/dev/null | grep "^+" | grep -v "^+++" | head -5 | sed 's/^+//')
   if [[ -n "$INSIGHT" ]]; then
     echo "Saving insight to learnings branch..."
-    bin/save-learning "rev$REV" "$INSIGHT" 2>/dev/null || echo "  (learnings branch not updated)"
+    # stderr stays visible: save-learning prints the git error and the full
+    # insight when the commit fails. Repeat the first line here so the loss
+    # is obvious in the heap-death output.
+    if ! bin/save-learning "rev$REV" "$INSIGHT"; then
+      echo "WARNING: learnings branch NOT updated; insight lost unless saved by hand: ${INSIGHT%%$'\n'*}" >&2
+    fi
   fi
 fi
 
-# Ensure we're back on the original branch after save-learning
-git checkout "$ORIGINAL_BRANCH" --quiet 2>/dev/null || true
+# save-learning writes the orphan `learnings` branch with plumbing
+# (commit-tree + update-ref) and never switches branches. Everything below
+# still runs bin/* from the current branch, and `learnings` has no bin/, so
+# keep the cheap invariant: die here rather than later with
+# "bin/zstate: No such file" if anything moved HEAD since we started.
+NOW_BRANCH=$(git branch --show-current)
+if [[ "$NOW_BRANCH" != "$ORIGINAL_BRANCH" ]]; then
+  echo "ERROR: branch changed during heap-death: started on '$ORIGINAL_BRANCH', now on '${NOW_BRANCH:-detached HEAD}'" >&2
+  exit 1
+fi
 
 #############################################
 # 3. Calculate remaining batch

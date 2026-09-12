@@ -4,48 +4,199 @@
 # container. Read-only git, and any git outside the worktree (e.g. the
 # throwaway repos bin/test-zstop-modes builds under /tmp), run against the
 # real host binary for speed. See bin/zgit for the container routing.
+#
+# Verbs that only ever read (log, diff, status, ...) stay on the host
+# outright. Verbs with both read and write forms (branch, tag, notes,
+# remote, config, worktree, stash) stay on the host only when the argument
+# list is provably a read (see read_form below); anything else, including
+# an option this shim does not recognise, goes to the container. Routing a
+# read into the container is slow but harmless; the reverse is not, and a
+# container started for `git branch --show-current` while bin/zloop holds
+# the container name collides with it ("name already in use").
+#
+# ZSHIM_DRY_RUN=1 prints the decision (host|container) instead of running
+# git, for bin/test-zshim.
 set -e
 
 SELF="$(cd "$(dirname "$0")" && pwd)"
 
 # The real git: the first one on PATH that is not this shim directory.
+#
+# Recursion guard: a fake git ahead of us on PATH that execs back into this
+# shim (a test wrapper resolved via `command -v git`) would be picked as
+# "the real git" and the two would exec each other forever. ZSHIM_SEEN
+# lists the directories this exec chain has already chosen, so the next
+# pass skips them. It applies only within one exec chain: exec keeps the
+# PID, so ZSHIM_PID tells the chain apart from a child (hook, alias, script)
+# that must resolve afresh.
 real=""
+realdir=""
+seen=""
+[[ "${ZSHIM_PID:-}" == "$$" ]] && seen="${ZSHIM_SEEN:-}"
 IFS=:
 for d in $PATH; do
   [[ "$d" == "$SELF" ]] && continue
-  [[ -x "$d/git" ]] && { real="$d/git"; break; }
+  case ":$seen:" in *":$d:"*) continue ;; esac
+  [[ -x "$d/git" ]] && { real="$d/git"; realdir="$d"; break; }
 done
 unset IFS
 [[ -n "$real" ]] || { echo "git-shim: real git not found on PATH" >&2; exit 127; }
+export ZSHIM_PID="$$" ZSHIM_SEEN="${seen:+$seen:}$realdir"
+
+# route <host|container>: exec the chosen git, or print the decision.
+route() {
+  local where="$1"; shift
+  if [[ "${ZSHIM_DRY_RUN:-0}" == "1" ]]; then
+    echo "$where"
+    exit 0
+  fi
+  case "$where" in
+    host) exec "$real" "$@" ;;
+    container) exec "$ROOT/bin/zgit" "$@" ;;
+  esac
+}
 
 # Only intercept inside the zociety worktree (ZOCIETY_ROOT is exported by
 # .envrc). Anywhere else, be a transparent passthrough.
 ROOT="${ZOCIETY_ROOT:-}"
 if [[ -z "$ROOT" || ( "$PWD" != "$ROOT" && "$PWD" != "$ROOT"/* ) ]]; then
+  if [[ "${ZSHIM_DRY_RUN:-0}" == "1" ]]; then echo host; exit 0; fi
   exec "$real" "$@"
 fi
 
 # Find the subcommand, skipping global options (and the value-taking ones).
+# rest[] is everything after it.
 verb=""
+rest=()
 skip=0
+i=0
 for arg in "$@"; do
+  i=$((i + 1))
   if [[ $skip -eq 1 ]]; then skip=0; continue; fi
   case "$arg" in
     -C|-c|--git-dir|--work-tree|--namespace) skip=1; continue ;;
     --exec-path) skip=1; continue ;;
     -*) continue ;;
-    *) verb="$arg"; break ;;
+    *) verb="$arg"; rest=("${@:i+1}"); break ;;
   esac
 done
 
+# Value-taking options of `git branch` that only filter the listing. Bare,
+# they take the next word (git's LASTARG_DEFAULT: `--merged main`); the
+# `--opt=value` spelling is matched separately below.
+branch_takes_value() {
+  case "$1" in
+    --contains|--no-contains|--merged|--no-merged|--points-at|--sort|--format) return 0 ;;
+  esac
+  return 1
+}
+
+# read_branch <args...>: 0 when `git branch <args>` can only list. Any
+# positional word (a branch to create, or a pattern) and any option not in
+# the read-only set, notably -d/-D, -m/-M, -c/-C, -u/--set-upstream-to,
+# --unset-upstream, --edit-description, -f/--force, -t/--track, fail it.
+read_branch() {
+  local a
+  while [[ $# -gt 0 ]]; do
+    a="$1"; shift
+    if branch_takes_value "$a"; then
+      [[ $# -gt 0 ]] && shift
+      continue
+    fi
+    case "$a" in
+      --show-current|--list|--all|--remotes|--verbose|--ignore-case|--quiet|\
+      --column|--no-column|--color|--no-color|--abbrev|--no-abbrev|\
+      --contains=*|--no-contains=*|--merged=*|--no-merged=*|--points-at=*|\
+      --sort=*|--format=*|--column=*|--color=*|--abbrev=*) ;;
+      *)
+        # Short flags, possibly bundled (-a, -vv, -avv): all must be reads.
+        [[ "$a" =~ ^-[alrviq]+$ ]] || return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# read_tag <args...>: 0 when `git tag <args>` can only list: -l/--list is
+# present and no other word is; git treats a positional under -l as a
+# pattern, but we still keep those in the container to stay minimal.
+read_tag() {
+  local a listing=0
+  while [[ $# -gt 0 ]]; do
+    a="$1"; shift
+    case "$a" in
+      -l|--list) listing=1 ;;
+      *) return 1 ;;
+    esac
+  done
+  [[ $listing -eq 1 ]]
+}
+
+# read_notes <args...>: 0 for `git notes [--ref <x>] list|show ...`.
+read_notes() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --ref) shift; [[ $# -gt 0 ]] && shift; continue ;;
+      --ref=*) shift; continue ;;
+      list|show) return 0 ;;
+      *) return 1 ;;
+    esac
+  done
+  return 1
+}
+
+# read_remote <args...>: 0 for bare `git remote`, `git remote -v`,
+# `git remote show ...` and `git remote get-url ...`.
+read_remote() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -v|--verbose) shift; continue ;;
+      show|get-url) return 0 ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# read_config <args...>: 0 when a read action is among the args. git config
+# accepts exactly one action, so --get alongside --unset is an error, never
+# a write.
+read_config() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --get|--get-all|--list|-l) return 0 ;;
+    esac
+    shift
+  done
+  return 1
+}
+
+# read_form <verb> <args...>: 0 when this invocation of a mixed verb is a
+# read. Unknown verbs and anything not matched are not reads.
+read_form() {
+  local verb="$1"; shift
+  case "$verb" in
+    branch) read_branch "$@" ;;
+    tag) read_tag "$@" ;;
+    notes) read_notes "$@" ;;
+    remote) read_remote "$@" ;;
+    config) read_config "$@" ;;
+    worktree) [[ "${1:-}" == list ]] ;;
+    stash) [[ "${1:-}" == list || "${1:-}" == show ]] ;;
+    *) return 1 ;;
+  esac
+}
+
 # Read-only verbs stay on the host: fast, and correct for a repo the host can
-# read. Everything else may write (commit, push, add, merge, rebase, tag,
-# fetch, config, ...) and goes through the container as zociety-dev.
+# read. Mixed verbs stay only in their read forms (read_form). Everything
+# else may write (commit, push, add, merge, rebase, fetch, ...) and goes
+# through the container as zociety-dev.
 case "$verb" in
   status|log|diff|show|ls-files|ls-tree|ls-remote|rev-parse|rev-list|\
   describe|blame|cat-file|for-each-ref|shortlog|reflog|grep|whatchanged|\
   name-rev|show-ref|show-branch|var|help|version|""|--version|--help)
-    exec "$real" "$@" ;;
+    route host "$@" ;;
+  branch|tag|notes|remote|config|worktree|stash)
+    if read_form "$verb" "${rest[@]}"; then route host "$@"; fi ;;
 esac
 
-exec "$ROOT/bin/zgit" "$@"
+route container "$@"
