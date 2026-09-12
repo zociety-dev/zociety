@@ -300,7 +300,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       run='bin/zcomplete <agent>'
       ;;
     heap-death)
-      run='bin/zheap-death <agent> "<question the next cycle should answer>"  (archives the cycle, commits, pushes and births the next branch; draw the question from what this cycle produced)'
+      run='bin/zheap-death --cite <stuff-file> <agent> "<question the next cycle should answer>"  (or --challenge <stuff-file>; archives, measures the cycle, and births the successor)'
       read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the question"
       listing=$(stuff_listing)
       [[ -n "$listing" ]] && listing="This cycle's stuff/:"$'\n'"$listing"

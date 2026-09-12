@@ -730,6 +730,7 @@ echo ""
 
 echo "=== Case 28: zheap-death defaults batch_size from the budget in budget mode (ZSTOP_BUDGET unset) ==="
 fresh_repo heap-death-budget
+git checkout -q -b cycle/rev1-attempt1
 START=$(git rev-parse HEAD)
 heap_death '{"batch_remaining":2}'
 heap_death '{"batch_remaining":1}'
@@ -748,11 +749,14 @@ echo ""
 
 echo "=== Case 29: zheap-death keeps batch_size 3 outside budget mode ==="
 fresh_repo heap-death-action
+git checkout -q -b cycle/rev1-attempt1
+mkdir stuff
+echo "fixture inheritance artifact" > stuff/inherited.md
 START=$(git rev-parse HEAD)
 heap_death '{"batch_remaining":2}'
 heap_death '{"batch_remaining":1}'
 write_state "$START" action,file
-run env -u ZSTOP_BUDGET bin/zheap-death tester "third question"
+run env -u ZSTOP_BUDGET bin/zheap-death --cite inherited.md tester "third question"
 assert_rc 0
 assert_no_err '^batch_size defaulted'
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
@@ -766,20 +770,10 @@ git checkout -q -b feat/scratch
 BEFORE=$(git rev-parse HEAD)
 run bin/zheap-death tester "leaked question"
 assert_rc 1
-assert_err "^zheap-death: refusing to run on 'feat/scratch' \(not main\); set ZHEAP_DEATH_ANY_BRANCH=1 to override$"
+assert_err "^zheap-death: refusing to run on 'feat/scratch'; run from cycle/"
 assert_eq "HEAD unchanged" "$(git rev-parse HEAD)" "$BEFORE"
 assert_eq "tags" "$(git tag | wc -l | tr -d ' ')" 0
 assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 0
-echo ""
-
-echo "=== Case 30b: ZHEAP_DEATH_ANY_BRANCH=1 lets zheap-death run off main ==="
-fresh_repo heap-death-anybranch
-git checkout -q -b feat/scratch
-run env ZHEAP_DEATH_ANY_BRANCH=1 bin/zheap-death tester "deliberate question"
-assert_rc 0
-assert_no_err '^zheap-death: refusing'
-assert_eq "[heap-death] commits" "$(git rev-list --count --grep='^\[heap-death\]' HEAD)" 1
-assert_eq "current branch" "$(git branch --show-current)" feat/scratch
 echo ""
 
 echo "=== Case 31: Ctrl-C (SIGINT) mid-iteration stops the agent, exits 130, removes state (#11) ==="

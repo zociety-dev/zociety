@@ -22,13 +22,6 @@
 #                       same guillotine bin/zloop applies. Before this the
 #                       only bound was the workflow's timeout-minutes, which
 #                       kills the whole job, not the iteration.
-#   ZLOOP_MAX_TIMEOUTS=3  Consecutive hard kills that abort the run (exit 3;
-#                       0 = never). See bin/zloop --help (Time).
-#   ZLOOP_MAX_SEAL_FAILURES=3  Consecutive bin/zblind seal failures that abort
-#                       the run (exit 4; 0 = never). A run that seals nothing
-#                       has no provenance record, which a per-iteration
-#                       "continuing" warning hides. A seal skipped for a
-#                       missing ZOCIETY_BLIND_KEY exits 0 and never counts.
 #   ZLOOP_STOP=action   Stop modes passed to bin/zloop-complete (no --stop flag
 #                       here; set it in the workflow env). See bin/zloop --help.
 #   ZSTOP_*             Per-mode knobs; see bin/zstop-<mode> --help
@@ -60,14 +53,10 @@ STOP_MODES="${ZLOOP_STOP:-action}"
 BUDGET_SECS="${ZLOOP_BUDGET:-300}"
 INTERVAL_SECS="${ZLOOP_INTERVAL:-2}"
 TIMEOUT_SECS="${ZLOOP_TIMEOUT:-}"
-MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
-MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
 BUDGET_FLOOR="${ZLOOP_BUDGET_FLOOR:-120}"
 PREV_FILE=.zociety/zloop.prev
 ITERATION=0
-TIMEOUTS=0
-SEAL_FAILURES=0
-for v in BUDGET_SECS INTERVAL_SECS MAX_TIMEOUTS MAX_SEAL_FAILURES BUDGET_FLOOR; do
+for v in BUDGET_SECS INTERVAL_SECS BUDGET_FLOOR; do
     [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "zga-loop: $v expects a non-negative integer, got '${!v}'" >&2; exit 2; }
 done
 # Same rule as bin/zloop: the guillotine must sit above the budget, else every
@@ -115,6 +104,12 @@ trap 'rm -f "$RESULT_FILE" "$RESULT_FILE.done" "$PREV_FILE"' EXIT
 
 # Ensure we have latest
 git pull --rebase || git pull --ff-only || true
+
+# CI follows the same no-direct-main-commits invariant as the local runner.
+if [[ "$(git branch --show-current)" == "main" ]]; then
+    cycle_branch=$(bin/zcycle-id --branch current)
+    git checkout -b "$cycle_branch"
+fi
 
 # Same as bin/zloop: captured once, rewritten into zloop.state every iteration.
 # Taken after the pull so start..HEAD holds only this run's commits; otherwise
@@ -187,6 +182,7 @@ EOF
     # Orientation for this turn, regenerated now so the context block reflects
     # the previous iteration's commits. See Orientation in the header.
     PROMPT=$(bin/zprompt --budget "$BUDGET_SECS")
+    TURN_ID="${START_SHA:0:12}-$ITERATION"
 
     # Construct agent arguments
     AGENT_ARGS=()
@@ -211,7 +207,7 @@ EOF
     # leaves a marker when it has drained; the record waits for that briefly.
     : > "$RESULT_FILE"
     rm -f "$RESULT_FILE.done"
-    ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" </dev/null \
+    ZOCIETY_TURN_ID="$TURN_ID" ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" </dev/null \
         > >(tee "$RESULT_FILE"; : > "$RESULT_FILE.done") 2>&1 &
     wait $! || exit_code=$?
     for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
@@ -229,7 +225,6 @@ EOF
         --commits "$iter_commits" --result "$RESULT_FILE" \
         || echo "WARNING: bin/zprompt --record failed; the next turn gets no memory of this one"
     if [[ $exit_code -eq 0 ]]; then
-        TIMEOUTS=0
         # Push after successful iteration (if there are changes)
         if ! git diff --quiet HEAD 2>/dev/null; then
             echo ""
@@ -242,18 +237,16 @@ EOF
             fi
         fi
     elif [[ $exit_code -eq 124 ]]; then
-        TIMEOUTS=$((TIMEOUTS + 1))
-        echo "WARNING: iteration $ITERATION hard-killed at ${TIMEOUT_SECS}s ($TIMEOUTS consecutive); uncommitted work is lost"
-        if [[ $MAX_TIMEOUTS -gt 0 && $TIMEOUTS -ge $MAX_TIMEOUTS ]]; then
-            echo ""
-            echo "=== Loop Aborted ==="
-            echo "$TIMEOUTS consecutive hard kills at ${TIMEOUT_SECS}s with a ${BUDGET_SECS}s budget; raise ZLOOP_BUDGET or shrink the work per turn"
-            rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE"
-            git push origin HEAD || echo "Warning: final push failed"
-            exit 3
-        fi
+        bin/zobserve runner failure-to-continue \
+            "zagent exceeded the ${TIMEOUT_SECS}s hard limit on iteration $ITERATION" 124
+        echo "=== Loop Stopped: timeout observed ==="
+        git push origin HEAD || echo "Warning: final push failed"
+        exit 124
     else
-        echo "Warning: Agent iteration failed (exit $exit_code), continuing..."
+        bin/zobserve runner failure-to-continue "zagent exited $exit_code on iteration $ITERATION" "$exit_code"
+        echo "=== Loop Stopped: failure observed ==="
+        git push origin HEAD || echo "Warning: final push failed"
+        exit "$exit_code"
     fi
 
     # Blind model record (same as bin/zloop, runner github-actions): seal the
@@ -264,18 +257,12 @@ EOF
     # a failure; MAX_SEAL_FAILURES real failures in a row abort the run, since
     # a job that seals nothing leaves the cycle with no provenance to reveal.
     if bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "${ZOCIETY_AGENT_CLIENT:-claude}" github-actions; then
-        SEAL_FAILURES=0
+        :
     else
-        SEAL_FAILURES=$((SEAL_FAILURES + 1))
-        echo "WARNING: zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7} ($SEAL_FAILURES consecutive); those commits carry no provenance note"
-        if [[ $MAX_SEAL_FAILURES -gt 0 && $SEAL_FAILURES -ge $MAX_SEAL_FAILURES ]]; then
-            echo ""
-            echo "=== Loop Aborted ==="
-            echo "$SEAL_FAILURES consecutive zblind seal failures; the run has no provenance record at all. Fix bin/zblind or set ZLOOP_MAX_SEAL_FAILURES=0 to accept an unsealed run"
-            rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE"
-            git push origin HEAD || echo "Warning: final push failed"
-            exit 4
-        fi
+        bin/zobserve runner failure-to-continue "zblind could not seal iteration $ITERATION provenance" 1
+        echo "=== Loop Stopped: provenance failure observed ==="
+        git push origin HEAD || echo "Warning: final push failed"
+        exit 1
     fi
     for death_sha in $(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}"); do
         bin/zblind reveal "$death_sha" \

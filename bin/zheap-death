@@ -2,7 +2,7 @@
 # zheap-death: Archive the current cycle and prepare the next one
 #
 # Usage:
-#   bin/zheap-death [--done] <agent> <question> [batch_size]
+#   bin/zheap-death [--done] [--cite FILE | --challenge FILE]... <agent> <question> [batch_size]
 #   bin/zheap-death -h | --help
 #
 # Options:
@@ -24,13 +24,6 @@
 #                event agrees with bin/zstop-budget. Otherwise 3.
 #
 # Environment:
-#   ZEVENT_NO_VERIFY=1   Commit with --no-verify (skip pre-commit hooks)
-#   ZHEAP_DEATH_ANY_BRANCH=1
-#                        Allow running off main or a cycle/rev{N}-attempt{M}
-#                        branch. By default zheap-death refuses on any other
-#                        branch (or detached HEAD): a by-hand test run would
-#                        otherwise commit a live [heap-death] into a feature
-#                        branch and push cycle/* refs and tags to origin.
 #   ZSTOP_BUDGET=3       Heap-deaths per loop run; drives the batch_size default
 #   ZSTOP_*              Every ZSTOP_* variable present is recorded under
 #                        data.zstop in the heap-death and direction events
@@ -72,6 +65,8 @@ usage() {
 
 DONE=false
 POSITIONAL=()
+CITES=()
+CHALLENGES=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
@@ -80,6 +75,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --done)
       DONE=true
+      ;;
+    --cite|--challenge)
+      [[ $# -ge 2 ]] || { echo "zheap-death: $1 requires a stuff/ file" >&2; exit 1; }
+      if [[ "$1" == "--cite" ]]; then CITES+=("$2"); else CHALLENGES+=("$2"); fi
+      shift
       ;;
     --)
       shift
@@ -108,15 +108,13 @@ if [[ -z "$AGENT" || -z "$QUESTION" ]]; then
   exit 1
 fi
 
-# Refuse to archive a cycle from anywhere but main or a cycle branch unless
-# told otherwise. Every step below writes history (event commit, cycle branch,
-# tag, pushes), so a stray run on a feature branch leaks a heap-death into
-# that branch's PR.
+# Archive only a named cycle branch. There is deliberately no override: every
+# lifecycle write must remain in the reviewable cycle lineage.
 CURRENT_BRANCH=$(git branch --show-current)
 ON_CYCLE_BRANCH=0
 [[ "$CURRENT_BRANCH" =~ ^cycle/rev[0-9]+-attempt[0-9]+$ ]] && ON_CYCLE_BRANCH=1
-if [[ "$CURRENT_BRANCH" != "main" && "$ON_CYCLE_BRANCH" -eq 0 && "${ZHEAP_DEATH_ANY_BRANCH:-0}" != "1" ]]; then
-  echo "zheap-death: refusing to run on '${CURRENT_BRANCH:-detached HEAD}' (not main); set ZHEAP_DEATH_ANY_BRANCH=1 to override" >&2
+if [[ "$ON_CYCLE_BRANCH" -eq 0 ]]; then
+  echo "zheap-death: refusing to run on '${CURRENT_BRANCH:-detached HEAD}'; run from cycle/rev{N}-attempt{M}" >&2
   exit 1
 fi
 
@@ -168,6 +166,28 @@ if ! [[ "$BATCH_SIZE" =~ ^[0-9]+$ ]]; then
   echo "zheap-death: batch_size must be a non-negative integer, got '$BATCH_SIZE'" >&2
   exit 1
 fi
+
+# A successor must explicitly inherit from, or challenge, something the
+# current cycle made. This gate is intentionally before any lifecycle write.
+if [[ "$BATCH_SIZE" -gt 1 ]]; then
+  if [[ ${#CITES[@]} -eq 0 && ${#CHALLENGES[@]} -eq 0 ]]; then
+    echo "zheap-death: successor direction requires --cite FILE or --challenge FILE from this cycle's stuff/" >&2
+    exit 1
+  fi
+  for artifact in "${CITES[@]}" "${CHALLENGES[@]}"; do
+    [[ "$artifact" != /* && -f "stuff/$artifact" ]] || {
+      echo "zheap-death: inheritance artifact must be a file under stuff/: '$artifact'" >&2
+      exit 1
+    }
+  done
+fi
+INHERITANCE='{"cite":[],"challenge":[]}'
+for artifact in "${CITES[@]}"; do
+  INHERITANCE=$(jq -c --arg artifact "$artifact" '.cite += [$artifact]' <<<"$INHERITANCE")
+done
+for artifact in "${CHALLENGES[@]}"; do
+  INHERITANCE=$(jq -c --arg artifact "$artifact" '.challenge += [$artifact]' <<<"$INHERITANCE")
+done
 
 # Every ZSTOP_* variable present, as {"BUDGET": "3", ...}
 KNOBS_JSON='{}'
@@ -287,6 +307,7 @@ bin/zlog zheap-death "Calculated batch remaining: $REMAINING (from $BATCH_SIZE -
 
 # Get current cycle from state
 CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
+MEASURES=$(bin/zcycle-measure "$CURRENT_CYCLE")
 
 #############################################
 # 4. Commit heap-death event
@@ -298,13 +319,15 @@ DATA=$(jq -nc \
   --arg question "$QUESTION" \
   --argjson remaining "$REMAINING" \
   --argjson is_done "$DONE" \
+  --argjson measures "$MEASURES" \
   --argjson regime "$REGIME" \
   '{
     tag: $tag,
     branch: $branch,
     question: $question,
     batch_remaining: $remaining,
-    done: $is_done
+    done: $is_done,
+    measures: $measures
   } + $regime')
 
 echo "Recording heap-death event..."
@@ -419,6 +442,7 @@ if [[ "$REMAINING" -gt 0 ]]; then
     --arg question "$QUESTION" \
     --argjson total "$BATCH_SIZE" \
     --argjson remaining "$REMAINING" \
+    --argjson inheritance "$INHERITANCE" \
     --argjson regime "$REGIME" \
     '{
       z: 1,
@@ -436,7 +460,8 @@ if [[ "$REMAINING" -gt 0 ]]; then
       data: ({
         question: $question,
         batch_total: $total,
-        batch_remaining: $remaining
+        batch_remaining: $remaining,
+        inheritance: $inheritance
       } + $regime)
     }'
   )
@@ -445,11 +470,7 @@ if [[ "$REMAINING" -gt 0 ]]; then
 
 $DIRECTION_EVENT"
 
-  if [[ -n "$ZEVENT_NO_VERIFY" ]]; then
-    git commit --allow-empty -m "$DIRECTION_MSG" --quiet --no-verify
-  else
-    git commit --allow-empty -m "$DIRECTION_MSG" --quiet
-  fi
+  git commit --allow-empty -m "$DIRECTION_MSG" --quiet
   echo "Direction event committed for cycle $NEXT_CYCLE"
 else
   # CRITICAL: This is where the self-sustainability gap originates

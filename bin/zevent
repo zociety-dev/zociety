@@ -17,6 +17,19 @@ if [[ -z "$TYPE" || -z "$AGENT" || -z "$DESC" ]]; then
   exit 1
 fi
 
+# A loop runner supplies one opaque turn identifier per agent invocation.
+# Genesis credits are calculated from distinct identifiers, so one invocation
+# cannot manufacture a whole society by emitting several qualifying events.
+SESSION_ID="${ZOCIETY_TURN_ID:-}"
+case "$TYPE" in
+  join|pass|stuff)
+    if [[ -z "$SESSION_ID" ]]; then
+      echo "zevent: $TYPE requires ZOCIETY_TURN_ID from a loop runner" >&2
+      exit 1
+    fi
+    ;;
+esac
+
 # Get current state
 CURRENT=$(bin/zstate)
 CYCLE=$(echo "$CURRENT" | jq -r '.cycle')
@@ -26,12 +39,19 @@ SEQ=$(echo "$CURRENT" | jq -r '.seq + 1')
 MEMBERS=$(echo "$CURRENT" | jq -r '.genesis.members')
 RULES=$(echo "$CURRENT" | jq -r '.genesis.rules')
 STUFF=$(echo "$CURRENT" | jq -r '.genesis.stuff')
+SESSION_CREDITS=$(echo "$CURRENT" | jq -c --arg session "$SESSION_ID" '.session_credits[$session] // {}')
 
 # Adjust counts based on event type
 case "$TYPE" in
-  join) MEMBERS=$((MEMBERS + 1)) ;;
-  pass) RULES=$((RULES + 1)) ;;
-  stuff) STUFF=$((STUFF + 1)) ;;
+  join)
+    [[ "$(echo "$SESSION_CREDITS" | jq -r '.join // false')" == "true" ]] || MEMBERS=$((MEMBERS + 1))
+    ;;
+  pass)
+    [[ "$(echo "$SESSION_CREDITS" | jq -r '.pass // false')" == "true" ]] || RULES=$((RULES + 1))
+    ;;
+  stuff)
+    [[ "$(echo "$SESSION_CREDITS" | jq -r '.stuff // false')" == "true" ]] || STUFF=$((STUFF + 1))
+    ;;
 esac
 
 # Check completion (as JSON boolean)
@@ -66,6 +86,7 @@ EVENT=$(jq -n \
   --arg complete "$COMPLETE" \
   --arg runtime "$RUNTIME" \
   --arg runtime_id "$RUNTIME_ID" \
+  --arg session "$SESSION_ID" \
   '{
     z: 1,
     event: $type,
@@ -75,7 +96,8 @@ EVENT=$(jq -n \
     ts: (now | todate),
     runtime: {
       env: $runtime,
-      id: $runtime_id
+      id: $runtime_id,
+      session: (if $session == "" then null else $session end)
     },
     state: {
       members: $members,
@@ -92,12 +114,9 @@ MSG="[$TYPE] $AGENT: $DESC
 
 $(echo "$EVENT" | jq -c .)"
 
-# Stage and commit (allow empty for events that don't change files)
+# Stage and commit (allow empty for events that don't change files).
+# Events always run repository hooks; constraints are part of the experiment.
 git add -A
-if [[ -n "$ZEVENT_NO_VERIFY" ]]; then
-  git commit --allow-empty --no-verify -m "$MSG"
-else
-  git commit --allow-empty -m "$MSG"
-fi
+git commit --allow-empty -m "$MSG"
 
 echo "$EVENT" | jq .
