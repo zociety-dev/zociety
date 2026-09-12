@@ -33,8 +33,7 @@ AGENT="${1:-system}"
 bin/zlog zpromise "Recording promise event to change git state" \
   "$(jq -n --arg agent "$AGENT" '{agent: $agent}')" 2>/dev/null || true
 
-# Use ZEVENT_NO_VERIFY to avoid hook issues during promise
-ZEVENT_NO_VERIFY=1 bin/zevent promise "$AGENT" "cycle complete" '{"terminal": true}'
+bin/zevent promise "$AGENT" "cycle complete" '{"terminal": true}'
 
 bin/zlog zpromise "Promise event recorded - state will now show action=stop" \
   "$(jq -n --argjson cycle $CYCLE --argjson seq $SEQ '{cycle: $cycle, seq: $seq, terminal: true}')" 2>/dev/null || true

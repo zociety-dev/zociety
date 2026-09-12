@@ -36,8 +36,7 @@ Zociety's own loop with dynamic completion checking:
   names its first cycle (`bin/zcycle-id current`: last tag, attempt+1, or
   rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
   before the first iteration. Cut no branch by hand; that step also
-  satisfies the no-main-commits hook. `ZLOOP_BRANCH=0` opts out (runs on
-  the current branch, as before). Already on a `cycle/*` branch: unchanged
+  satisfies the no-main-commits hook. Already on a `cycle/*` branch: unchanged
 - Before each iteration `bin/zloop-complete` dispatches the stop predicates
   (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
@@ -137,9 +136,8 @@ marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
 
 In `budget` mode `bin/zheap-death` defaults `batch_size` to
 `ZSTOP_BUDGET - <heap-deaths so far>` so its event data agrees with the loop.
-`bin/zheap-death` refuses to run off `main` or a `cycle/rev{N}-attempt{M}`
-branch (override with `ZHEAP_DEATH_ANY_BRANCH=1`) so a test run cannot
-archive a cycle into a feature branch.
+`bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}` branch so every
+archive remains in a reviewable cycle lineage.
 
 ### zloop Environment Variables
 
@@ -157,7 +155,6 @@ archive a cycle into a feature branch.
 | `ZLOOP_VERBOSE` | 0 | Same as `--verbose`: raw stream-json events (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
-| `ZLOOP_BRANCH` | 1 | 0 skips the cycle-branch preflight: run on whatever branch is checked out (`main` then needs `ALLOW_MAIN=1`) |
 
 ### ZSTOP Environment Variables
 
@@ -192,6 +189,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zcomplete` | Record genesis completion |
 | `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
+| `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
 | `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
@@ -355,9 +353,11 @@ Check with: `bin/zstate | jq .genesis`
 ```
 bin/zstate → action field tells you what to do:
 
-  "contribute" → Join, make stuff, vote on rules (see next/needs below)
+  "contribute" → Join, make stuff, vote on rules (see next/needs below). Each
+                  credited action must be in a distinct runner turn.
   "complete"   → Run bin/zcomplete
-  "heap-death" → Run bin/zheap-death
+  "heap-death" → Run bin/zheap-death --cite <stuff-file> (or --challenge
+                  <stuff-file>) to explicitly inherit or dispute an artifact
   "promise"    → Run bin/zpromise and STOP
   "stop"       → Do nothing, exit cleanly
 ```

@@ -14,9 +14,8 @@
 # Cases: bin/zcycle-id current/next from no tags, from a tag with PROMPT.md
 # unchanged and changed, and on a cycle branch (the branch name wins);
 # bin/zheap-death on a cycle branch ends on the successor branch with the
-# [direction] event on it and the tag on the previous head, while on main it
-# behaves as before; bin/zloop checks out cycle/rev{N}-attempt{M} at birth
-# unless ZLOOP_BRANCH=0 or already on a cycle branch.
+# [direction] event on it and the tag on the previous head; bin/zloop checks
+# out cycle/rev{N}-attempt{M} at birth.
 
 set -e
 
@@ -88,14 +87,16 @@ fresh_repo() {
   git config commit.gpgsign false
   git config core.hooksPath "$TMP/nohooks"
   echo "# fixture prompt" > PROMPT.md
+  mkdir stuff
+  echo "fixture inheritance artifact" > stuff/inherited.md
   printf '.claude/\n' > .gitignore
-  git add .gitignore PROMPT.md
+  git add .gitignore PROMPT.md stuff/inherited.md
   git commit -q -m "genesis fixture"
 }
 
 # event <type>: one synthetic event commit via bin/zevent, quietly
 event() {
-  bin/zevent "$1" tester "synthetic $1" '{}' >/dev/null 2>&1
+  ZOCIETY_TURN_ID="fixture-$1-$RANDOM" bin/zevent "$1" tester "synthetic $1" '{}' >/dev/null 2>&1
 }
 
 # change_prompt: commit a PROMPT.md edit (a rev bump for the tag derivation)
@@ -322,6 +323,9 @@ git checkout -q -b cycle/rev1-attempt1
 event join
 event stuff
 run bin/zheap-death tester "first question" 3
+assert_rc 1
+assert_err '^zheap-death: successor direction requires --cite FILE or --challenge FILE'
+run bin/zheap-death --cite inherited.md tester "first question" 3
 assert_rc 0
 assert_out_has '^On cycle branch: cycle/rev1-attempt1$'
 assert_out_has '^Birthing successor branch: cycle/rev1-attempt2$'
@@ -341,7 +345,9 @@ echo ""
 
 echo "=== Case 6b: a second heap-death chains: attempt2 dies, attempt3 is born ==="
 event join
-run bin/zheap-death tester "second question" 2
+mkdir -p stuff
+echo "second fixture artifact" > stuff/inherited.md
+run bin/zheap-death --cite inherited.md tester "second question" 2
 assert_rc 0
 HD2=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt3
@@ -371,7 +377,7 @@ git tag rev1-attempt1-iterations1of1 -m "q"
 change_prompt
 git checkout -q -b cycle/rev2-attempt1
 event join
-run bin/zheap-death tester "learned question" 3
+run bin/zheap-death --cite inherited.md tester "learned question" 3
 assert_rc 0
 assert_out_has '^Saving insight to learnings branch'
 assert_eq "learnings branch exists" "$(git show-ref --verify --quiet refs/heads/learnings && echo yes)" yes
@@ -382,42 +388,22 @@ assert_tag_at 'rev2-attempt1-iterations*' "$HD"
 assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 1
 echo ""
 
-echo "=== Case 9: heap-death on main keeps today's behaviour (stays on main, pointer branch, [direction] on main) ==="
+echo "=== Case 9: heap-death rejects main with no override ==="
 fresh_repo hd-main
 event join
 run bin/zheap-death tester "main question" 3
-assert_rc 0
-assert_out_has '^Creating cycle branch: cycle/rev1-attempt1$'
-assert_no_out 'Birthing successor'
-HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
-assert_eq "current branch" "$(git branch --show-current)" main
-assert_branch_at cycle/rev1-attempt1 "$HD"
-assert_tag_at 'rev1-attempt1-iterations*' "$HD"
-assert_eq "[direction] commits on main" "$(git rev-list --count --grep='^\[direction\]' main)" 1
-assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 1
+assert_rc 1
+assert_err "^zheap-death: refusing to run on 'main'; run from cycle/"
 echo ""
 
-echo "=== Case 9b: heap-death on main with the cycle branch already present leaves it alone ==="
-fresh_repo hd-main-existing
-event join
-OLD=$(git rev-parse HEAD)
-git branch cycle/rev1-attempt1
-event stuff
-run bin/zheap-death tester "main question" 3
-assert_rc 0
-assert_out_has '^Cycle branch exists: cycle/rev1-attempt1 \(left as is\)$'
-assert_branch_at cycle/rev1-attempt1 "$OLD"
-assert_eq "current branch" "$(git branch --show-current)" main
-echo ""
-
-echo "=== Case 10: heap-death refuses a feature branch, accepts a cycle branch without the override ==="
+echo "=== Case 10: heap-death refuses a feature branch, accepts a cycle branch ==="
 fresh_repo hd-guard
 git checkout -q -b feat/scratch
 run bin/zheap-death tester "leaked question"
 assert_rc 1
 assert_err "^zheap-death: refusing to run on 'feat/scratch'"
 git checkout -q -b cycle/rev1-attempt1
-run env -u ZHEAP_DEATH_ANY_BRANCH bin/zheap-death tester "allowed question" 2
+run bin/zheap-death --cite inherited.md tester "allowed question" 2
 assert_rc 0
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
 echo ""
@@ -428,7 +414,7 @@ git checkout -q -b cycle/rev1-attempt1
 git branch cycle/rev1-attempt2
 event join
 BEFORE=$(git rev-parse HEAD)
-run bin/zheap-death tester "blocked question" 3
+run bin/zheap-death --cite inherited.md tester "blocked question" 3
 assert_rc 1
 assert_err '^zheap-death: successor branch cycle/rev1-attempt2 already exists'
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt1
@@ -463,13 +449,12 @@ assert_eq "current branch" "$(git branch --show-current)" cycle/rev9-attempt9
 assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 1
 echo ""
 
-echo "=== Case 14: ZLOOP_BRANCH=0 skips the preflight ==="
+echo "=== Case 14: the preflight always creates a cycle branch ==="
 fresh_repo loop-opt-out
-run env ZLOOP_BRANCH=0 bin/zloop --quiet --max 1
+run bin/zloop --quiet --max 1
 assert_rc 1
-assert_no_err '^\[zloop\] Branch:'
-assert_eq "current branch" "$(git branch --show-current)" main
-assert_eq "cycle/* branches" "$(git branch --list 'cycle/*' | wc -l | tr -d ' ')" 0
+assert_err '^\[zloop\] Branch: cycle/rev1-attempt1 \(from main\)$'
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt1
 echo ""
 
 echo "=== Case 15: zloop fails loud when the derived branch already exists ==="
@@ -477,7 +462,7 @@ fresh_repo loop-exists
 git branch cycle/rev1-attempt1
 run bin/zloop --quiet --max 1
 assert_rc 2
-assert_err '^zloop: cycle/rev1-attempt1 already exists; check it out to resume it, delete it, or set ZLOOP_BRANCH=0$'
+assert_err '^zloop: cycle/rev1-attempt1 already exists; check it out to resume it$'
 assert_eq "current branch" "$(git branch --show-current)" main
 echo ""
 

@@ -76,6 +76,36 @@ if [[ -z "$LAST_EVENT" ]]; then
   exit 0
 fi
 
+# Credit only one join, pass, and stuff event of each kind per runner-issued
+# turn id. Older history predates turn ids, so each legacy commit remains a
+# distinct credit rather than rewriting its experimental record.
+cycle_credits() {
+  local cycle="$1" hash body event
+  for hash in $(git log --format=%H -n 1000 2>/dev/null); do
+    body=$(git log -1 --format=%b "$hash" 2>/dev/null \
+      | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {exit}')
+    event=$(printf '%s' "$body" | jq -ce --argjson cycle "$cycle" \
+      'select(.z == 1 and .cycle == $cycle)' 2>/dev/null) || continue
+    printf '%s\n' "$event" | jq -c --arg hash "$hash" \
+      '{event, session: (.runtime.session // $hash)}'
+  done | jq -sc '
+    reduce .[] as $e
+      ({members: 0, rules: 0, stuff: 0, session_credits: {}};
+       if ($e.event == "join" or $e.event == "pass" or $e.event == "stuff") then
+         .session_credits[$e.session] = (.session_credits[$e.session] // {})
+           | if .session_credits[$e.session][$e.event] then .
+             else .session_credits[$e.session][$e.event] = true
+               | if $e.event == "join" then .members += 1
+                 elif $e.event == "pass" then .rules += 1
+                 else .stuff += 1
+                 end
+             end
+       else .
+       end)'
+}
+
+CREDITS=$(cycle_credits "$(echo "$LAST_EVENT" | jq -r '.cycle')")
+
 # Log the found event
 LAST_EVENT_TYPE=$(echo "$LAST_EVENT" | jq -r '.event')
 LAST_EVENT_AGENT=$(echo "$LAST_EVENT" | jq -r '.agent')
@@ -84,12 +114,17 @@ bin/zlog zstate "Found last event: $LAST_EVENT_TYPE by $LAST_EVENT_AGENT" \
 
 # Parse last event and compute phase and action
 OUTPUT=$(echo "$LAST_EVENT" | jq -r \
+  --argjson credits "$CREDITS" \
   --argjson need_members "$NEED_MEMBERS" \
   --argjson need_rules "$NEED_RULES" \
   --argjson need_stuff "$NEED_STUFF" '
   # Determine phase based on last event and state
+  .state.members = $credits.members |
+  .state.rules = $credits.rules |
+  .state.stuff = $credits.stuff |
+  .state.complete = (.state.members >= $need_members and .state.rules >= $need_rules and .state.stuff >= $need_stuff) |
   .phase = (
-    if .event == "promise" then "stopped"
+    if .event == "promise" or (.event == "observation" and .data.terminal) then "stopped"
     elif .event == "heap-death" then
       if (.data.batch_remaining // 0) == 0 then "exiting"
       else "direction"
@@ -106,7 +141,7 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
   # After [promise], loop should stop - no further action needed
   # Direction guides contribution, not file editing
   .action = (
-    if .event == "promise" then "stop"
+    if .event == "promise" or (.event == "observation" and .data.terminal) then "stop"
     elif .event == "complete" then "heap-death"
     elif .event == "heap-death" then
       if (.data.batch_remaining // 0) == 0 then "promise"
@@ -153,7 +188,8 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
     needs: .needs,
     next: .next,
     last_event: .event,
-    last_agent: .agent
+    last_agent: .agent,
+    session_credits: $credits.session_credits
   }
 ')
 

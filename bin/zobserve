@@ -1,0 +1,18 @@
+#!/bin/bash
+# zobserve: Record a terminal experimental observation
+# Usage: bin/zobserve <agent> <kind> <detail> [exit_code]
+
+set -e
+
+AGENT="${1:-}"
+KIND="${2:-}"
+DETAIL="${3:-}"
+EXIT_CODE="${4:-1}"
+if [[ -z "$AGENT" || -z "$KIND" || -z "$DETAIL" || ! "$EXIT_CODE" =~ ^[0-9]+$ ]]; then
+  echo "Usage: bin/zobserve <agent> <kind> <detail> [exit_code]" >&2
+  exit 1
+fi
+
+DATA=$(jq -nc --arg kind "$KIND" --arg detail "$DETAIL" --argjson exit_code "$EXIT_CODE" \
+  '{kind: $kind, detail: $detail, exit_code: $exit_code, terminal: true}')
+bin/zevent observation "$AGENT" "$DETAIL" "$DATA"

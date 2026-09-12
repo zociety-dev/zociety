@@ -1,0 +1,32 @@
+#!/bin/bash
+# zcycle-measure: Derive auditable experimental measures for the current cycle
+# Usage: bin/zcycle-measure [cycle]
+#
+# Scores are 0..1 and are deliberately mechanical indicators, not claims of
+# semantic quality. They make comparisons reproducible from committed history.
+
+set -euo pipefail
+
+CYCLE="${1:-$(bin/zstate | jq -r .cycle)}"
+events=$(git log --format=%B | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {s=0}' \
+  | jq -sc --argjson cycle "$CYCLE" '[.[] | select(.z == 1 and .cycle == $cycle)]')
+artifacts=$(printf '%s' "$events" | jq '[.[] | select(.event == "stuff") | .data.file] | unique')
+prior_artifacts=$(git log --format=%B | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {s=0}' \
+  | jq -sc --argjson cycle "$CYCLE" '[.[] | select(.z == 1 and .cycle < $cycle and .event == "stuff") | .data.file] | unique')
+
+jq -n --argjson events "$events" --argjson artifacts "$artifacts" --argjson prior "$prior_artifacts" '
+  def ratio($n; $d): if $d == 0 then 0 else ($n / $d) end;
+  ($events | map(select(.event == "join") | .runtime.session) | map(select(. != null)) | unique) as $sessions |
+  ($events | map(select(.event == "pass")) | length) as $passes |
+  ($events | map(select(.event == "stuff")) | length) as $stuff |
+  ($events | map(select(.event == "direction") | .data.inheritance // empty) | length) as $lineage |
+  ($artifacts | map(select(. as $a | $prior | index($a) | not)) | length) as $new |
+  {
+    novelty: ratio($new; ($artifacts | length)),
+    inheritance: (if $lineage > 0 then 1 else 0 end),
+    diversity: ratio(($sessions | length); 3),
+    constraint_adherence: (if ($events | map(select(.event == "intervention")) | length) == 0 then 1 else 0 end),
+    surprise: ratio(($events | map(select(.event == "observation")) | length); ($events | length)),
+    stability: ratio($passes; ($passes + $stuff)),
+    trace_quality: ratio(($events | map(select(.data != null and .runtime != null)) | length); ($events | length))
+  }'
