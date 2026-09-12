@@ -334,8 +334,15 @@ All event commits validated successfully:
 
 ### Fix #6: bin/save-learning pre-commit hooks
 **Problem:** learnings branch has no .pre-commit-config.yaml
-**Solution:** Use `PRE_COMMIT_ALLOW_NO_CONFIG=1` or `--no-verify`
-**Impact:** Learning saves complete
+**Solution:** No checkout, no `git commit`, so no hooks: save-learning
+builds the new `LEARNINGS.md` in a temp file under `.zociety/`, writes the
+blob and a raw one-entry tree with `git hash-object -w` (`-t tree`), commits
+with `git commit-tree -p <tip>` and advances `refs/heads/learnings` with a
+`git update-ref` compare-and-swap (no parent when the branch is new). Nothing
+needs stdin or env, so the host shim route and the container behave the
+same; the working tree, index and current branch are never touched. A failed
+step exits non-zero and prints the insight to stderr; heap-death warns.
+**Impact:** Learning saves complete on host and in container, or fail loudly
 
 ---
 

@@ -66,13 +66,27 @@ Zociety's own loop with dynamic completion checking:
   is reported as a WARNING, not as a normal turn, and `ZLOOP_MAX_TIMEOUTS`
   consecutive kills abort the run (exit 3) rather than let a misconfigured loop
   burn iterations that can never finish
+- Budget floor: a budget under `ZLOOP_BUDGET_FLOOR` (120s) prints a loud WARNING
+  at start, not a refusal: heap-death and contribute turns typically need 180s+,
+  so every iteration of such a run overruns. The finish line names the overrun
+  (`Iteration 3 finished in 266s (budget 60s, OVER by 206s) (exit 0)`)
+- Iteration memory: after every iteration `bin/zprompt --record` writes
+  `.zociety/zloop.prev` (gitignored, removed at start and on exit) with the
+  action `bin/zstate` named, exit code, wall time against the budget, commits
+  made (`PREV_HEAD..HEAD`) and the last 15 lines of the agent's stdout. The
+  next prompt carries a "Previous iteration" section built from it: a retry of
+  the same action after a failure is told to start from that summary and not
+  re-diagnose, and two or more consecutive failures of the same action are
+  told to fix the tool or record why it cannot be done rather than try again.
+  A failure is a non-zero exit or a turn with no commit. `bin/zga-loop` does
+  the same
 - A failed `bin/zblind seal` after an iteration is a WARNING carrying the running
   failure count, and `ZLOOP_MAX_SEAL_FAILURES` consecutive failures abort the run
   (exit 4) rather than let a whole run accumulate commits with no provenance
   notes. A seal *skipped* because `ZOCIETY_BLIND_KEY` is unset exits 0 and never
   counts toward the streak; the streak resets on the next successful seal
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
-- Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message
+- Rewrites `.claude/zloop.state` (`iteration`, `max`, `start`, `mode`) every iteration; `bin/zheap-death` records `mode` as `stop_mode` in its events and `stop=<list>` in the tag message. `.zociety/zloop.prev` (the memory record above) sits beside it and survives heap-death's removal of the state file
 - Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
   the agent gets SIGTERM, then SIGKILL after `ZLOOP_KILL_GRACE` seconds, the
   state file is removed and zloop exits 128+signal (130 for Ctrl-C). For a
@@ -84,7 +98,7 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: "read PROMPT.md", then a generated block with `bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds, then the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed |
+| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline) plus an instruction not to re-read PROMPT.md/AGENTS.md, the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
@@ -132,6 +146,7 @@ archive a cycle into a feature branch.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ZLOOP_BUDGET` | 300 | Seconds of work an iteration is told it has. Passed to the agent in its prompt so it can scope the turn and commit in time |
+| `ZLOOP_BUDGET_FLOOR` | 120 | Budgets below this get a WARNING at start (heap-death and contribute turns need 180s+; the run will overrun). Never a refusal |
 | `ZLOOP_INTERVAL` | 1 | Seconds of quiet between iterations (cadence, as `watch -n` means it). Bounds no work |
 | `ZLOOP_TIMEOUT` | 2x budget | Hard kill: `timeout` SIGTERMs the agent mid-token and uncommitted work is lost. A backstop for a hung process, not the working budget. Must exceed `ZLOOP_BUDGET` |
 | `ZLOOP_MAX_TIMEOUTS` | 3 | Consecutive hard kills that abort the run with exit 3 (0 = never abort) |
@@ -180,7 +195,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
-| `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host |
+| `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host. Read-only verbs (`log`, `diff`, `status`, `show`, `rev-parse`, ...) always stay; mixed verbs stay only in their read forms: `branch` listing (`--show-current`, `-a`/`-r`/`-v`, `--contains`, `--merged`, ... with no positional), `tag -l`, `notes list`/`show`, `remote [-v]`/`show`/`get-url`, `config --get`/`--get-all`/`--list`, `worktree list`, `stash list`/`show`. Anything else, including unrecognised options, goes to the container |
 | `bin/zpromise` | Output completion promise |
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
@@ -195,15 +210,16 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
 | `bin/test-zga-loop` | Dry-run harness for the GitHub Actions runner (local bare origin, fake `claude`) |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
+| `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
-| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`) |
+| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
 | `bin/nfprov.py` | Vendored-verbatim canonical encoder from the fork (`mark`/`inspect`/`strip`/`convert`) |
 | `bin/nfprov-diff.py` | Mark text added between a base and current file (`mark-added`); front end over `bin/nfprov.py` |
 | `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
-| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout) |
+| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout). The archive is gathered in four git calls for the whole `rev*` tag set (`for-each-ref` for names and dates, `grep -L` for each tag's `stuff/*.md`, `grep` for their h1s, `cat-file --batch` for the bodies), never per tag or per artifact |
 | `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
 
 ### Provenance (delano/nerd-fonts#15)
@@ -313,7 +329,17 @@ bin/zstate | jq .                       # current state
   cycle. The machine only ever bumps `attempt`; to bump `rev` (after a
   `PROMPT.md` change), check out `cycle/rev{N+1}-attempt1` yourself before
   starting the loop
-- `learnings` - orphan branch with accumulated insights
+- `learnings` - orphan branch with accumulated insights. Written by
+  `bin/save-learning` with plumbing only, never a checkout: `git show
+  learnings:LEARNINGS.md` plus the new block goes to a temp file under
+  `.zociety/`, `hash-object -w` (blob, then the raw one-entry tree with
+  `-t tree`), `commit-tree -p <tip>`, `update-ref` compare-and-swap against
+  the tip it read (no parent when the branch does not exist yet). No stdin
+  or env is needed, so it works on the host through the git shim and in the
+  container alike; no hooks run, so the branch's missing
+  `.pre-commit-config.yaml` is irrelevant. The working tree, index and
+  current branch are never touched. A non-zero exit means the insight was
+  NOT saved (it is echoed to stderr); `bin/zheap-death` warns and carries on
 
 ## Genesis Thresholds
 
@@ -398,6 +424,8 @@ Before proposing any changes, verify correctness using:
   bare origin: budget delivery, hard kill and abort, push after commit.
 - `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
   heap-death successor checkout and the zloop preflight.
+- `bin/test-zshim` to verify which git invocations `bin/shims/git` keeps on
+  the host and which it routes into the container (dry run, no container).
 - `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to
   verify the blind model record: `bin/zblind` seal/reveal, `bin/zjoin`
   naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and the
