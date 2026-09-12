@@ -445,7 +445,11 @@ if [[ "$REMAINING" -gt 0 ]]; then
 
 $DIRECTION_EVENT"
 
-  git commit --allow-empty -m "$DIRECTION_MSG" --quiet
+  if [[ -n "$ZEVENT_NO_VERIFY" ]]; then
+    git commit --allow-empty -m "$DIRECTION_MSG" --quiet --no-verify
+  else
+    git commit --allow-empty -m "$DIRECTION_MSG" --quiet
+  fi
   echo "Direction event committed for cycle $NEXT_CYCLE"
 else
   # CRITICAL: This is where the self-sustainability gap originates
