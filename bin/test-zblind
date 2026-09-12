@@ -362,7 +362,18 @@ echo "=== Case 4b: seal never feeds git notes on stdin (container git route) ===
 # failed". STDINGIT below is a stand-in for that route: it refuses the same
 # stdin-reading forms bin/zgit refuses and otherwise is the real git.
 mkdir -p "$TMP/stdingit"
-REAL_GIT=$(command -v git)
+# The real git, not bin/shims/git. With the shim first on PATH (direnv),
+# `command -v git` is the shim, and the shim outside the worktree execs the
+# first git on PATH not in its own dir -- the fake below -- so the two exec
+# each other forever. Skip every shims directory instead.
+REAL_GIT=""
+IFS=:
+for d in $PATH; do
+  case "$d" in */shims|*/shims/) continue ;; esac
+  [[ -x "$d/git" ]] && { REAL_GIT="$d/git"; break; }
+done
+unset IFS
+[[ -n "$REAL_GIT" ]] || { echo "test-zblind: no git outside a shims directory on PATH" >&2; exit 1; }
 printf '%s\n' '#!/bin/bash' \
   'prev=""' \
   'for arg in "$@"; do' \
