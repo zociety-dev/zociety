@@ -29,29 +29,86 @@ NEED_MEMBERS=3
 NEED_RULES=2
 NEED_STUFF=3
 
-# Find most recent event commit by searching for valid JSON with z:1 marker
-# Uses jq to parse regardless of pretty-print formatting
-find_last_event() {
-  local count=0
-  for HASH in $(git log --format=%H -n 1000 2>/dev/null); do
-    # Only the JSON envelope: from the first line starting with "{" to the end
-    # of that object (one line when compact, the bare "}" line when
-    # pretty-printed). Anything after it, e.g. a stray Agent: trailer, is
-    # ignored so it can never hide the event.
-    BODY=$(git log -1 --format=%b "$HASH" 2>/dev/null \
-      | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {exit}')
-    # Try to parse the envelope as JSON with z:1 schema marker
-    EVENT=$(echo "$BODY" | jq -ce 'select(.z == 1)' 2>/dev/null) && {
-      echo "$EVENT"
-      return 0
-    }
-    ((count++))
-    [[ $count -ge 1000 ]] && break
-  done
-  return 1
+# One pass over the last 1000 commits, newest first: one git process and one
+# jq, never a process per commit. (The per-commit loop this replaced cost
+# ~30s on a 1300-commit repo, and every z* command runs zstate several times
+# through bin/zlog, so a single bin/zjoin took over a minute of a 300s turn.)
+#
+# Each commit becomes a record: the hash on its first line, then the full
+# message. Only the JSON envelope counts: from the first line starting with
+# "{" to the end of that object (one line when compact, the bare "}" line when
+# pretty-printed). Anything after it, e.g. a stray Agent: trailer, is ignored
+# so it can never hide the event. Emits one compact {z:1 ...} object per event
+# commit with the commit hash added as _hash (legacy events carry no turn id,
+# so the hash stands in as one).
+scan_events() {
+  git log --format='%x1e%H%n%B' -n 1000 2>/dev/null \
+    | jq -R -s -c '
+      split("\u001e")[1:]
+      | map(
+          split("\n") as $l
+          | $l[0] as $hash
+          | $l[1:] as $msg
+          | ($msg | to_entries | map(select(.value | startswith("{"))) | first | .key) as $start
+          | select($start != null)
+          | $msg[$start:] as $rest
+          | (if ($rest[0] | test("^\\{.*\\}$")) then [$rest[0]]
+             else ($rest | to_entries | map(select(.value == "}")) | first | .key) as $end
+                  | if $end == null then [] else $rest[:$end + 1] end
+             end) as $env
+          | ($env | join("\n") | fromjson?)
+          | select(type == "object" and .z == 1)
+          | . + {_hash: $hash}
+        )
+      | .[]'
 }
 
-LAST_EVENT=$(find_last_event || true)
+# Everything derived from the scan, in one jq:
+#   last       the most recent event (the state machine's input)
+#   direction  this cycle's [direction] question, for events that do not
+#              carry one themselves
+#   credits    genesis counts, crediting one join, pass and stuff per
+#              runner-issued turn id (runtime.session; the commit hash for
+#              legacy events), so one agent invocation cannot manufacture a
+#              whole society by emitting several qualifying events
+#   votes      per rule, the latest vote of each distinct turn: {"1": {yes, no}}.
+#              bin/zpass passes a rule on this tally, never on numbers the
+#              caller supplies, so three votes cast by one invocation under
+#              three member names count once
+SCAN=$(scan_events | jq -s -c '
+  .[0] as $last
+  | if $last == null then {last: null}
+    else
+      map(select(.cycle == $last.cycle)) as $cyc
+      | {
+          last: ($last | del(._hash)),
+          direction: ($cyc | map(select(.event == "direction") | .data.question) | first),
+          credits: ($cyc
+            | map(select(.event == "join" or .event == "pass" or .event == "stuff")
+                  | {event, session: (.runtime.session // ._hash)})
+            | reduce .[] as $e
+                ({members: 0, rules: 0, stuff: 0, session_credits: {}};
+                 .session_credits[$e.session] = (.session_credits[$e.session] // {})
+                 | if .session_credits[$e.session][$e.event] then .
+                   else .session_credits[$e.session][$e.event] = true
+                     | if $e.event == "join" then .members += 1
+                       elif $e.event == "pass" then .rules += 1
+                       else .stuff += 1
+                       end
+                   end)),
+          votes: ($cyc
+            | map(select(.event == "vote" and (.data.rule | type) == "number"))
+            | reverse
+            | reduce .[] as $v ({};
+                .[($v.data.rule | tostring)][($v.runtime.session // $v._hash)] = $v.data.vote)
+            | map_values(
+                (to_entries | map(.value)) as $vs
+                | {yes: ($vs | map(select(. == 1)) | length),
+                   no: ($vs | map(select(. == -1)) | length)}))
+        }
+    end')
+
+LAST_EVENT=$(printf '%s' "$SCAN" | jq -c '.last // empty')
 
 if [[ -z "$LAST_EVENT" ]]; then
   # No events yet - initial state
@@ -76,35 +133,9 @@ if [[ -z "$LAST_EVENT" ]]; then
   exit 0
 fi
 
-# Credit only one join, pass, and stuff event of each kind per runner-issued
-# turn id. Older history predates turn ids, so each legacy commit remains a
-# distinct credit rather than rewriting its experimental record.
-cycle_credits() {
-  local cycle="$1" hash body event
-  for hash in $(git log --format=%H -n 1000 2>/dev/null); do
-    body=$(git log -1 --format=%b "$hash" 2>/dev/null \
-      | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {exit}')
-    event=$(printf '%s' "$body" | jq -ce --argjson cycle "$cycle" \
-      'select(.z == 1 and .cycle == $cycle)' 2>/dev/null) || continue
-    printf '%s\n' "$event" | jq -c --arg hash "$hash" \
-      '{event, session: (.runtime.session // $hash)}'
-  done | jq -sc '
-    reduce .[] as $e
-      ({members: 0, rules: 0, stuff: 0, session_credits: {}};
-       if ($e.event == "join" or $e.event == "pass" or $e.event == "stuff") then
-         .session_credits[$e.session] = (.session_credits[$e.session] // {})
-           | if .session_credits[$e.session][$e.event] then .
-             else .session_credits[$e.session][$e.event] = true
-               | if $e.event == "join" then .members += 1
-                 elif $e.event == "pass" then .rules += 1
-                 else .stuff += 1
-                 end
-             end
-       else .
-       end)'
-}
-
-CREDITS=$(cycle_credits "$(echo "$LAST_EVENT" | jq -r '.cycle')")
+CREDITS=$(printf '%s' "$SCAN" | jq -c '.credits')
+VOTES=$(printf '%s' "$SCAN" | jq -c '.votes // {}')
+CYCLE_DIRECTION=$(printf '%s' "$SCAN" | jq -c '.direction // null')
 
 # Log the found event
 LAST_EVENT_TYPE=$(echo "$LAST_EVENT" | jq -r '.event')
@@ -115,6 +146,8 @@ bin/zlog zstate "Found last event: $LAST_EVENT_TYPE by $LAST_EVENT_AGENT" \
 # Parse last event and compute phase and action
 OUTPUT=$(echo "$LAST_EVENT" | jq -r \
   --argjson credits "$CREDITS" \
+  --argjson votes "$VOTES" \
+  --argjson cycle_direction "$CYCLE_DIRECTION" \
   --argjson need_members "$NEED_MEMBERS" \
   --argjson need_rules "$NEED_RULES" \
   --argjson need_stuff "$NEED_STUFF" '
@@ -183,13 +216,14 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
     phase: .phase,
     genesis: .state,
     batch: (.data.batch_remaining // null),
-    direction: (.data.question // null),
+    direction: (.data.question // $cycle_direction),
     action: .action,
     needs: .needs,
     next: .next,
     last_event: .event,
     last_agent: .agent,
-    session_credits: $credits.session_credits
+    session_credits: $credits.session_credits,
+    votes: $votes
   }
 ')
 
