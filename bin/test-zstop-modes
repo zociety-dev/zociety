@@ -1348,17 +1348,42 @@ echo ""
 
 echo "=== Case 38c: one seal failure between successes does not abort (streak resets) ==="
 fresh_repo seal-streak-reset
+# The stub logs each seal's from..to and fails the second one. One [join] a
+# turn ($TMP/joining.sh, Case 35o) gives every seal a real range.
 # shellcheck disable=SC2016  # the single quotes are the point: printf emits shell
-printf '#!/bin/bash\n[[ "$1" == "seal" ]] || exit 0\nn=$(cat "%s" 2>/dev/null || echo 0)\nn=$((n + 1))\necho "$n" > "%s"\n[[ $n -eq 2 ]] && exit 1\nexit 0\n' \
-  "$TMP/sealcount" "$TMP/sealcount" > bin/zblind
+printf '#!/bin/bash\n[[ "$1" == "seal" ]] || exit 0\necho "$2 $3" >> "%s"\nn=$(wc -l < "%s" | tr -d " ")\n[[ $n -eq 2 ]] && exit 1\nexit 0\n' \
+  "$TMP/seallog" "$TMP/seallog" > bin/zblind
 chmod +x bin/zblind
-rm -f "$TMP/sealcount"
+rm -f "$TMP/seallog"
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+cp "$TMP/joining.sh" "$FAKEBIN/claude"
 run env ZLOOP_MAX_SEAL_FAILURES=2 bin/zloop --budget 30 --max 4
+cp "$TMP/claude.real" "$FAKEBIN/claude"
 assert_rc 1
 assert_err '\(1 consecutive\)$'
 assert_no_err '\(2 consecutive\)'
 assert_no_err '^=== Loop Aborted ==='
 assert_claude_runs 4
+# The failed range is not forgotten: the third seal starts where the second
+# did, so a later success covers the earlier unsealed commits; the fourth is
+# back to its own iteration's range. Nothing is left unsealed at the end.
+assert_eq "seal calls" "$(wc -l < "$TMP/seallog" | tr -d ' ')" 4
+assert_eq "third seal retries the failed range" \
+  "$(sed -n 3p "$TMP/seallog" | cut -d' ' -f1)" "$(sed -n 2p "$TMP/seallog" | cut -d' ' -f1)"
+assert_eq "fourth seal starts at the third's end" \
+  "$(sed -n 4p "$TMP/seallog" | cut -d' ' -f1)" "$(sed -n 3p "$TMP/seallog" | cut -d' ' -f2)"
+assert_no_err 'is unsealed'
+echo ""
+
+echo "=== Case 38c2: a run that ends mid-streak names the unsealed range ==="
+fresh_repo seal-left-unsealed
+printf '#!/bin/bash\n[[ "$1" == "seal" ]] || exit 0\nexit 1\n' > bin/zblind
+chmod +x bin/zblind
+cp "$TMP/joining.sh" "$FAKEBIN/claude"
+run env ZLOOP_MAX_SEAL_FAILURES=3 bin/zloop --budget 30 --max 1
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+assert_rc 1
+assert_err '^\[zloop\] WARNING: [0-9a-f]{7}\.\.HEAD is unsealed \(no provenance note\); rerun bin/zblind seal for that range$'
 echo ""
 
 # bin/zblind deliberately exits 0 with a "seal skipped" message when no key is
@@ -1403,12 +1428,13 @@ assert_claude_runs 2
 assert_absent .claude/zloop.state
 # The seal got past git notes and died at gpg: the plaintext marker is there,
 # the encrypted note is not. That is exactly the state the abort exists for.
-# (HEAD itself is the runner's [observation]; the turn's commit is the join.)
-last_turn=$(git log -1 --format=%H --grep='^\[join\]')
+# (HEAD itself is the runner's [observation]. Every attempt retries from the
+# first unsealed commit, the first join, and dies at gpg on it.)
+first_turn=$(git log --format=%H --grep='^\[join\]' | tail -n1)
 assert_eq "agent marker written before the gpg failure" \
-  "$(git notes --ref=agent show "$last_turn" 2>/dev/null | head -n1)" "kind: ai"
+  "$(git notes --ref=agent show "$first_turn" 2>/dev/null | head -n1)" "kind: ai"
 assert_eq "no blind note for that commit" \
-  "$(git notes --ref=blind show "$last_turn" 2>/dev/null | wc -l | tr -d ' ')" "0"
+  "$(git notes --ref=blind show "$first_turn" 2>/dev/null | wc -l | tr -d ' ')" "0"
 echo ""
 
 # A run that stops on a terminal [observation] (Cases 35c, 38) leaves the

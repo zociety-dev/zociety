@@ -69,7 +69,10 @@ if [[ "$CURRENT_BRANCH" =~ ^cycle/rev([0-9]+)-attempt([0-9]+)$ ]]; then
   REV="${BASH_REMATCH[1]}"
   ATTEMPT="${BASH_REMATCH[2]}"
 else
-  LAST_TAG=$(git tag --sort=-version:refname | head -1)
+  # A failed listing must not read as "no tags": that named a 65-rev repo's
+  # next cycle rev1-attempt1 when the shim-routed git lost a container race.
+  TAGS=$(git tag --sort=-version:refname) || die "git tag failed; cannot name the cycle"
+  LAST_TAG=$(printf '%s\n' "$TAGS" | head -1)
   if [[ -z "$LAST_TAG" ]]; then
     REV=1
     ATTEMPT=1

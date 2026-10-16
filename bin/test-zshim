@@ -181,6 +181,14 @@ container tag -l 'v*'
 container tag -d v1
 container tag -a v1 -m msg
 container tag -l -d v1
+# Listing options alone (bin/zcycle-id's form) are reads; with a positional
+# they may create, so the rest of the argument list still decides.
+host tag --sort=-version:refname
+host tag -l --sort=-version:refname
+host tag --sort -version:refname
+host tag --format='%(refname:short)'
+container tag --sort=-version:refname v1
+container tag --sort
 echo ""
 
 echo "=== Case 6: notes ==="

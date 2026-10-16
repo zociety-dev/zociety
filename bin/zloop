@@ -373,6 +373,7 @@ trap 'rm -f .zociety/zloop.state .claude/zloop.state "$PREV_FILE" "$METRICS_FILE
 # print_totals: "[zloop] Totals: 3 iterations · duration 12m03s · turns 51 · $3.20"
 # from the metrics file; silent when no result event was rendered.
 print_totals() {
+  [[ -z "${SEAL_FROM:-}" ]] || log "[zloop] WARNING: ${SEAL_FROM:0:7}..HEAD is unsealed (no provenance note); rerun bin/zblind seal for that range"
   [[ -s "$METRICS_FILE" ]] || return 0
   LC_NUMERIC=C awk '
     { n++; ms += $1; turns += $2; cost += $3 }
@@ -448,6 +449,7 @@ ITERATION=0
 FAILURES=0
 TIMEOUTS=0
 SEAL_FAILURES=0
+SEAL_FROM=""
 
 # stop_observed <kind> <detail> <exit>: record the terminal observation that
 # ends this run (bin/zobserve, as the runner), print the totals and exit. The
@@ -614,14 +616,22 @@ EOF
   # counts. Mirrors the hard-kill streak below: warn every time, stop once
   # MAX_SEAL_FAILURES in a row have failed, because a run that seals nothing
   # produces no provenance and "(continuing)" makes that invisible.
-  if bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "$CLIENT" local; then
+  #
+  # A failed range is not forgotten when a later seal succeeds: the range
+  # carried in SEAL_FROM starts at the first unsealed iteration, so the next
+  # attempt seals everything since (idempotent: notes are overwritten). Only
+  # a success clears it; a run that ends mid-streak says what it left unsealed.
+  seal_from="${SEAL_FROM:-$PREV_HEAD}"
+  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$MODEL" "$CLIENT" local; then
     SEAL_FAILURES=0
+    SEAL_FROM=""
   else
     SEAL_FAILURES=$((SEAL_FAILURES + 1))
-    log "[zloop] WARNING: zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7}" \
+    SEAL_FROM="$seal_from"
+    log "[zloop] WARNING: zblind seal failed for ${seal_from:0:7}..${CUR_HEAD:0:7}" \
         "($SEAL_FAILURES consecutive)"
-    log "[zloop] Those commits carry no provenance note; the cycle cannot be" \
-        "revealed at heap-death."
+    log "[zloop] Those commits carry no provenance note; the next successful seal" \
+        "retries this range, otherwise the cycle cannot be revealed at heap-death."
     if [[ $MAX_SEAL_FAILURES -gt 0 && $SEAL_FAILURES -ge $MAX_SEAL_FAILURES ]]; then
       log ""
       log "=== Loop Aborted ==="

@@ -125,6 +125,13 @@ read_tag() {
     a="$1"; shift
     case "$a" in
       -l|--list) listing=1 ;;
+      # Listing options: `git tag --sort=-version:refname` with nothing
+      # else is how bin/zcycle-id names the cycle, and routing it into the
+      # container raced the previous command's `podman run --rm` teardown
+      # ("name already in use"), leaving the tag list empty and the cycle
+      # named rev1-attempt1.
+      --sort=*|--format=*) listing=1 ;;
+      --sort|--format) [[ $# -gt 0 ]] || return 1; shift; listing=1 ;;
       *) return 1 ;;
     esac
   done

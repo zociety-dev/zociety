@@ -71,6 +71,7 @@ PREV_FILE=.zociety/zloop.prev
 ITERATION=0
 TIMEOUTS=0
 SEAL_FAILURES=0
+SEAL_FROM=""
 for v in BUDGET_SECS INTERVAL_SECS MAX_TIMEOUTS MAX_SEAL_FAILURES BUDGET_FLOOR; do
     [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "zga-loop: $v expects a non-negative integer, got '${!v}'" >&2; exit 2; }
 done
@@ -286,11 +287,16 @@ EOF
     # As in bin/zloop: a skipped seal (no ZOCIETY_BLIND_KEY) exits 0 and is not
     # a failure; MAX_SEAL_FAILURES real failures in a row stop the run, since
     # a job that seals nothing leaves the cycle with no provenance to reveal.
-    if bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "${ZOCIETY_AGENT_CLIENT:-claude}" github-actions; then
+    # A failed range is carried (SEAL_FROM) so the next successful seal covers
+    # it too; only a success clears it.
+    seal_from="${SEAL_FROM:-$PREV_HEAD}"
+    if bin/zblind seal "$seal_from" "$CUR_HEAD" "$MODEL" "${ZOCIETY_AGENT_CLIENT:-claude}" github-actions; then
         SEAL_FAILURES=0
+        SEAL_FROM=""
     else
         SEAL_FAILURES=$((SEAL_FAILURES + 1))
-        echo "WARNING: zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7} ($SEAL_FAILURES consecutive); those commits carry no provenance note"
+        SEAL_FROM="$seal_from"
+        echo "WARNING: zblind seal failed for ${seal_from:0:7}..${CUR_HEAD:0:7} ($SEAL_FAILURES consecutive); those commits carry no provenance note until a later seal succeeds"
         if [[ $MAX_SEAL_FAILURES -gt 0 && $SEAL_FAILURES -ge $MAX_SEAL_FAILURES ]]; then
             echo ""
             echo "=== Loop Aborted ==="
