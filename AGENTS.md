@@ -64,7 +64,13 @@ Zociety's own loop with dynamic completion checking:
   The guillotine defaults to twice the budget and must exceed it. A hard kill
   is reported as a WARNING, not as a normal turn, and `ZLOOP_MAX_TIMEOUTS`
   consecutive kills abort the run (exit 3) rather than let a misconfigured loop
-  burn iterations that can never finish
+  burn iterations that can never finish. The abort leaves a terminal
+  `[observation]` on the cycle branch (`bin/zobserve`), so `bin/zstate` answers
+  `action: stop` there and no run takes another turn until an operator lifts
+  it: `bin/zloop --resume "<reason>"` runs `bin/zresume`, which records the
+  decision as an `[intervention]`, then starts the run (from `main` it checks
+  out the existing cycle branch first). A plain non-zero claude exit is
+  retried with exponential backoff (`ZLOOP_BACKOFF_MAX`), not observed
 - Budget floor: a budget under `ZLOOP_BUDGET_FLOOR` (120s) prints a loud WARNING
   at start, not a refusal: heap-death and contribute turns typically need 180s+,
   so every iteration of such a run overruns. The finish line names the overrun
@@ -81,7 +87,8 @@ Zociety's own loop with dynamic completion checking:
   the same
 - A failed `bin/zblind seal` after an iteration is a WARNING carrying the running
   failure count, and `ZLOOP_MAX_SEAL_FAILURES` consecutive failures abort the run
-  (exit 4) rather than let a whole run accumulate commits with no provenance
+  (exit 4, with the same terminal `[observation]` as a hard-kill abort) rather
+  than let a whole run accumulate commits with no provenance
   notes. A seal *skipped* because `ZOCIETY_BLIND_KEY` is unset exits 0 and never
   counts toward the streak; the streak resets on the next successful seal
 - Consecutive non-zero claude exits back off exponentially (2s, 4s, 8s... capped by `ZLOOP_BACKOFF_MAX`)
@@ -180,7 +187,7 @@ All state is derived from git history. No mutable state files.
 
 | Script | Purpose |
 |--------|---------|
-| `bin/zstate` | Get current state and next action (JSON output) |
+| `bin/zstate` | Get current state and next action (JSON output). One `git log` pass and one `jq` over the last 1000 commits (about 1s; never a process per commit, which cost 30s and, through `bin/zlog`, a minute per z* command). Also `direction` (this cycle's question), `session_credits` (one join/pass/stuff credited per turn id) and `votes` (per rule, one vote per turn) |
 | `bin/zjoin` | Join as a member (name assigned: `member-{N}`; no model in the event) |
 | `bin/zblind` | Seal each loop turn's model under `refs/notes/blind` (`seal`), mark it `kind: ai` under `refs/notes/agent`, and decrypt a cycle's models at heap-death (`reveal`) |
 | `bin/zstuff` | Record stuff creation |
@@ -195,6 +202,8 @@ All state is derived from git history. No mutable state files.
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
 | `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host. Read-only verbs (`log`, `diff`, `status`, `show`, `rev-parse`, ...) always stay; mixed verbs stay only in their read forms: `branch` listing (`--show-current`, `-a`/`-r`/`-v`, `--contains`, `--merged`, ... with no positional), `tag -l`, `notes list`/`show`, `remote [-v]`/`show`/`get-url`, `config --get`/`--get-all`/`--list`, `worktree list`, `stash list`/`show`. Anything else, including unrecognised options, goes to the container |
 | `bin/zpromise` | Output completion promise |
+| `bin/zobserve` | Record a terminal `[observation]` (the runner does this when it stops on a hard-kill or seal-failure streak); the branch then answers `action: stop` |
+| `bin/zresume` | Lift a terminal observation with an `[intervention]` event naming it and the reason; run by `bin/zloop --resume "<reason>"`. `bin/zcycle-measure` scores it against constraint adherence |
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
 | `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
@@ -308,6 +317,8 @@ All commits use prefixes for queryable history:
 - `[workflow]` - workflow proposed
 - `[workflow-vote]` - vote on workflow
 - `[workflow-pass]` - workflow activated
+- `[observation]` - terminal: a runner could not continue (`bin/zobserve`); `action` is `stop` until lifted
+- `[intervention]` - an operator lifted an observation (`bin/zresume`), reason recorded
 
 Query examples:
 ```bash
@@ -354,7 +365,15 @@ Check with: `bin/zstate | jq .genesis`
 bin/zstate → action field tells you what to do:
 
   "contribute" → Join, make stuff, vote on rules (see next/needs below). Each
-                  credited action must be in a distinct runner turn.
+                  credited action must be in a distinct runner turn: one join,
+                  one pass and one stuff per turn id, and one vote per turn
+                  per rule (`bin/zpass` tallies distinct turns from the
+                  [vote] events and needs 2 yes, more yes than no; the
+                  for/against arguments are not trusted). A rule therefore
+                  takes two turns: propose (vote yes), then another turn
+                  seconds and passes. A cycle is about 12 turns (3 joins,
+                  2x2 rule turns, 3 stuff, complete, heap-death), so
+                  `--max 5` cannot finish one.
   "complete"   → Run bin/zcomplete
   "heap-death" → Run bin/zheap-death --cite <stuff-file> (or --challenge
                   <stuff-file>) to explicitly inherit or dispute an artifact

@@ -1,18 +1,41 @@
 #!/bin/bash
 # zpass: Record a rule passing
-# Usage: bin/zpass <agent> <rule_number> <description> <for_votes> <against_votes>
+# Usage: bin/zpass <agent> <rule_number> <description> [for_votes] [against_votes]
+#
+# A rule passes on the tally bin/zstate derives from this cycle's [vote]
+# events, one vote per runner turn (the latest vote a turn cast on the rule):
+# at least 2 yes, and more yes than no. The for/against arguments are
+# accepted for old callers but never trusted; the recorded tally is the
+# derived one, and a mismatch is noted on stderr. One invocation voting under
+# three member names counts once, so a rule proposed this turn passes in a
+# later turn, after another turn has voted on it.
 
 set -e
 
 AGENT="$1"
 RULE="$2"
 DESC="$3"
-FOR="${4:-2}"
-AGAINST="${5:-0}"
+FOR_ARG="${4:-}"
+AGAINST_ARG="${5:-}"
 
 if [[ -z "$AGENT" || -z "$RULE" || -z "$DESC" ]]; then
-  echo "Usage: bin/zpass <agent> <rule_number> <description> <for_votes> <against_votes>" >&2
+  echo "Usage: bin/zpass <agent> <rule_number> <description> [for_votes] [against_votes]" >&2
   exit 1
+fi
+[[ "$RULE" =~ ^[0-9]+$ ]] || { echo "zpass: rule number must be an integer, got '$RULE'" >&2; exit 1; }
+
+TALLY=$(bin/zstate | jq -c --arg r "$RULE" '.votes[$r] // {yes: 0, no: 0}')
+FOR=$(printf '%s' "$TALLY" | jq -r '.yes')
+AGAINST=$(printf '%s' "$TALLY" | jq -r '.no')
+
+if [[ "$FOR" -lt 2 || "$FOR" -le "$AGAINST" ]]; then
+  echo "zpass: rule $RULE has $FOR yes / $AGAINST no from distinct runner turns; passing needs at least 2 yes and more yes than no." >&2
+  echo "zpass: a turn's votes count once however many names they are cast under. If you voted this turn, that vote is recorded: end the turn and let another vote on it." >&2
+  exit 1
+fi
+
+if [[ -n "$FOR_ARG" && ( "$FOR_ARG" != "$FOR" || "${AGAINST_ARG:-0}" != "$AGAINST" ) ]]; then
+  echo "zpass: note: recording the derived tally $FOR for / $AGAINST against, not the $FOR_ARG / ${AGAINST_ARG:-0} given" >&2
 fi
 
 DATA=$(jq -nc \

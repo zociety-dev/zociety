@@ -188,13 +188,16 @@ assert_claude_runs() {
   fi
 }
 
-# assert_origin_has <ere>: origin/main's log has a subject matching
+# assert_origin_has <ere>: a subject matching reached origin on any branch.
+# bin/zga-loop never commits to main: started there it checks out
+# cycle/rev{N}-attempt{M} first (the no-direct-main-commits invariant), so
+# the pushed events land on that branch.
 assert_origin_has() {
-  if git --git-dir="$ORIGIN" log --format=%s main | grep -E -q -- "$1"; then
+  if git --git-dir="$ORIGIN" log --format=%s --all | grep -E -q -- "$1"; then
     pass "origin has /$1/"
   else
     fail "origin lacks /$1/"
-    git --git-dir="$ORIGIN" log --format='    origin: %s' main
+    git --git-dir="$ORIGIN" log --format='    origin: %s' --all
   fi
 }
 
@@ -338,8 +341,8 @@ printf '#!/bin/bash\necho "zblind: synthetic seal failure" >&2\nexit 1\n' > bin/
 chmod +x bin/zblind
 run env ZLOOP_INTERVAL=0 ZLOOP_MAX_SEAL_FAILURES=2 bin/zga-loop 5 fake-model
 assert_rc 4
-assert_out '^WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(1 consecutive\); those commits carry no provenance note$'
-assert_out '^WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(2 consecutive\); those commits carry no provenance note$'
+assert_out '^WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(1 consecutive\); those commits carry no provenance note until a later seal succeeds$'
+assert_out '^WARNING: zblind seal failed for [0-9a-f]{7}\.\.[0-9a-f]{7} \(2 consecutive\); those commits carry no provenance note until a later seal succeeds$'
 assert_out '^=== Loop Aborted ===$'
 assert_out '^2 consecutive zblind seal failures; the run has no provenance record at all'
 assert_claude_runs 2
@@ -351,7 +354,7 @@ printf '#!/bin/bash\nexit 1\n' > bin/zblind
 chmod +x bin/zblind
 run env ZLOOP_INTERVAL=0 ZLOOP_MAX_SEAL_FAILURES=0 bin/zga-loop 2 fake-model
 assert_rc 0
-assert_out '\(2 consecutive\); those commits carry no provenance note$'
+assert_out '\(2 consecutive\); those commits carry no provenance note until a later seal succeeds$'
 assert_no_out '^=== Loop Aborted ===$'
 assert_claude_runs 2
 echo ""

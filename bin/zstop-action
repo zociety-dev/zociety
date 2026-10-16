@@ -25,9 +25,17 @@ fi
 
 STATE=$(bin/zstate)
 ACTION=$(echo "$STATE" | jq -r '.action')
+LAST=$(echo "$STATE" | jq -r '.last_event // ""')
 
 case "$ACTION" in
   stop|promise)
+    if [[ "$LAST" == "observation" ]]; then
+      # Not a finished cycle: a runner stopped on this branch and recorded
+      # why. Say so, and how an operator lifts it (bin/zresume).
+      detail=$(git log -1 --format=%s --grep='^\[observation\]' 2>/dev/null || true)
+      echo "STOP: action action=$ACTION (terminal observation: ${detail:-see git log}; lift it with bin/zloop --resume \"<reason>\")"
+      exit 0
+    fi
     # Cycle is complete, loop should stop
     echo "STOP: action action=$ACTION"
     exit 0

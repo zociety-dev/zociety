@@ -81,8 +81,25 @@ if [[ -f /run/.containerenv || -f /.dockerenv || -n "${container:-}" ]]; then
   exec git --no-pager "$@"
 fi
 
+# Consecutive routed commands race the previous one's `podman run --rm`
+# teardown: the name still exists when this one looks, so it chooses exec,
+# and the container is gone by the time exec attaches ("no container with
+# name"); or the name is already free of its process but not of its storage,
+# and run fails with "name already in use". Both are podman failures (exit
+# 125) before git ran at all, so they are safe to retry: fall through from a
+# vanished exec to a fresh run, and give run a few short waits.
 if podman container exists "$CONTAINER_NAME" 2>/dev/null; then
-  exec "$SCRIPT_DIR/zociety" exec git --no-pager "$@"
+  rc=0
+  "$SCRIPT_DIR/zociety" exec git --no-pager "$@" || rc=$?
+  [[ $rc -eq 125 ]] && ! podman container exists "$CONTAINER_NAME" 2>/dev/null || exit $rc
 fi
 
-exec "$SCRIPT_DIR/zociety" git --no-pager "$@"
+rc=0
+for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+  rc=0
+  "$SCRIPT_DIR/zociety" git --no-pager "$@" || rc=$?
+  [[ $rc -eq 125 ]] || exit $rc
+  sleep 0.5
+done
+echo "zgit: container '$CONTAINER_NAME' still unavailable after 10 attempts" >&2
+exit $rc

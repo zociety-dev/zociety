@@ -1,0 +1,55 @@
+#!/bin/bash
+# zresume: Lift a terminal observation so the cycle can continue
+#
+# Usage:
+#   bin/zresume <agent> <reason>
+#   bin/zresume -h | --help
+#
+# A runner that cannot continue (a hard-kill streak, a provenance seal that
+# keeps failing, or bin/zobserve run by hand) leaves a terminal [observation]
+# on the cycle branch: bin/zstate then answers action=stop and bin/zloop takes
+# no further turn there. Continuing anyway is an operator decision, and the
+# experiment records it as one. This writes an [intervention] event naming
+# the observation it lifts and the reason given; bin/zstate then derives the
+# action from the genesis counts again. bin/zcycle-measure scores an
+# intervention against the cycle's constraint adherence, so a resume is never
+# free and never silent.
+#
+# Refuses when the last event is not a terminal observation: there is nothing
+# to lift, and the branch does not need it.
+#
+# Usually run by `bin/zloop --resume "<reason>"`, not by hand.
+
+set -e
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
+AGENT="${1:-}"
+REASON="${2:-}"
+if [[ -z "$AGENT" || -z "$REASON" ]]; then
+  echo "Usage: bin/zresume <agent> <reason>" >&2
+  exit 1
+fi
+
+STATE=$(bin/zstate)
+LAST=$(printf '%s' "$STATE" | jq -r '.last_event // ""')
+ACTION=$(printf '%s' "$STATE" | jq -r '.action')
+if [[ "$LAST" != "observation" || "$ACTION" != "stop" ]]; then
+  echo "zresume: nothing to lift; the last event is '${LAST:-none}' and the action is '$ACTION', not a terminal observation" >&2
+  exit 1
+fi
+
+# The observation being lifted: the newest [observation] commit.
+OBS_SHA=$(git log -1 --format=%H --grep='^\[observation\]' 2>/dev/null || true)
+OBS=$(git log -1 --format=%b "$OBS_SHA" 2>/dev/null \
+  | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {exit}' \
+  | jq -c '{kind: .data.kind, detail: .data.detail, exit_code: .data.exit_code}' 2>/dev/null) || OBS='{}'
+
+DATA=$(jq -nc --arg reason "$REASON" --arg sha "$OBS_SHA" --argjson obs "$OBS" \
+  '{kind: "resume", reason: $reason, observation: $sha, lifted: $obs}')
+
+bin/zevent intervention "$AGENT" "resume: $REASON" "$DATA" >/dev/null
+echo "zresume: lifted the terminal observation ${OBS_SHA:0:7}; next action: $(bin/zstate | jq -r '.next')"
