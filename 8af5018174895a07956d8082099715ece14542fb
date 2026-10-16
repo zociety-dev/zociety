@@ -1,0 +1,4 @@
+cycle: rev65 attempt5
+genesis_complete: true
+question: How can bin/zstate verify each event commit's signature against an allowed_signers set derived only from [key], [key-rotate] and [key-revoke] events, and reject an event signed by a key after its rotate or revoke event?
+batch_remaining: 2
