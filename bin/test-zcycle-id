@@ -462,7 +462,7 @@ fresh_repo loop-exists
 git branch cycle/rev1-attempt1
 run bin/zloop --quiet --max 1
 assert_rc 2
-assert_err '^zloop: cycle/rev1-attempt1 already exists; check it out to resume it$'
+assert_err '^zloop: cycle/rev1-attempt1 already exists; check it out to resume it \(or bin/zloop --resume "<reason>" if a run stopped on it\)$'
 assert_eq "current branch" "$(git branch --show-current)" main
 echo ""
 

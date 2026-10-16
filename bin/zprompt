@@ -279,9 +279,11 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       run='bin/zjoin "" <role> "<greeting>"  (the harness assigns your member name)'
       ;;
     contribute:rule)
-      run='bin/zvote <agent> <rule_number> yes|no "<reason>" per vote (a yes on an unused number proposes that rule; put its text in the reason), then bin/zpass <agent> <rule_number> "<description>" <for> <against> once it has the votes'
+      run='bin/zvote <agent> <rule_number> yes|no "<reason>" ONCE: a yes on an unused number proposes that rule (its text goes in the reason); a rule passes on yes votes from 2 distinct turns, and all votes one turn casts count as one, so second an open proposal below rather than opening another. Then bin/zpass <agent> <rule_number> "<description>" only when the tally below already shows 1 yes before yours (zpass refuses otherwise; your vote is still recorded, end the turn)'
       read_first="nothing; rule activity so far is listed below"
       listing=$(git --no-pager log --format='  %s' --grep='^\[vote\]' --grep='^\[pass\]' -10 2>/dev/null) || listing=""
+      tally=$(printf '%s' "$state" | jq -r '.votes // {} | to_entries[] | "  rule \(.key): \(.value.yes) yes / \(.value.no) no (distinct turns)"' 2>/dev/null) || tally=""
+      [[ -n "$tally" ]] && listing="$listing"$'\n'"Tally:"$'\n'"$tally"
       [[ -n "$listing" ]] && listing="Rule activity so far:"$'\n'"$listing"
       ;;
     contribute:stuff)

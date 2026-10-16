@@ -15,6 +15,10 @@
 #   -s, --stop LIST    Stop modes, comma-separated (default: action)
 #                      Modes: action, budget, converge, feedback, file
 #                      e.g. --stop action,file  or  --stop budget,converge,file
+#   -R, --resume WHY   Lift the terminal [observation] a previous run left on
+#                      the cycle branch (bin/zresume records WHY as an
+#                      [intervention]) and continue the cycle. From main, also
+#                      checks out the existing cycle branch first
 #   -q, --quiet        Buffered output: nothing until claude's result arrives
 #   -v, --verbose      Raw stream-json events, partial messages included
 #   -d, --debug        Enable debug output
@@ -26,10 +30,15 @@
 #                           Budget floor below); never a refusal
 #   ZLOOP_INTERVAL=1        Seconds to wait between iterations
 #   ZLOOP_TIMEOUT=          Hard kill in seconds (default: 2x the budget)
+#   ZLOOP_MAX_TIMEOUTS=3    Consecutive hard kills that stop the run (0 = never)
+#   ZLOOP_MAX_SEAL_FAILURES=3  Consecutive bin/zblind seal failures that stop
+#                           the run (exit 4; 0 = never). A seal skipped for a
+#                           missing ZOCIETY_BLIND_KEY exits 0 and never counts
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_QUIET=1           Same as --quiet
 #   ZLOOP_VERBOSE=1         Same as --verbose
+#   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
 #   ZLOOP_KILL_GRACE=10     Seconds to wait for the agent to exit on Ctrl-C
 #                           before it is killed outright
 #   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
@@ -48,9 +57,24 @@
 #               2x the budget so it only fires on a genuinely stuck process.
 #               Set it equal to the budget and every iteration dies mid-work.
 #
-# A hard kill or failed provenance seal is recorded as a terminal observation.
-# The runner does not retry a non-continuation or turn it into artificial
-# continuity. A seal skipped because ZOCIETY_BLIND_KEY is unset exits 0.
+# Failure to continue. A claude exit that is neither 0 nor 124 (rate limit,
+# transient API error) is retried with exponential backoff (2s, 4s, 8s ...
+# capped by ZLOOP_BACKOFF_MAX); --max bounds it. A hard kill (124) is reported
+# as a warning, not as a normal turn, and ZLOOP_MAX_TIMEOUTS consecutive kills
+# stop the run (exit 3): a loop whose iterations are all being guillotined is
+# misconfigured, not working. The same shape guards the provenance seal: a
+# run that fails to seal every iteration produces no provenance at all, so
+# ZLOOP_MAX_SEAL_FAILURES consecutive failures stop the run (exit 4). A seal
+# skipped because ZOCIETY_BLIND_KEY is unset exits 0 and is not a failure.
+#
+# Either stop is recorded on the cycle branch as a terminal [observation]
+# (bin/zobserve): bin/zstate then answers action=stop and no run will take
+# another turn on that branch until an operator lifts it. That is deliberate.
+# The runner never retries its way past a non-continuation; a human decides,
+# and the decision is itself an event: `bin/zloop --resume "<reason>"` runs
+# bin/zresume, which writes an [intervention] naming the observation and the
+# reason, then starts the run. bin/zcycle-measure scores the intervention
+# against the cycle's constraint adherence, so it is never free.
 #
 # Budget floor: a budget under ZLOOP_BUDGET_FLOOR (120s) gets a loud WARNING
 # at start, not a refusal. heap-death and contribute turns typically need
@@ -113,7 +137,9 @@
 # result of the final permitted iteration before --max ends the run.
 #
 # Exit codes: 0 complete, 1 max iterations reached, 2 usage error or an
-# aborting stop predicate, 124 timeout observation, 128+N a signal.
+# aborting stop predicate, 3 too many consecutive hard kills, 4 too many
+# consecutive bin/zblind seal failures (3 and 4 leave a terminal
+# [observation]; see --resume), 128+N a signal.
 # Each iteration reads PROMPT.md and follows instructions.
 # State persists in git between iterations; .claude/zloop.state carries
 # iteration/max/start/mode for zheap-death and the predicates.
@@ -131,6 +157,8 @@ TIMEOUT_SECS="${ZLOOP_TIMEOUT:-}"
 # var from before the budget/timeout split is worth a warning (see below).
 TIMEOUT_SOURCE=""
 [[ -n "$TIMEOUT_SECS" ]] && TIMEOUT_SOURCE="env"
+MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
+MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 # Render level handed to bin/zagent --render: compact (default), text
@@ -138,7 +166,15 @@ DEBUG="${ZLOOP_DEBUG:-0}"
 RENDER="compact"
 [[ "${ZLOOP_VERBOSE:-0}" == "1" ]] && RENDER="raw"
 [[ "${ZLOOP_QUIET:-0}" == "1" ]] && RENDER="text"
+BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
 KILL_GRACE="${ZLOOP_KILL_GRACE:-10}"
+# Seed for the failure backoff only (2s, 4s, 8s ...). Deliberately not
+# --interval: an interval of 0 is a legitimate cadence but would flatten the
+# backoff to zero and hammer a failing API.
+BACKOFF_BASE=1
+# --resume "<reason>": lift a terminal [observation] on the cycle branch
+# (bin/zresume) before the first iteration. Empty = not asked.
+RESUME_REASON=""
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -208,6 +244,11 @@ while [[ $# -gt 0 ]]; do
       STOP_MODES="$2"
       shift
       ;;
+    -R|--resume)
+      [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a reason (recorded in the [intervention] event)"
+      RESUME_REASON="$2"
+      shift
+      ;;
     --)
       shift
       break
@@ -228,6 +269,9 @@ done
 
 require_int "ZLOOP_BUDGET" "$BUDGET_SECS"
 require_int "ZLOOP_INTERVAL" "$INTERVAL_SECS"
+require_int "ZLOOP_MAX_TIMEOUTS" "$MAX_TIMEOUTS"
+require_int "ZLOOP_MAX_SEAL_FAILURES" "$MAX_SEAL_FAILURES"
+require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 [[ "$BUDGET_SECS" -gt 0 ]] || die "--budget/ZLOOP_BUDGET must be greater than 0"
 BUDGET_FLOOR="${ZLOOP_BUDGET_FLOOR:-120}"
@@ -271,10 +315,25 @@ current_branch=$(git branch --show-current)
 if [[ ! "$current_branch" =~ ^cycle/ ]]; then
   cycle_branch=$(bin/zcycle-id --branch current) || die "bin/zcycle-id failed"
   if git show-ref --verify --quiet "refs/heads/$cycle_branch"; then
-    die "$cycle_branch already exists; check it out to resume it"
+    if [[ -n "$RESUME_REASON" ]]; then
+      git checkout "$cycle_branch" --quiet
+      log "[zloop] Branch: $cycle_branch (resumed from ${current_branch:-detached HEAD})"
+    else
+      die "$cycle_branch already exists; check it out to resume it (or bin/zloop --resume \"<reason>\" if a run stopped on it)"
+    fi
+  else
+    [[ -z "$RESUME_REASON" ]] || die "--resume: nothing to resume; $cycle_branch does not exist yet"
+    git checkout -b "$cycle_branch" --quiet
+    log "[zloop] Branch: $cycle_branch (from ${current_branch:-detached HEAD})"
   fi
-  git checkout -b "$cycle_branch" --quiet
-  log "[zloop] Branch: $cycle_branch (from ${current_branch:-detached HEAD})"
+fi
+
+# A terminal [observation] left by an earlier run (see Failure to continue in
+# the header) stops the branch until an operator lifts it. With --resume the
+# lift is recorded now, before the first predicate check sees action=stop;
+# without it the run stops at once and bin/zstop-action names the observation.
+if [[ -n "$RESUME_REASON" ]]; then
+  bin/zresume operator "$RESUME_REASON" >&2 || die "bin/zresume failed; see above"
 fi
 
 # Captured once so predicates can scope their queries to this run
@@ -386,6 +445,26 @@ interruptible_sleep() {
 }
 
 ITERATION=0
+FAILURES=0
+TIMEOUTS=0
+SEAL_FAILURES=0
+
+# stop_observed <kind> <detail> <exit>: record the terminal observation that
+# ends this run (bin/zobserve, as the runner), print the totals and exit. The
+# observation is an event commit; if even that fails the stop still happens,
+# just without its record, and the log says so.
+stop_observed() {
+  local kind="$1" detail="$2" code="$3"
+  if bin/zobserve runner "$kind" "$detail" "$code" >/dev/null; then
+    log "[zloop] Recorded a terminal [observation]; this branch answers action=stop until" \
+        "bin/zloop --resume \"<reason>\" lifts it."
+  else
+    log "[zloop] WARNING: bin/zobserve could not record the observation (see above)"
+  fi
+  print_totals
+  bin/zstate | jq '{action, phase, genesis}' >&2 || true
+  exit "$code"
+}
 
 log "=== Zociety Loop ($(date '+%H:%M:%S')) ==="
 log "Max iterations: $MAX_ITERATIONS"
@@ -531,38 +610,81 @@ EOF
     --exit "$exit_code" --elapsed "$iter_secs" --budget "$BUDGET_SECS" \
     --commits "$iter_commits" --result "$RESULT_FILE" --render "$RENDER" \
     || log "[zloop] WARNING: bin/zprompt --record failed; the next turn gets no memory of this one"
-  # A seal skipped for a missing key exits 0. A real failure is a terminal
-  # observation: continuing would create an untraceable experiment.
+  # A seal that is skipped for a missing key exits 0; only a real failure
+  # counts. Mirrors the hard-kill streak below: warn every time, stop once
+  # MAX_SEAL_FAILURES in a row have failed, because a run that seals nothing
+  # produces no provenance and "(continuing)" makes that invisible.
   if bin/zblind seal "$PREV_HEAD" "$CUR_HEAD" "$MODEL" "$CLIENT" local; then
-    :
+    SEAL_FAILURES=0
   else
-    bin/zobserve runner failure-to-continue \
-      "zblind could not seal iteration $ITERATION provenance" 1
-    log "=== Loop Stopped: provenance failure observed ==="
-    exit 1
+    SEAL_FAILURES=$((SEAL_FAILURES + 1))
+    log "[zloop] WARNING: zblind seal failed for ${PREV_HEAD:0:7}..${CUR_HEAD:0:7}" \
+        "($SEAL_FAILURES consecutive)"
+    log "[zloop] Those commits carry no provenance note; the cycle cannot be" \
+        "revealed at heap-death."
+    if [[ $MAX_SEAL_FAILURES -gt 0 && $SEAL_FAILURES -ge $MAX_SEAL_FAILURES ]]; then
+      log ""
+      log "=== Loop Aborted ==="
+      log "$SEAL_FAILURES consecutive zblind seal failures."
+      log "Every iteration of this run is unsealed, so the run has no" \
+          "provenance record at all."
+      log "Fix bin/zblind (see its output above) or set" \
+          "ZLOOP_MAX_SEAL_FAILURES=0 to accept an unsealed run."
+      stop_observed failure-to-continue \
+        "zblind could not seal provenance $SEAL_FAILURES iterations in a row (last: iteration $ITERATION)" 4
+    fi
   fi
   for death_sha in $(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}"); do
     bin/zblind reveal "$death_sha" \
       || log "[zloop] zblind reveal failed for ${death_sha:0:7} (continuing)"
   done
 
-  # A failure to continue is an observation, not a condition the runner may
-  # override with retries. Record it when ordinary branch constraints allow,
-  # then stop and preserve the partial experiment for later inspection.
+  # The configured interval on success. On consecutive non-zero exits (rate
+  # limits, transient API errors) back off exponentially instead of hammering
+  # every second: 2s, 4s, 8s ... capped at BACKOFF_MAX.
   #
-  # A hard kill (124) is not a normal turn. It is recorded as a terminal
-  # observation rather than retried by runner policy.
+  # A hard kill (124) does not count toward that backoff -- the agent was
+  # working, not refused -- but it is not a normal turn either. It is reported
+  # as a warning and counted: a run whose iterations are all being guillotined
+  # is misconfigured, and saying "CONTINUE" after each one hides exactly the
+  # failure that matters. MAX_TIMEOUTS consecutive kills stop the run, and
+  # the stop is recorded (see Failure to continue in the header).
   if [[ $exit_code -eq 0 ]]; then
+    FAILURES=0
+    TIMEOUTS=0
     delay=$INTERVAL_SECS
   elif [[ $exit_code -eq 124 ]]; then
-    bin/zobserve runner failure-to-continue \
-      "zagent exceeded the ${TIMEOUT_SECS}s hard limit on iteration $ITERATION" 124
-    log "=== Loop Stopped: timeout observed ==="
-    exit 124
+    TIMEOUTS=$((TIMEOUTS + 1))
+    log "[zloop] WARNING: iteration $ITERATION hard-killed at ${TIMEOUT_SECS}s" \
+        "($TIMEOUTS consecutive)"
+    log "[zloop] The agent was SIGTERMed mid-work; anything it had not" \
+        "committed is lost."
+    if [[ $MAX_TIMEOUTS -gt 0 && $TIMEOUTS -ge $MAX_TIMEOUTS ]]; then
+      log ""
+      log "=== Loop Aborted ==="
+      log "$TIMEOUTS consecutive hard kills at ${TIMEOUT_SECS}s with a" \
+          "${BUDGET_SECS}s budget."
+      log "No iteration is finishing, so none of them can contribute. Raise" \
+          "--budget (and"
+      log "with it the hard kill), or lower the work each turn attempts. See" \
+          "'bin/zloop --help' (Time)."
+      stop_observed failure-to-continue \
+        "zagent exceeded the ${TIMEOUT_SECS}s hard limit $TIMEOUTS iterations in a row (last: iteration $ITERATION)" 3
+    fi
+    delay=$INTERVAL_SECS
   else
-    bin/zobserve runner failure-to-continue "zagent exited $exit_code on iteration $ITERATION" "$exit_code"
-    log "=== Loop Stopped: failure observed ==="
-    exit "$exit_code"
+    FAILURES=$((FAILURES + 1))
+    # TIMEOUTS is deliberately NOT reset here. A run alternating 124, 1, 124,
+    # 1 is entirely broken, and resetting on the unrelated failure would let it
+    # loop forever without ever reaching the stop. Only a clean iteration --
+    # proof that the budget is workable -- clears the count.
+    if [[ $FAILURES -lt 20 ]]; then
+      delay=$((BACKOFF_BASE << FAILURES))
+    else
+      delay=$BACKOFF_MAX
+    fi
+    [[ $delay -gt $BACKOFF_MAX ]] && delay=$BACKOFF_MAX
+    log "[zloop] zagent exited $exit_code ($FAILURES consecutive); backing off ${delay}s"
   fi
 
   debug "Iteration $ITERATION complete, sleeping ${delay}s..."

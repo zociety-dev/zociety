@@ -883,6 +883,13 @@ assert_err '^=== Loop Aborted ===$'
 assert_err '^2 consecutive hard kills at 2s with a 1s budget\.$'
 # Aborted on the second kill: the third iteration never started.
 assert_claude_runs 2
+# The stop is on the record: a terminal [observation] by the runner, after
+# which the branch answers action=stop until an operator lifts it (Case 39).
+assert_err '^\[zloop\] Recorded a terminal \[observation\]; this branch answers action=stop until'
+assert_eq "observation recorded" "$(git log -1 --format=%s)" \
+  "[observation] runner: zagent exceeded the 2s hard limit 2 iterations in a row (last: iteration 2)"
+assert_eq "observation exit code" "$(git log -1 --format=%b | jq -r '.data.exit_code')" 3
+assert_eq "branch stopped" "$(bin/zstate | jq -r .action)" stop
 echo ""
 
 echo "=== Case 35d: ZLOOP_MAX_TIMEOUTS=0 never aborts on hard kills ==="
@@ -1058,7 +1065,7 @@ assert_eq "prompt heads the command block" "$(printf '%s\n' "$prompt" | grep -c 
 assert_eq "prompt gives zjoin's usage and purpose" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zjoin \[name\] \[role\] \[greeting\] - Join the zociety$')" 1
 assert_eq "prompt gives zstuff's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zstuff <agent> <file> \[traversal\] - Record stuff creation$')" 1
 assert_eq "prompt gives zvote's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zvote <agent> <rule_number> <yes|no> \[reason\] - Vote on a rule$')" 1
-assert_eq "prompt gives zheap-death's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death \[--done\] <agent> <question> \[batch_size\] - ')" 1
+assert_eq "prompt gives zheap-death's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death \[--done\] \[--cite FILE | --challenge FILE\]\.\.\. <agent> <question> \[batch_size\] - ')" 1
 # zcomplete/zpromise have no Usage: line in their headers; the name alone is
 # the usage, and the block must still list them rather than drop them.
 assert_eq "prompt lists the argument-free commands" "$(printf '%s\n' "$prompt" | grep -c -e '^  bin/zcomplete - ' -e '^  bin/zpromise - ')" 2
@@ -1239,7 +1246,9 @@ fresh_repo zstate-needs
 
 # zev <type>: record a genesis event via bin/zevent, quietly
 zev() {
-  bin/zevent "$1" tester "fixture $1" '{}' >/dev/null 2>&1
+  # Each fixture event is its own runner turn: genesis credits one join, pass
+  # and stuff per turn id, so a shared id would collapse these to one each.
+  ZOCIETY_TURN_ID="fixture-$1-$RANDOM-$RANDOM" bin/zevent "$1" tester "fixture $1" '{}' >/dev/null 2>&1
 }
 
 # No events at all: the initial state carries the full requirement.
@@ -1321,6 +1330,9 @@ assert_err '^2 consecutive zblind seal failures\.$'
 assert_err 'ZLOOP_MAX_SEAL_FAILURES=0 to accept an unsealed run'
 assert_claude_runs 2
 assert_absent .claude/zloop.state
+assert_eq "observation recorded" "$(git log -1 --format=%s)" \
+  "[observation] runner: zblind could not seal provenance 2 iterations in a row (last: iteration 2)"
+assert_eq "branch stopped" "$(bin/zstate | jq -r .action)" stop
 echo ""
 
 echo "=== Case 38b: ZLOOP_MAX_SEAL_FAILURES=0 warns forever and never aborts ==="
@@ -1391,10 +1403,105 @@ assert_claude_runs 2
 assert_absent .claude/zloop.state
 # The seal got past git notes and died at gpg: the plaintext marker is there,
 # the encrypted note is not. That is exactly the state the abort exists for.
+# (HEAD itself is the runner's [observation]; the turn's commit is the join.)
+last_turn=$(git log -1 --format=%H --grep='^\[join\]')
 assert_eq "agent marker written before the gpg failure" \
-  "$(git notes --ref=agent show HEAD 2>/dev/null | head -n1)" "kind: ai"
+  "$(git notes --ref=agent show "$last_turn" 2>/dev/null | head -n1)" "kind: ai"
 assert_eq "no blind note for that commit" \
-  "$(git notes --ref=blind show HEAD 2>/dev/null | wc -l | tr -d ' ')" "0"
+  "$(git notes --ref=blind show "$last_turn" 2>/dev/null | wc -l | tr -d ' ')" "0"
+echo ""
+
+# A run that stops on a terminal [observation] (Cases 35c, 38) leaves the
+# branch answering action=stop. Nothing silently continues it: the next run
+# stops at once and names the observation; `--resume "<reason>"` lifts it
+# through bin/zresume, which records the decision as an [intervention].
+echo "=== Case 39: a terminal observation stops the branch; --resume lifts it on the record ==="
+fresh_repo observed-stop
+# This case switches branches: keep the fixture's untracked bin/ out of the
+# event commits (bin/zevent stages with `git add -A`), or checking out main
+# would delete it.
+printf 'bin/\n' >> .gitignore
+git add .gitignore
+git commit -q -m "fixture: ignore bin/"
+git checkout -q -b cycle/rev1-attempt1
+bin/zobserve runner failure-to-continue "fixture: three hard kills" 3 >/dev/null 2>&1
+assert_eq "stopped action" "$(bin/zstate | jq -r .action)" stop
+assert_eq "stopped phase" "$(bin/zstate | jq -r .phase)" stopped
+run bin/zloop --max 3
+assert_rc 0
+assert_err '^STOP: action action=stop \(terminal observation: \[observation\] runner: fixture: three hard kills; lift it with bin/zloop --resume "<reason>"\)$'
+assert_claude_runs 0
+# --resume needs a reason: it is the text of the [intervention].
+run bin/zloop --resume "" --max 1
+assert_rc 2
+assert_err 'requires a reason'
+assert_claude_runs 0
+run bin/zloop --resume "fixture: budget raised, trying again" --max 1
+assert_rc 1
+assert_err '^zresume: lifted the terminal observation [0-9a-f]{7}; next action: contribute:member$'
+assert_claude_runs 1
+assert_eq "intervention recorded" "$(git log -1 --format=%s)" \
+  "[intervention] operator: resume: fixture: budget raised, trying again"
+assert_eq "intervention names the observation" \
+  "$(git log -1 --format=%b | jq -r '.data.lifted.detail')" "fixture: three hard kills"
+assert_eq "action derived again" "$(bin/zstate | jq -r .action)" contribute
+# Nothing to lift: --resume on a branch that is not stopped is a usage error.
+run bin/zloop --resume "nothing wrong" --max 1
+assert_rc 2
+assert_err '^zresume: nothing to lift; the last event is .intervention. and the action is .contribute., not a terminal observation$'
+assert_claude_runs 1
+# From main, --resume checks out the existing cycle branch it would otherwise
+# refuse to create, then lifts the observation there.
+bin/zobserve runner failure-to-continue "fixture: stopped again" 4 >/dev/null 2>&1
+git checkout -q main
+run bin/zloop --max 1
+assert_rc 2
+assert_err '^zloop: cycle/rev1-attempt1 already exists; check it out to resume it \(or bin/zloop --resume "<reason>" if a run stopped on it\)$'
+run bin/zloop --resume "fixture: resume from main" --max 1
+assert_rc 1
+assert_err '^\[zloop\] Branch: cycle/rev1-attempt1 \(resumed from main\)$'
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt1
+assert_eq "second intervention" "$(git log -1 --format=%s)" \
+  "[intervention] operator: resume: fixture: resume from main"
+assert_claude_runs 2
+echo ""
+
+# bin/zpass passes a rule on the tally of distinct runner turns, never on the
+# numbers its caller supplies: one invocation voting under three names is one
+# vote, so a rule proposed this turn passes in a later one.
+echo "=== Case 40: bin/zpass tallies one vote per turn; a rule needs two turns ==="
+fresh_repo vote-tally
+run bin/zvote member-1 1 yes "proposal: fixture rule"
+assert_rc 1
+assert_err '^zevent: vote requires ZOCIETY_TURN_ID from a loop runner$'
+run env ZOCIETY_TURN_ID=turn-1 bin/zvote member-1 1 yes "proposal: fixture rule"
+assert_rc 0
+run env ZOCIETY_TURN_ID=turn-1 bin/zvote member-2 1 yes "seconded by the same turn"
+assert_rc 0
+run env ZOCIETY_TURN_ID=turn-1 bin/zvote member-3 1 yes "and again"
+assert_rc 0
+assert_eq "three votes, one turn" "$(bin/zstate | jq -c '.votes["1"]')" '{"yes":1,"no":0}'
+run env ZOCIETY_TURN_ID=turn-1 bin/zpass member-3 1 "fixture rule" 3 0
+assert_rc 1
+assert_err '^zpass: rule 1 has 1 yes / 0 no from distinct runner turns; passing needs at least 2 yes and more yes than no\.$'
+assert_eq "no pass recorded" "$(bin/zstate | jq -r .genesis.rules)" 0
+run env ZOCIETY_TURN_ID=turn-2 bin/zvote member-2 1 yes "seconded by another turn"
+assert_rc 0
+assert_eq "two turns" "$(bin/zstate | jq -c '.votes["1"]')" '{"yes":2,"no":0}'
+run env ZOCIETY_TURN_ID=turn-2 bin/zpass member-2 1 "fixture rule" 3 0
+assert_rc 0
+assert_err '^zpass: note: recording the derived tally 2 for / 0 against, not the 3 / 0 given$'
+assert_eq "derived tally recorded" "$(git log -1 --format=%b | jq -c '.data.votes')" '{"for":2,"against":0}'
+assert_eq "rule credited" "$(bin/zstate | jq -r .genesis.rules)" 1
+# A turn's latest vote is the one that counts, and a tie does not pass.
+run env ZOCIETY_TURN_ID=turn-3 bin/zvote member-1 2 yes "proposal: second rule"
+run env ZOCIETY_TURN_ID=turn-4 bin/zvote member-2 2 no "against"
+run env ZOCIETY_TURN_ID=turn-5 bin/zvote member-3 2 yes "for"
+run env ZOCIETY_TURN_ID=turn-5 bin/zvote member-3 2 no "changed my mind"
+assert_eq "latest vote per turn" "$(bin/zstate | jq -c '.votes["2"]')" '{"yes":1,"no":2}'
+run env ZOCIETY_TURN_ID=turn-5 bin/zpass member-3 2 "second rule"
+assert_rc 1
+assert_err '^zpass: rule 2 has 1 yes / 2 no from distinct runner turns'
 echo ""
 
 #############################################

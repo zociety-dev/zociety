@@ -20,9 +20,11 @@ fi
 # A loop runner supplies one opaque turn identifier per agent invocation.
 # Genesis credits are calculated from distinct identifiers, so one invocation
 # cannot manufacture a whole society by emitting several qualifying events.
+# Votes carry it too: bin/zpass tallies one vote per turn, so one invocation
+# cannot carry a rule under three member names either.
 SESSION_ID="${ZOCIETY_TURN_ID:-}"
 case "$TYPE" in
-  join|pass|stuff)
+  join|pass|stuff|vote)
     if [[ -z "$SESSION_ID" ]]; then
       echo "zevent: $TYPE requires ZOCIETY_TURN_ID from a loop runner" >&2
       exit 1

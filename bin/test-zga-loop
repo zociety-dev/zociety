@@ -188,13 +188,16 @@ assert_claude_runs() {
   fi
 }
 
-# assert_origin_has <ere>: origin/main's log has a subject matching
+# assert_origin_has <ere>: a subject matching reached origin on any branch.
+# bin/zga-loop never commits to main: started there it checks out
+# cycle/rev{N}-attempt{M} first (the no-direct-main-commits invariant), so
+# the pushed events land on that branch.
 assert_origin_has() {
-  if git --git-dir="$ORIGIN" log --format=%s main | grep -E -q -- "$1"; then
+  if git --git-dir="$ORIGIN" log --format=%s --all | grep -E -q -- "$1"; then
     pass "origin has /$1/"
   else
     fail "origin lacks /$1/"
-    git --git-dir="$ORIGIN" log --format='    origin: %s' main
+    git --git-dir="$ORIGIN" log --format='    origin: %s' --all
   fi
 }
 
