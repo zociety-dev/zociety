@@ -1,2 +1,5 @@
 kind: ai
 runner: local
+
+model: unknown
+client: claude
