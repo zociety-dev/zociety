@@ -1,2 +1,5 @@
 kind: ai
 runner: local
+
+model: gemini-3-5-flash
+client: gemini
