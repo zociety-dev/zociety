@@ -19,10 +19,32 @@
 #           rules are the scarcest leg, stuff is always available).
 #   - last_event: type of last event
 #   - last_agent: who did last event
+#   - roster: this cycle's joined members, least recently active first.
+#             bin/zprompt hands a non-join turn roster[0] as its name, so a
+#             turn acts for a member instead of inventing a handle.
+#   - ask: the operator question this cycle answers (bin/zask), or null:
+#          the one it already answered, else the oldest open one.
+#          {id, text, cycles, answered, asked_cycle, answers, open, status}
+#   - asks_open: how many operator questions are open, the head included
 #
-# Genesis thresholds: 3 members, 2 passed rules, 3 stuff items.
+# Genesis thresholds: 3 members, 2 passed rules, 3 stuff items, plus one
+# answer while an operator question is open (needs.answers, next
+# contribute:answer after members and rules).
+#
+# Usage:
+#   bin/zstate          The state above
+#   bin/zstate --asks   Every operator question in the scanned history, oldest
+#                       first, with status and answers (bin/zask --list)
 
 set -e
+
+MODE=state
+case "${1:-}" in
+  "") ;;
+  --asks) MODE=asks ;;
+  -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "zstate: unknown argument '$1'" >&2; exit 2 ;;
+esac
 
 # Genesis thresholds (see AGENTS.md "Genesis")
 NEED_MEMBERS=3
@@ -75,24 +97,68 @@ scan_events() {
 #              bin/zpass passes a rule on this tally, never on numbers the
 #              caller supplies, so three votes cast by one invocation under
 #              three member names count once
+#   asks       every operator question, oldest first, across cycles. Open
+#              until answered in .cycles distinct cycles or closed. An answer
+#              is a [stuff] event whose data.answers names the ask
+#   ask        the question this cycle answers: the one it already answered,
+#              else the oldest open one; answer_due is 1 while that is still
+#              owed (open ask, no answer yet, no [complete] yet)
+#
+# [ask] events are operator input, not lifecycle: the state machine runs on
+# the newest event that is not one, so an ask landing after [complete] or a
+# heap-death does not reset the cycle. seq still counts it.
 SCAN=$(scan_events | jq -s -c '
-  .[0] as $last
-  | if $last == null then {last: null}
+  map(select(.event == "stuff" and (.data.answers | type) == "string")) as $answers
+  | map(select(.event == "ask" and .data.close == true) | .data.id) as $closed
+  | (map(select(.event == "ask" and (.data.text | type) == "string")) | reverse
+      | map(.data.id as $id
+          | ($answers | map(select(.data.answers == $id)) | reverse
+             | map({cycle, file: .data.file, commit: ._hash})) as $ans
+          | {id: $id, text: .data.text, cycles: (.data.cycles // 1),
+             asked_cycle: .cycle, answers: $ans,
+             answered: ($ans | map(.cycle) | unique | length),
+             closed: ($closed | index($id) != null)}
+          | .open = (.answered < .cycles and (.closed | not)))) as $asks
+  | ($asks | map(select(.open))) as $open
+  | (map(select(.event != "ask")) | first) as $last
+  | if $last == null then
+      {last: null, asks: $asks, asks_open: ($open | length),
+       ask: ($open | first | if . then . + {status: "open"} else null end),
+       answer_due: (if ($open | length) > 0 then 1 else 0 end)}
     else
       map(select(.cycle == $last.cycle)) as $cyc
+      | ($cyc | map(select(.event == "stuff" and (.data.answers | type) == "string")) | last) as $answered_here
+      | ($asks | map(select(.id == ($answered_here.data.answers // null))) | first) as $answered_ask
       | {
           last: ($last | del(._hash)),
+          seq: (first | .seq),
+          asks: $asks,
+          asks_open: ($open | length),
+          ask: (if $answered_ask then $answered_ask + {status: "answered"}
+                else ($open | first | if . then . + {status: "open"} else null end)
+                end),
+          answer_due: (if $answered_here == null and ($open | length) > 0
+                         and ($cyc | any(.event == "complete") | not)
+                       then 1 else 0 end),
           direction: ($cyc | map(select(.event == "direction") | .data.question) | first),
+          roster: ($cyc | map(.agent) as $actors
+            | $cyc | map(select(.event == "join") | .agent) | reverse
+            | reduce .[] as $m ([]; if index($m) != null then . else . + [$m] end)
+            | map({name: ., recency: (. as $m | $actors | index($m))})
+            | sort_by(-.recency) | map(.name)),
           credits: ($cyc
             | map(select(.event == "join" or .event == "pass" or .event == "stuff")
-                  | {event, session: (.runtime.session // ._hash)})
+                  | {event: (if .event == "stuff" and (.data.answers | type) == "string"
+                             then "answer" else .event end),
+                     session: (.runtime.session // ._hash)})
             | reduce .[] as $e
-                ({members: 0, rules: 0, stuff: 0, session_credits: {}};
+                ({members: 0, rules: 0, stuff: 0, answers: 0, session_credits: {}};
                  .session_credits[$e.session] = (.session_credits[$e.session] // {})
                  | if .session_credits[$e.session][$e.event] then .
                    else .session_credits[$e.session][$e.event] = true
                      | if $e.event == "join" then .members += 1
                        elif $e.event == "pass" then .rules += 1
+                       elif $e.event == "answer" then .answers += 1
                        else .stuff += 1
                        end
                    end)),
@@ -108,7 +174,15 @@ SCAN=$(scan_events | jq -s -c '
         }
     end')
 
+if [[ "$MODE" == "asks" ]]; then
+  printf '%s' "$SCAN" | jq '.asks'
+  exit 0
+fi
+
 LAST_EVENT=$(printf '%s' "$SCAN" | jq -c '.last // empty')
+ASK=$(printf '%s' "$SCAN" | jq -c '.ask // null')
+ASKS_OPEN=$(printf '%s' "$SCAN" | jq -r '.asks_open // 0')
+ANSWER_DUE=$(printf '%s' "$SCAN" | jq -r '.answer_due // 0')
 
 if [[ -z "$LAST_EVENT" ]]; then
   # No events yet - initial state
@@ -117,18 +191,24 @@ if [[ -z "$LAST_EVENT" ]]; then
     --argjson need_members "$NEED_MEMBERS" \
     --argjson need_rules "$NEED_RULES" \
     --argjson need_stuff "$NEED_STUFF" \
+    --argjson answer_due "$ANSWER_DUE" \
+    --argjson ask "$ASK" \
+    --argjson asks_open "$ASKS_OPEN" \
     '{
       cycle: 1,
       seq: 0,
       phase: "initial",
-      genesis: {members: 0, rules: 0, stuff: 0, complete: false},
+      genesis: {members: 0, rules: 0, stuff: 0, answers: 0, complete: false},
       batch: null,
       direction: null,
       action: "join",
-      needs: {members: $need_members, rules: $need_rules, stuff: $need_stuff},
+      needs: {members: $need_members, rules: $need_rules, stuff: $need_stuff, answers: $answer_due},
       next: "join",
       last_event: null,
-      last_agent: null
+      last_agent: null,
+      roster: [],
+      ask: $ask,
+      asks_open: $asks_open
     }'
   exit 0
 fi
@@ -136,6 +216,8 @@ fi
 CREDITS=$(printf '%s' "$SCAN" | jq -c '.credits')
 VOTES=$(printf '%s' "$SCAN" | jq -c '.votes // {}')
 CYCLE_DIRECTION=$(printf '%s' "$SCAN" | jq -c '.direction // null')
+ROSTER=$(printf '%s' "$SCAN" | jq -c '.roster // []')
+LATEST_SEQ=$(printf '%s' "$SCAN" | jq -c '.seq // null')
 
 # Log the found event
 LAST_EVENT_TYPE=$(echo "$LAST_EVENT" | jq -r '.event')
@@ -148,6 +230,11 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
   --argjson credits "$CREDITS" \
   --argjson votes "$VOTES" \
   --argjson cycle_direction "$CYCLE_DIRECTION" \
+  --argjson roster "$ROSTER" \
+  --argjson latest_seq "$LATEST_SEQ" \
+  --argjson ask "$ASK" \
+  --argjson asks_open "$ASKS_OPEN" \
+  --argjson answer_due "$ANSWER_DUE" \
   --argjson need_members "$NEED_MEMBERS" \
   --argjson need_rules "$NEED_RULES" \
   --argjson need_stuff "$NEED_STUFF" '
@@ -155,7 +242,9 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
   .state.members = $credits.members |
   .state.rules = $credits.rules |
   .state.stuff = $credits.stuff |
-  .state.complete = (.state.members >= $need_members and .state.rules >= $need_rules and .state.stuff >= $need_stuff) |
+  .state.answers = $credits.answers |
+  .state.complete = (.state.members >= $need_members and .state.rules >= $need_rules
+                     and .state.stuff >= $need_stuff and $answer_due == 0) |
   .phase = (
     if .event == "promise" or (.event == "observation" and .data.terminal) then "stopped"
     elif .event == "heap-death" then
@@ -188,22 +277,26 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
   # What is still missing for genesis, as REMAINING counts (never negative).
   # Overshooting one leg (e.g. 4 members) reports 0, not a negative number.
   .needs = (
-    if .state.complete then {members: 0, rules: 0, stuff: 0}
+    if .state.complete then {members: 0, rules: 0, stuff: 0, answers: 0}
     else {
       members: ([$need_members - (.state.members // 0), 0] | max),
       rules:   ([$need_rules   - (.state.rules   // 0), 0] | max),
-      stuff:   ([$need_stuff   - (.state.stuff   // 0), 0] | max)
+      stuff:   ([$need_stuff   - (.state.stuff   // 0), 0] | max),
+      answers: $answer_due
     }
     end
   ) |
 
   # Deficit-qualified action. .action keeps its stable vocabulary for the
   # stop predicates; .next is the field an agent reads to pick a leg.
-  # Deterministic priority: members, then rules, then stuff.
+  # Deterministic priority: members, then rules, then an owed answer to the
+  # operator question (early, so a --max cap cannot cut it off and the
+  # stuff that follows can build on it), then stuff.
   .next = (
     if .action != "contribute" then .action
     elif .needs.members > 0 then "contribute:member"
     elif .needs.rules > 0 then "contribute:rule"
+    elif .needs.answers > 0 then "contribute:answer"
     elif .needs.stuff > 0 then "contribute:stuff"
     else "contribute"
     end
@@ -212,7 +305,7 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
   # Build output structure
   {
     cycle: .cycle,
-    seq: .seq,
+    seq: ($latest_seq // .seq),
     phase: .phase,
     genesis: .state,
     batch: (.data.batch_remaining // null),
@@ -223,7 +316,10 @@ OUTPUT=$(echo "$LAST_EVENT" | jq -r \
     last_event: .event,
     last_agent: .agent,
     session_credits: $credits.session_credits,
-    votes: $votes
+    votes: $votes,
+    roster: $roster,
+    ask: $ask,
+    asks_open: $asks_open
   }
 ')
 

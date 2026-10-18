@@ -19,6 +19,10 @@
 #                      the cycle branch (bin/zresume records WHY as an
 #                      [intervention]) and continue the cycle. From main, also
 #                      checks out the existing cycle branch first
+#   -a, --ask TEXT     Put a question or statement to the zociety before the
+#                      first iteration (bin/zask). The current cycle, or the
+#                      next if this one is complete, answers it besides its
+#                      own direction; bin/zask --show reads the answer
 #   -q, --quiet        Buffered output: nothing until claude's result arrives
 #   -v, --verbose      Raw stream-json events, partial messages included
 #   -d, --debug        Enable debug output
@@ -178,6 +182,10 @@ BACKOFF_BASE=1
 # (bin/zresume) before the first iteration. Empty = not asked.
 RESUME_REASON=""
 
+# --ask "<text>": record an operator question (bin/zask) before the first
+# iteration. Empty = not asked.
+ASK_TEXT=""
+
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 }
@@ -249,6 +257,11 @@ while [[ $# -gt 0 ]]; do
     -R|--resume)
       [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a reason (recorded in the [intervention] event)"
       RESUME_REASON="$2"
+      shift
+      ;;
+    -a|--ask)
+      [[ $# -ge 2 && -n "$2" ]] || die "$1 requires the question or statement"
+      ASK_TEXT="$2"
       shift
       ;;
     --)
@@ -336,6 +349,12 @@ fi
 # without it the run stops at once and bin/zstop-action names the observation.
 if [[ -n "$RESUME_REASON" ]]; then
   bin/zresume operator "$RESUME_REASON" >&2 || die "bin/zresume failed; see above"
+fi
+
+# The operator question goes in before the first turn, so no turn's seal
+# claims it.
+if [[ -n "$ASK_TEXT" ]]; then
+  bin/zask "$ASK_TEXT" >&2 || die "bin/zask failed; see above"
 fi
 
 # Captured once so predicates can scope their queries to this run

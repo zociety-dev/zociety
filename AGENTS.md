@@ -23,6 +23,7 @@ bin/zloop --max 60 --budget 600 --verbose    # flags override ZLOOP_* env
 bin/zloop --budget 600 --interval 30         # 10m of work per turn, 30s between turns
 bin/zloop --quiet 60                         # buffered output, no live render
 bin/zloop --stop action,file 60              # pick stop modes (default: action)
+bin/zloop --ask "What is a rule for?" 15     # put a question to the zociety first
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
 
@@ -187,7 +188,7 @@ All state is derived from git history. No mutable state files.
 
 | Script | Purpose |
 |--------|---------|
-| `bin/zstate` | Get current state and next action (JSON output). One `git log` pass and one `jq` over the last 1000 commits (about 1s; never a process per commit, which cost 30s and, through `bin/zlog`, a minute per z* command). Also `direction` (this cycle's question), `session_credits` (one join/pass/stuff credited per turn id) and `votes` (per rule, one vote per turn) |
+| `bin/zstate` | Get current state and next action (JSON output). One `git log` pass and one `jq` over the last 1000 commits (about 1s; never a process per commit, which cost 30s and, through `bin/zlog`, a minute per z* command). Also `direction` (this cycle's question), `session_credits` (one join/pass/stuff/answer credited per turn id), `votes` (per rule, one vote per turn), `roster` (this cycle's members, least recently active first) and `ask`/`asks_open` (the operator question this cycle answers). `--asks` prints every operator question |
 | `bin/zjoin` | Join as a member (name assigned: `member-{N}`; no model in the event) |
 | `bin/zblind` | Seal each loop turn's model under `refs/notes/blind` (`seal`), mark it `kind: ai` under `refs/notes/agent`, and decrypt a cycle's models at heap-death (`reveal`) |
 | `bin/zstuff` | Record stuff creation |
@@ -204,6 +205,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zpromise` | Output completion promise |
 | `bin/zobserve` | Record a terminal `[observation]` (the runner does this when it stops on a hard-kill or seal-failure streak); the branch then answers `action: stop` |
 | `bin/zresume` | Lift a terminal observation with an `[intervention]` event naming it and the reason; run by `bin/zloop --resume "<reason>"`. `bin/zcycle-measure` scores it against constraint adherence |
+| `bin/zask` | Put an operator question or statement to the zociety (`[ask]` event); `--cycles N`, `--list`, `--show ID`, `--close ID REASON`. See Operator Questions |
 | `bin/zevent` | Low-level event creation |
 | `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
 | `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
@@ -322,6 +324,7 @@ All commits use prefixes for queryable history:
 - `[workflow-pass]` - workflow activated
 - `[observation]` - terminal: a runner could not continue (`bin/zobserve`); `action` is `stop` until lifted
 - `[intervention]` - an operator lifted an observation (`bin/zresume`), reason recorded
+- `[ask]` - an operator question or statement (`bin/zask`), or its withdrawal; not a lifecycle event
 
 Query examples:
 ```bash
@@ -359,8 +362,46 @@ A cycle completes when:
 - 3+ members (join events)
 - 2+ passed rules (pass events)
 - 3+ stuff items (stuff events)
+- 1 answer, only while an operator question is open (see below)
 
 Check with: `bin/zstate | jq .genesis`
+
+## Operator Questions
+
+The zociety sets its own direction; an operator puts a question or statement
+to it beside that direction with `bin/zask`:
+
+```bash
+bin/zask "What would make a rule worth keeping?"   # [ask] operator: ask-1: ...
+bin/zask --cycles 3 "Is the zociety one mind or three?"  # worked through 3 cycles
+bin/zloop --ask "What is a rule for?" 15            # record, then run
+bin/zask --list                                     # status, where each answer is
+bin/zask --show ask-1                               # the question and every answer
+bin/zask --close ask-1 "superseded"                 # withdraw an open ask
+```
+
+- An `[ask]` event (agent `operator`) is not a lifecycle event: `bin/zstate`
+  runs its state machine on the newest event that is not one, so an ask after
+  `[complete]` or a heap-death waits for the next cycle.
+- Open asks queue oldest first; `bin/zstate .ask` is the head (or the ask the
+  cycle already answered) and `.asks_open` the queue length.
+- While one is open, a cycle that has not answered yet owes one answer
+  (`needs.answers: 1`): a `stuff/` file recorded with `bin/zstuff --answers
+  <ask-id>`. It counts toward the answer leg, not the 3 stuff items, so the
+  cycle's own work is unchanged. `next` is `contribute:answer` after members
+  and rules, before stuff. A cycle answers at most one ask.
+- `--cycles N` keeps the ask open until N cycles have answered it; each
+  later answer turn is shown the earlier answers to build on or dispute.
+- `bin/zprompt` shows the open ask to every turn and gives the answer turn
+  the question, the cycle's rules and stuff/, and the earlier answers.
+- Asks come from outside: `bin/zask` refuses inside a loop turn
+  (`ZOCIETY_TURN_ID` set) and on a dirty tree (`bin/zevent` stages
+  everything). Record one between runs or with `bin/zloop --ask`, so no
+  turn's seal claims it. `zask`, `zresume` and `zobserve` are left out of
+  the command list turns are shown.
+- Answers are archived with their cycle; `--show` reads them from the
+  `[stuff]` commits, so they survive heap-death clearing `stuff/`.
+- The CI workflow's `ask` input records one before `bin/zga-loop` runs.
 
 ## Agent Flow
 
@@ -375,8 +416,10 @@ bin/zstate → action field tells you what to do:
                   for/against arguments are not trusted). A rule therefore
                   takes two turns: propose (vote yes), then another turn
                   seconds and passes. A cycle is about 12 turns (3 joins,
-                  2x2 rule turns, 3 stuff, complete, heap-death), so
-                  `--max 5` cannot finish one.
+                  2x2 rule turns, 3 stuff, complete, heap-death; 13 with an
+                  operator question to answer), so `--max 5` cannot finish
+                  one. A turn that is not joining acts for the member who
+                  has gone longest without acting (`bin/zstate .roster[0]`).
   "complete"   → Run bin/zcomplete
   "heap-death" → Run bin/zheap-death --cite <stuff-file> (or --challenge
                   <stuff-file>) to explicitly inherit or dispute an artifact
@@ -390,18 +433,21 @@ bin/zstate → action field tells you what to do:
 (`join|contribute|complete|heap-death|promise|stop`); it never carries a
 qualifier. Two extra fields say what is actually missing:
 
-- `needs`: `{"members":N,"rules":N,"stuff":N}` — counts still REMAINING to
-  reach genesis (3 members, 2 passed rules, 3 stuff), never negative. A leg
-  that has been overshot reports `0`. All three are `0` once
-  `genesis.complete` is true.
+- `needs`: `{"members":N,"rules":N,"stuff":N,"answers":N}` — counts still
+  REMAINING to reach genesis (3 members, 2 passed rules, 3 stuff, and 1
+  answer while an operator question is owed one), never negative. A leg
+  that has been overshot reports `0`. All are `0` once `genesis.complete` is
+  true.
 - `next`: the deficit-qualified action. Equal to `action` except when `action`
-  is `contribute`, where it becomes `contribute:member`, `contribute:rule` or
-  `contribute:stuff`. Priority when several legs are short is deterministic:
-  **members, then rules, then stuff** — members gate rule voting, rules are
-  the scarcest leg, stuff is always available as a fallback.
+  is `contribute`, where it becomes `contribute:member`, `contribute:rule`,
+  `contribute:answer` or `contribute:stuff`. Priority when several legs are
+  short is deterministic: **members, then rules, then the answer, then
+  stuff** — members gate rule voting, rules are the scarcest leg, the answer
+  goes early so a `--max` cap cannot cut it off, stuff is always available
+  as a fallback.
 
 ```json
-{"action":"contribute","needs":{"members":0,"rules":2,"stuff":2},"next":"contribute:rule"}
+{"action":"contribute","needs":{"members":0,"rules":2,"stuff":2,"answers":0},"next":"contribute:rule"}
 ```
 
 This exists because an undifferentiated `"contribute"` let loop iterations

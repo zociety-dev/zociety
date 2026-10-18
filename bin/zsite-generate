@@ -1643,7 +1643,7 @@ cat > "$DOCS_DIR/.well-known/zevent.schema.json" << 'SCHEMA_EOF'
     },
     "event": {
       "type": "string",
-      "enum": ["join", "vote", "pass", "stuff", "complete", "heap-death", "direction"],
+      "enum": ["join", "vote", "pass", "stuff", "complete", "heap-death", "direction", "promise", "observation", "intervention", "ask"],
       "description": "Event type."
     },
     "cycle": {

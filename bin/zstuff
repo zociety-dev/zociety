@@ -1,19 +1,47 @@
 #!/bin/bash
 # zstuff: Record stuff creation
-# Usage: bin/zstuff <agent> <file> [traversal]
+# Usage: bin/zstuff [--answers ASK_ID] <agent> <file> [traversal]
+#
+# --answers ASK_ID  The file answers the operator question ASK_ID (bin/zask).
+#                   It must be the question bin/zstate names as .ask while
+#                   needs.answers is 1; the event then settles the answer leg
+#                   instead of counting toward the 3 stuff items.
 
 set -e
+
+ANSWERS=""
+if [[ "${1:-}" == "--answers" ]]; then
+  [[ $# -ge 2 && -n "$2" ]] || { echo "zstuff: --answers requires an ask id (bin/zstate .ask.id)" >&2; exit 1; }
+  ANSWERS="$2"
+  shift 2
+fi
 
 AGENT="$1"
 FILE="$2"
 TRAVERSAL="${3:-direct}"
 
 if [[ -z "$AGENT" || -z "$FILE" ]]; then
-  echo "Usage: bin/zstuff <agent> <file> [traversal]" >&2
+  echo "Usage: bin/zstuff [--answers ASK_ID] <agent> <file> [traversal]" >&2
   exit 1
 fi
 
-DATA=$(jq -nc --arg file "$FILE" --arg traversal "$TRAVERSAL" \
-  '{file: $file, action: "create", traversal: $traversal}')
+if [[ -n "$ANSWERS" ]]; then
+  STATE=$(bin/zstate)
+  OWED=$(printf '%s' "$STATE" | jq -r '.needs.answers // 0')
+  CURRENT=$(printf '%s' "$STATE" | jq -r '.ask.id // empty')
+  if [[ "$OWED" != "1" || "$CURRENT" != "$ANSWERS" ]]; then
+    echo "zstuff: no answer to '$ANSWERS' is owed: bin/zstate names ask '${CURRENT:-none}' with needs.answers $OWED" >&2
+    exit 1
+  fi
+  [[ -f "$FILE" ]] || { echo "zstuff: '$FILE' does not exist; write the answer first" >&2; exit 1; }
+fi
 
-bin/zevent stuff "$AGENT" "added $FILE" "$DATA"
+DATA=$(jq -nc --arg file "$FILE" --arg traversal "$TRAVERSAL" --arg answers "$ANSWERS" \
+  '{file: $file, action: "create", traversal: $traversal}
+   + (if $answers != "" then {answers: $answers} else {} end)')
+
+if [[ -n "$ANSWERS" ]]; then
+  bin/zevent stuff "$AGENT" "answered $ANSWERS in $FILE" "$DATA"
+else
+  bin/zevent stuff "$AGENT" "added $FILE" "$DATA"
+fi

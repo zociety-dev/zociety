@@ -1,0 +1,131 @@
+#!/bin/bash
+# zask: Put a question or statement to the zociety, beside its own direction
+#
+# Usage:
+#   bin/zask [--cycles N] "<question or statement>"
+#   bin/zask --list
+#   bin/zask --show <ask-id>
+#   bin/zask --close <ask-id> "<reason>"
+#   bin/zask -h | --help
+#
+# The zociety sets its own direction: each heap-death names the question the
+# next cycle works on. An ask is the operator's way in without taking that
+# over. It is an [ask] event (agent "operator") carrying the text. bin/zstate
+# queues open asks oldest first and names the head as .ask; while one is open,
+# a cycle that has not answered it yet gets one more genesis leg, an answer:
+# a stuff/ file recorded with `bin/zstuff --answers <ask-id>` (bin/zstate .next
+# is contribute:answer once members and rules are in). The cycle's direction,
+# rules and 3 stuff items are unchanged; the answer is in addition to them. A
+# cycle answers at most one ask, so a queue is taken one cycle at a time. An
+# ask recorded after a cycle's [complete] waits for the next cycle.
+#
+# Options:
+#   --cycles N   Work the ask through N cycles (default 1). Each cycle answers
+#                it once and is shown the earlier answers, to build on,
+#                correct or dispute; the ask closes after the Nth answer.
+#   --list       Every ask, its status and where each answer is.
+#   --show ID    The ask and the full text of every answer so far.
+#   --close ID   Withdraw an open ask; the reason is recorded.
+#
+# Asks come from outside the society: a loop turn (ZOCIETY_TURN_ID set) is
+# refused. Record one between runs, or with `bin/zloop --ask "<text>"`, which
+# does it before the first iteration: a commit made while a turn runs is
+# sealed as that turn's. The tree must be clean, because bin/zevent stages
+# everything. Answers are archived with their cycle; --show reads them from
+# the [stuff] commits that recorded them, so they survive bin/zheap-death
+# clearing stuff/. Asks older than bin/zstate's 1000-commit window are not
+# seen.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zask: $*" >&2
+  exit 1
+}
+
+# ask_by_id <id>: the ask's record from bin/zstate --asks, or empty
+ask_by_id() {
+  bin/zstate --asks | jq -c --arg id "$1" '.[] | select(.id == $id)'
+}
+
+# record_guard: an ask is the operator's, and bin/zevent stages everything
+record_guard() {
+  [[ -z "${ZOCIETY_TURN_ID:-}" ]] \
+    || die "asks come from the operator, not a loop turn (ZOCIETY_TURN_ID is set)"
+  [[ -z "$(git status --porcelain 2>/dev/null)" ]] \
+    || die "the working tree has changes; commit or remove them first (bin/zevent stages everything into the event)"
+}
+
+CYCLES=1
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  --list)
+    bin/zstate --asks | jq -r '
+      if length == 0 then "No asks yet. bin/zask \"<question>\" records one."
+      else .[] | (if .open then "open" elif .closed then "closed" else "answered" end) as $s
+        | "\(.id)  \($s)  answered in \(.answered) of \(.cycles) cycle(s), asked in cycle \(.asked_cycle)\n  \(.text)"
+          + (.answers | map("\n  cycle \(.cycle): \(.file) (\(.commit[0:7]))") | join(""))
+      end'
+    exit 0
+    ;;
+  --show)
+    [[ -n "${2:-}" ]] || die "--show requires an ask id (bin/zask --list)"
+    ASK=$(ask_by_id "$2")
+    [[ -n "$ASK" ]] || die "no ask '$2' (bin/zask --list)"
+    printf '%s' "$ASK" | jq -r '"# \(.id): \(.text)\n\n\(if .open then "open" elif .closed then "closed" else "answered" end), answered in \(.answered) of \(.cycles) cycle(s), asked in cycle \(.asked_cycle)"'
+    while IFS=$'\t' read -r cycle file commit; do
+      printf '\n## cycle %s: %s (%s)\n\n' "$cycle" "$file" "${commit:0:7}"
+      git --no-pager show "$commit:$file" 2>/dev/null || echo "(not readable at $commit)"
+    done < <(printf '%s' "$ASK" | jq -r '.answers[] | [.cycle, .file, .commit] | @tsv')
+    exit 0
+    ;;
+  --close)
+    [[ -n "${2:-}" && -n "${3:-}" ]] || die "--close requires an ask id and a reason"
+    record_guard
+    ASK=$(ask_by_id "$2")
+    [[ -n "$ASK" ]] || die "no ask '$2' (bin/zask --list)"
+    [[ "$(printf '%s' "$ASK" | jq -r '.open')" == "true" ]] || die "ask '$2' is not open"
+    DATA=$(jq -nc --arg id "$2" --arg reason "$3" '{id: $id, close: true, reason: $reason}')
+    bin/zevent ask operator "close $2: $3" "$DATA" >/dev/null
+    echo "zask: closed $2"
+    exit 0
+    ;;
+  --cycles)
+    [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] || die "--cycles expects a positive integer, got '${2:-}'"
+    CYCLES="$2"
+    shift 2
+    ;;
+  -*)
+    die "unknown option '$1'"
+    ;;
+esac
+
+TEXT="${1:-}"
+[[ $# -le 1 ]] || die "quote the question as one argument"
+[[ -n "${TEXT//[[:space:]]/}" ]] || { usage >&2; exit 1; }
+record_guard
+
+# Ids run over the whole history, not bin/zstate's window, so one is never
+# reused: the highest ask-N any [ask] subject names, plus one.
+LAST_N=$(git log --format=%s --grep='^\[ask\] ' 2>/dev/null \
+  | grep -o 'ask-[0-9]*' | cut -d- -f2 | sort -n | tail -n1)
+ID="ask-$(( ${LAST_N:-0} + 1 ))"
+
+DATA=$(jq -nc --arg id "$ID" --arg text "$TEXT" --argjson cycles "$CYCLES" \
+  '{id: $id, text: $text, cycles: $cycles}')
+bin/zevent ask operator "$ID: $TEXT" "$DATA" >/dev/null
+
+STATE=$(bin/zstate)
+echo "zask: recorded $ID ($(printf '%s' "$STATE" | jq -r '.asks_open') open)"
+if [[ "$(printf '%s' "$STATE" | jq -r '.ask.id // empty')" == "$ID" && "$(printf '%s' "$STATE" | jq -r '.needs.answers')" == "1" ]]; then
+  echo "zask: cycle $(printf '%s' "$STATE" | jq -r '.cycle') owes it an answer; bin/zask --show $ID reads it once given"
+else
+  echo "zask: queued behind the asks ahead of it, or for the next cycle if this one is complete"
+fi
