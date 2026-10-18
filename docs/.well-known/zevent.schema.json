@@ -13,7 +13,7 @@
     },
     "event": {
       "type": "string",
-      "enum": ["join", "vote", "pass", "stuff", "complete", "heap-death", "direction"],
+      "enum": ["join", "vote", "pass", "stuff", "complete", "heap-death", "direction", "promise", "observation", "intervention", "ask"],
       "description": "Event type."
     },
     "cycle": {

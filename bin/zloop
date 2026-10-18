@@ -19,6 +19,10 @@
 #                      the cycle branch (bin/zresume records WHY as an
 #                      [intervention]) and continue the cycle. From main, also
 #                      checks out the existing cycle branch first
+#   -a, --ask TEXT     Put a question or statement to the zociety before the
+#                      first iteration (bin/zask). The current cycle, or the
+#                      next if this one is complete, answers it besides its
+#                      own direction; bin/zask --show reads the answer
 #   -q, --quiet        Buffered output: nothing until claude's result arrives
 #   -v, --verbose      Raw stream-json events, partial messages included
 #   -d, --debug        Enable debug output
@@ -111,8 +115,10 @@
 # rev, check out cycle/rev{N+1}-attempt1 yourself before starting.
 #
 # Blind model record: the model (ANTHROPIC_MODEL, or GEMINI_MODEL for the
-# gemini client; "unknown" when neither is set) and client are captured once
-# at start. After every iteration `bin/zblind seal <prev-head> HEAD <model>
+# gemini client) and client are captured once at start; when neither
+# variable is set, each turn's model is read from its stream's init event
+# (compact and --verbose renders; --quiet seals "unknown"). After every
+# iteration `bin/zblind seal <prev-head> HEAD <model>
 # <client> local` seals them per new commit under refs/notes/blind (needs
 # ZOCIETY_BLIND_KEY; without it only the plaintext refs/notes/agent marker is
 # written) and `bin/zblind reveal <sha>` runs for every [heap-death] commit
@@ -175,6 +181,10 @@ BACKOFF_BASE=1
 # --resume "<reason>": lift a terminal [observation] on the cycle branch
 # (bin/zresume) before the first iteration. Empty = not asked.
 RESUME_REASON=""
+
+# --ask "<text>": record an operator question (bin/zask) before the first
+# iteration. Empty = not asked.
+ASK_TEXT=""
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -247,6 +257,11 @@ while [[ $# -gt 0 ]]; do
     -R|--resume)
       [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a reason (recorded in the [intervention] event)"
       RESUME_REASON="$2"
+      shift
+      ;;
+    -a|--ask)
+      [[ $# -ge 2 && -n "$2" ]] || die "$1 requires the question or statement"
+      ASK_TEXT="$2"
       shift
       ;;
     --)
@@ -334,6 +349,12 @@ fi
 # without it the run stops at once and bin/zstop-action names the observation.
 if [[ -n "$RESUME_REASON" ]]; then
   bin/zresume operator "$RESUME_REASON" >&2 || die "bin/zresume failed; see above"
+fi
+
+# The operator question goes in before the first turn, so no turn's seal
+# claims it.
+if [[ -n "$ASK_TEXT" ]]; then
+  bin/zask "$ASK_TEXT" >&2 || die "bin/zask failed; see above"
 fi
 
 # Captured once so predicates can scope their queries to this run
@@ -583,6 +604,7 @@ EOF
   # the agent's pid for on_signal). tee is not this shell's child, so it
   # leaves a marker when it has drained the pipe; the record waits for it.
   PREV_HEAD=$(git rev-parse HEAD)
+  metrics_before=$(wc -l < "$METRICS_FILE" | tr -d ' ')
   : > "$RESULT_FILE"
   rm -f "$RESULT_FILE.done"
   ZOCIETY_TURN_ID="$TURN_ID" ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} bin/zagent "${AGENT_ARGS[@]}" </dev/null \
@@ -621,8 +643,25 @@ EOF
   # carried in SEAL_FROM starts at the first unsealed iteration, so the next
   # attempt seals everything since (idempotent: notes are overwritten). Only
   # a success clears it; a run that ends mid-streak says what it left unsealed.
+  #
+  # With no model variable set the client picks its own default, and sealing
+  # "unknown" leaves the heap-death reveal with nothing to say (cycle 41
+  # revealed "gemini-3-5-flash,unknown"). The stream's init event names the
+  # model that actually ran: bin/zrender writes it into this turn's metrics
+  # line (compact), and the raw stream is the result file itself (--verbose).
+  turn_model="$MODEL"
+  if [[ "$turn_model" == "unknown" ]]; then
+    seen=""
+    case "$RENDER" in
+      compact) seen=$(tail -n +"$((metrics_before + 1))" "$METRICS_FILE" 2>/dev/null \
+                 | awk 'NF >= 5 && $5 != "-" {m = $5} END {print m}') || seen="" ;;
+      raw)     seen=$(grep -m1 '"subtype":"init"' "$RESULT_FILE" 2>/dev/null \
+                 | jq -r '.model // empty' 2>/dev/null) || seen="" ;;
+    esac
+    if [[ -n "$seen" ]]; then turn_model="$seen"; fi
+  fi
   seal_from="${SEAL_FROM:-$PREV_HEAD}"
-  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$MODEL" "$CLIENT" local; then
+  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$turn_model" "$CLIENT" local; then
     SEAL_FAILURES=0
     SEAL_FROM=""
   else

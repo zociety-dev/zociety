@@ -1063,7 +1063,8 @@ assert_eq "prompt heads the command block" "$(printf '%s\n' "$prompt" | grep -c 
 # Usage, not just a name: the turns that prompted this fix spent two or three
 # calls on `bin/z* --help` before they could invoke anything.
 assert_eq "prompt gives zjoin's usage and purpose" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zjoin \[name\] \[role\] \[greeting\] - Join the zociety$')" 1
-assert_eq "prompt gives zstuff's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zstuff <agent> <file> \[traversal\] - Record stuff creation$')" 1
+assert_eq "prompt gives zstuff's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zstuff \[--answers ASK_ID\] <agent> <file> \[traversal\] - Record stuff creation$')" 1
+assert_eq "operator tools are not offered to turns" "$(printf '%s\n' "$prompt" | grep -c '^  bin/z\(ask\|resume\|observe\)')" 0
 assert_eq "prompt gives zvote's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zvote <agent> <rule_number> <yes|no> \[reason\] - Vote on a rule$')" 1
 assert_eq "prompt gives zheap-death's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death \[--done\] \[--cite FILE | --challenge FILE\]\.\.\. <agent> <question> \[batch_size\] - ')" 1
 # zcomplete/zpromise have no Usage: line in their headers; the name alone is
@@ -1234,7 +1235,7 @@ assert_rc 0
 assert_eq "stdout" "$(cat "$OUT")" "partial answer"
 assert_err '^… thinking [12]s$'
 assert_err '^duration 1m05s · turns 7 · [$]1\.50 · error$'
-assert_eq "metrics" "$(cat "$metrics")" "65000 7 1.5 true"
+assert_eq "metrics" "$(cat "$metrics")" "65000 7 1.5 true claude-fake"
 echo ""
 
 # An undifferentiated action="contribute" let iterations pile onto the
@@ -1254,25 +1255,25 @@ zev() {
 # No events at all: the initial state carries the full requirement.
 assert_eq "initial action" "$(bin/zstate | jq -r .action)" join
 assert_eq "initial next" "$(bin/zstate | jq -r .next)" join
-assert_eq "initial needs" "$(bin/zstate | jq -c .needs)" '{"members":3,"rules":2,"stuff":3}'
+assert_eq "initial needs" "$(bin/zstate | jq -c .needs)" '{"members":3,"rules":2,"stuff":3,"answers":0}'
 
 # Members are the first priority while short.
 zev join
 assert_eq "one member action" "$(bin/zstate | jq -r .action)" contribute
 assert_eq "one member next" "$(bin/zstate | jq -r .next)" contribute:member
-assert_eq "one member needs" "$(bin/zstate | jq -c .needs)" '{"members":2,"rules":2,"stuff":3}'
+assert_eq "one member needs" "$(bin/zstate | jq -c .needs)" '{"members":2,"rules":2,"stuff":3,"answers":0}'
 
 # Stuff alone does not change the priority: members still come first.
 zev stuff
 assert_eq "stuff does not outrank members" "$(bin/zstate | jq -r .next)" contribute:member
-assert_eq "needs after one stuff" "$(bin/zstate | jq -c .needs)" '{"members":2,"rules":2,"stuff":2}'
+assert_eq "needs after one stuff" "$(bin/zstate | jq -c .needs)" '{"members":2,"rules":2,"stuff":2,"answers":0}'
 
 # Members satisfied (and then overshot): rules are next, and the overshot
 # leg reports 0 rather than a negative count.
 zev join
 zev join
 zev join
-assert_eq "overshot members report 0" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":2,"stuff":2}'
+assert_eq "overshot members report 0" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":2,"stuff":2,"answers":0}'
 assert_eq "genesis members" "$(bin/zstate | jq -r .genesis.members)" 4
 assert_eq "rules are next" "$(bin/zstate | jq -r .next)" contribute:rule
 assert_eq "action stays stable" "$(bin/zstate | jq -r .action)" contribute
@@ -1281,7 +1282,7 @@ assert_eq "action stays stable" "$(bin/zstate | jq -r .action)" contribute
 zev pass
 zev pass
 assert_eq "stuff is next" "$(bin/zstate | jq -r .next)" contribute:stuff
-assert_eq "needs after rules" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":0,"stuff":2}'
+assert_eq "needs after rules" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":0,"stuff":2,"answers":0}'
 
 # A [heap-death] mid-batch still recommends contribute, now qualified.
 heap_death '{"batch_remaining":1}'
@@ -1298,7 +1299,7 @@ zev stuff
 assert_eq "genesis complete" "$(bin/zstate | jq -r .genesis.complete)" true
 assert_eq "complete action" "$(bin/zstate | jq -r .action)" complete
 assert_eq "complete next" "$(bin/zstate | jq -r .next)" complete
-assert_eq "complete needs are zero" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":0,"stuff":0}'
+assert_eq "complete needs are zero" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":0,"stuff":0,"answers":0}'
 
 bin/zevent complete tester "fixture complete" '{}' >/dev/null 2>&1
 assert_eq "after complete action" "$(bin/zstate | jq -r .action)" heap-death
@@ -1528,6 +1529,151 @@ assert_eq "latest vote per turn" "$(bin/zstate | jq -c '.votes["2"]')" '{"yes":1
 run env ZOCIETY_TURN_ID=turn-5 bin/zpass member-3 2 "second rule"
 assert_rc 1
 assert_err '^zpass: rule 2 has 1 yes / 2 no from distinct runner turns'
+echo ""
+
+# next_cycle <n>: a [direction] event opening cycle n, as bin/zheap-death
+# writes it (bin/zevent always stamps the current cycle, so it cannot).
+next_cycle() {
+  git commit -q --allow-empty -m "[direction] system: fixture cycle $1" \
+    -m "{\"z\":1,\"event\":\"direction\",\"cycle\":$1,\"seq\":1,\"agent\":\"system\",\"ts\":\"2026-10-18T00:00:00Z\",\"state\":{\"members\":0,\"rules\":0,\"stuff\":0,\"complete\":false},\"data\":{\"question\":\"fixture direction $1\",\"batch_remaining\":2}}"
+}
+
+# An operator question rides beside the cycle's own direction: one more
+# genesis leg, an answer, taken after members and rules and before stuff.
+echo "=== Case 41: bin/zask puts a question to the cycle; one answer settles it ==="
+fresh_repo asks
+zev join
+zev join
+zev join
+assert_eq "no ask, no answer leg" "$(bin/zstate | jq -c .needs)" '{"members":0,"rules":2,"stuff":3,"answers":0}'
+run env ZOCIETY_TURN_ID=turn-x bin/zask "Should we?"
+assert_rc 1
+assert_err '^zask: asks come from the operator, not a loop turn'
+echo draft > draft.md
+run bin/zask "Should we?"
+assert_rc 1
+assert_err '^zask: the working tree has changes'
+rm draft.md
+run bin/zask "What would make a rule worth keeping?"
+assert_rc 0
+assert_eq "ask subject" "$(git log -1 --format=%s)" "[ask] operator: ask-1: What would make a rule worth keeping?"
+assert_eq "ask is the head" "$(bin/zstate | jq -c '.ask | {id, status, open}')" '{"id":"ask-1","status":"open","open":true}'
+assert_eq "an answer is owed" "$(bin/zstate | jq -r .needs.answers)" 1
+assert_eq "an ask is not lifecycle" "$(bin/zstate | jq -r .action)" contribute
+assert_eq "rules still come first" "$(bin/zstate | jq -r .next)" contribute:rule
+zev pass
+zev pass
+assert_eq "the answer comes before stuff" "$(bin/zstate | jq -r .next)" contribute:answer
+prompt=$(bin/zprompt --budget 60)
+assert_eq "Do now names the leg" "$(printf '%s\n' "$prompt" | grep -c '^Action: contribute:answer (still needed: 0 member(s), 0 passed rule(s), 3 stuff, 1 answer)$')" 1
+assert_eq "Run names the ask and the member" "$(printf '%s\n' "$prompt" | grep -c '^Run: write stuff/ask-1.md answering the operator question below, then bin/zstuff --answers ask-1 tester stuff/ask-1.md$')" 1
+assert_eq "the question is under Do now" "$(printf '%s\n' "$prompt" | grep -c '^  What would make a rule worth keeping?$')" 1
+assert_eq "every turn sees it" "$(printf '%s\n' "$prompt" | grep -c '^Operator question ask-1 (open, answered in 0 of 1 cycle(s)): What would make')" 1
+run env ZOCIETY_TURN_ID=turn-a bin/zstuff --answers ask-9 tester stuff/ask-9.md
+assert_rc 1
+assert_err "^zstuff: no answer to 'ask-9' is owed"
+run env ZOCIETY_TURN_ID=turn-a bin/zstuff --answers ask-1 tester stuff/ask-1.md
+assert_rc 1
+assert_err "^zstuff: 'stuff/ask-1.md' does not exist"
+zev stuff
+zev stuff
+zev stuff
+assert_eq "3 stuff without the answer is not genesis" "$(bin/zstate | jq -r .genesis.complete)" false
+assert_eq "the answer is still next" "$(bin/zstate | jq -r .next)" contribute:answer
+mkdir -p stuff
+echo "# Keep a rule if it changes what a turn does" > stuff/ask-1.md
+run env ZOCIETY_TURN_ID=turn-a bin/zstuff --answers ask-1 tester stuff/ask-1.md
+assert_rc 0
+assert_eq "answer subject" "$(git log -1 --format=%s)" "[stuff] tester: answered ask-1 in stuff/ask-1.md"
+assert_eq "an answer, not stuff" "$(bin/zstate | jq -c '.genesis | {stuff, answers, complete}')" '{"stuff":3,"answers":1,"complete":true}'
+assert_eq "the envelope agrees" "$(git log -1 --format=%b | jq -c '.state | {stuff, complete}')" '{"stuff":3,"complete":true}'
+assert_eq "ask answered" "$(bin/zstate | jq -c '.ask | {id, status, open, answered}')" '{"id":"ask-1","status":"answered","open":false,"answered":1}'
+assert_eq "genesis complete" "$(bin/zstate | jq -r .next)" complete
+run bin/zask --show ask-1
+assert_rc 0
+assert_eq "--show prints the answer" "$(grep -c '^# Keep a rule if it changes what a turn does$' "$OUT")" 1
+run bin/zask --list
+assert_eq "--list says answered" "$(grep -c '^ask-1  answered  answered in 1 of 1 cycle(s)' "$OUT")" 1
+bin/zevent complete tester "fixture complete" '{}' >/dev/null 2>&1
+run bin/zask --cycles 2 "Is two cycles enough?"
+assert_rc 0
+assert_eq "an ask after complete keeps heap-death" "$(bin/zstate | jq -r .action)" heap-death
+assert_eq "and owes nothing this cycle" "$(bin/zstate | jq -r .needs.answers)" 0
+heap_death '{"batch_remaining":2}'
+cycle_n=$(( $(bin/zstate | jq -r .cycle) + 1 ))
+next_cycle "$cycle_n"
+assert_eq "next cycle takes it" "$(bin/zstate | jq -c '.ask | {id, status, cycles, answered}')" '{"id":"ask-2","status":"open","cycles":2,"answered":0}'
+assert_eq "next cycle owes it" "$(bin/zstate | jq -r .needs.answers)" 1
+assert_eq "members first" "$(bin/zstate | jq -r .next)" contribute:member
+run bin/zask "A queued third"
+assert_eq "ids are never reused" "$(git log -1 --format=%s)" "[ask] operator: ask-3: A queued third"
+assert_eq "two open" "$(bin/zstate | jq -r .asks_open)" 2
+echo "# first pass" > stuff/ask-2.md
+run env ZOCIETY_TURN_ID=turn-b bin/zstuff --answers ask-2 tester stuff/ask-2.md
+assert_rc 0
+assert_eq "one of two cycles" "$(bin/zstate | jq -c '.ask | {id, status, open, answered}')" '{"id":"ask-2","status":"answered","open":true,"answered":1}'
+assert_eq "one answer per cycle" "$(bin/zstate | jq -r .needs.answers)" 0
+assert_eq "the queue shows" "$(bin/zprompt --budget 60 | grep -c '^Operator question ask-2 (answered this cycle in stuff/ask-2.md): Is two cycles enough? \[1 more queued\]$')" 1
+heap_death '{"batch_remaining":2}'
+next_cycle $((cycle_n + 1))
+assert_eq "second cycle of ask-2" "$(bin/zstate | jq -c '.ask | {id, answered, status}')" '{"id":"ask-2","answered":1,"status":"open"}'
+zev join
+zev join
+zev join
+zev pass
+zev pass
+prompt=$(bin/zprompt --budget 60)
+assert_eq "the earlier answer is listed" "$(printf '%s\n' "$prompt" | grep -c '^  cycle [0-9]*: git show [0-9a-f]\{12\}:stuff/ask-2.md$')" 1
+assert_eq "and is to be built on" "$(printf '%s\n' "$prompt" | grep -c 'build on it, correct it or dispute it')" 1
+run bin/zask --close ask-3 "withdrawn"
+assert_rc 0
+assert_eq "closed" "$(bin/zstate --asks | jq -c '.[] | select(.id == "ask-3") | {open, closed}')" '{"open":false,"closed":true}'
+run bin/zask --close ask-3 "again"
+assert_rc 1
+assert_err "^zask: ask 'ask-3' is not open$"
+echo ""
+
+# Turns that did not join used to name themselves: all nine of cycle 41's
+# signed "dev-session", the label a human dev session uses.
+echo "=== Case 42: a non-join turn acts for the member who has gone longest without acting ==="
+fresh_repo roster
+for m in member-1 member-2 member-3; do
+  ZOCIETY_TURN_ID="join-$m" bin/zevent join "$m" "fixture join" '{}' >/dev/null 2>&1
+done
+assert_eq "join order while nobody has acted since" "$(bin/zstate | jq -c .roster)" '["member-1","member-2","member-3"]'
+ZOCIETY_TURN_ID=v1 bin/zvote member-1 1 yes "proposal" >/dev/null 2>&1
+assert_eq "the member who just acted goes last" "$(bin/zstate | jq -c .roster)" '["member-2","member-3","member-1"]'
+prompt=$(bin/zprompt --budget 60)
+assert_eq "the command carries the name" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zvote member-2 <rule_number>')" 1
+assert_eq "the prompt says whose turn it is" "$(printf '%s\n' "$prompt" | grep -c 'This turn acts for member-2, the member who has gone longest without acting')" 1
+echo ""
+
+# A run with no model variable sealed "unknown" on every turn, so the
+# heap-death reveal of cycle 41 said "gemini-3-5-flash,unknown".
+echo "=== Case 43: the seal names the model the stream ran when no variable does ==="
+fresh_repo seal-model
+printf '#!/bin/bash\necho "$*" >> %q\n' "$TMP/zblind.args" > bin/zblind
+chmod +x bin/zblind
+run env -u ANTHROPIC_MODEL -u GEMINI_MODEL bin/zloop --budget 30 --max 1
+assert_eq "compact: the init event's model" "$(grep -c '^seal [0-9a-f]* [0-9a-f]* claude-fake claude local$' "$TMP/zblind.args")" 1
+rm -f "$TMP/zblind.args"
+run env ANTHROPIC_MODEL=pinned-model bin/zloop --budget 30 --max 1
+assert_eq "a variable still wins" "$(grep -c ' pinned-model claude local$' "$TMP/zblind.args")" 1
+rm -f "$TMP/zblind.args"
+run env -u ANTHROPIC_MODEL -u GEMINI_MODEL bin/zloop --quiet --budget 30 --max 1
+assert_eq "quiet: no stream, unknown" "$(grep -c ' unknown claude local$' "$TMP/zblind.args")" 1
+echo ""
+
+echo "=== Case 44: bin/zloop --ask records the question before the first turn ==="
+fresh_repo loop-ask
+# bin/zask wants a clean tree; the fixture's bin/ is untracked until an event
+# commit sweeps it in, as it is tracked in the real repo.
+git add -A
+git commit -q -m "fixture tools"
+run bin/zloop --ask "What is the zociety for?" --budget 30 --max 1
+assert_eq "recorded" "$(git log --format=%s --grep='^\[ask\]')" "[ask] operator: ask-1: What is the zociety for?"
+assert_eq "the first turn saw it" "$(sed -n 1p "$FAKE_LOG" | grep -c 'Operator question ask-1 (open, answered in 0 of 1 cycle(s)): What is the zociety for?')" 1
+assert_eq "no turn sealed it" "$(git log --format=%H --grep='^\[ask\]' | xargs -n1 git notes --ref=agent show 2>/dev/null | grep -c 'kind: ai')" 0
 echo ""
 
 #############################################
