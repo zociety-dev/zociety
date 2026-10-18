@@ -38,7 +38,12 @@
 #   (arguments included) and the one or two things worth reading first, if
 #   any -- usually nothing, because the listing the agent would have gone
 #   looking for (stuff/ files, rule votes so far) is inlined under it. So the
-#   first tool call can be the action, and the prompt says so.
+#   first tool call can be the action, and the prompt says so. A turn that
+#   is not joining acts for bin/zstate .roster[0], the member who has gone
+#   longest without acting, and its command carries that name. When an
+#   operator question (bin/zask) is owed an answer, contribute:answer carries
+#   the question, this cycle's rules and stuff/, and any earlier answers to
+#   build on; every turn sees the open question under Where things stand.
 #
 #   Memory. The loop records each iteration's outcome (--record) and the
 #   next prompt gets a "Previous iteration" section: action attempted, exit
@@ -232,7 +237,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
     [[ -x "$f" ]] || continue
     base="${f#bin/}"
     case "$base" in
-      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*) continue ;;
+      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve) continue ;;
     esac
     # Usage: the "# Usage: bin/z..." one-liner, or the first "#   bin/z..."
     # under a "# Usage:" heading. The "-h | --help" form is not news.
@@ -260,9 +265,30 @@ if [[ "$CONTEXT" -eq 1 ]]; then
     nxt=$(printf '%s' "$state" | jq -r '
       if .next == null then empty
       else .next + (if (.needs // empty) then
-        " (still needed: \(.needs.members) member(s), \(.needs.rules) passed rule(s), \(.needs.stuff) stuff)"
+        " (still needed: \(.needs.members) member(s), \(.needs.rules) passed rule(s), \(.needs.stuff) stuff"
+        + (if (.needs.answers // 0) > 0 then ", \(.needs.answers) answer" else "" end) + ")"
         else "" end)
       end' 2>/dev/null) || nxt=""
+  fi
+
+  # Who this turn acts for. A join turn gets its name from bin/zjoin; any
+  # other turn acts for the member who has gone longest without acting
+  # (bin/zstate .roster[0]), so events carry a member's name instead of a
+  # handle the turn made up (cycle 41 signed all nine of its turns
+  # "dev-session"). Empty before anyone has joined.
+  you=""
+  [[ -n "$state" ]] && { you=$(printf '%s' "$state" | jq -r '.roster[0] // empty' 2>/dev/null) || you=""; }
+
+  # The operator question (bin/zask) this cycle answers, if any.
+  ask_id=""
+  ask_line=""
+  if [[ -n "$state" ]]; then
+    ask_id=$(printf '%s' "$state" | jq -r '.ask.id // empty' 2>/dev/null) || ask_id=""
+    ask_line=$(printf '%s' "$state" | jq -r '
+      if .ask == null then empty
+      else "Operator question \(.ask.id) (\(if .ask.status == "answered" then "answered this cycle in \(.ask.answers[-1].file)" else "open, answered in \(.ask.answered) of \(.ask.cycles) cycle(s)" end)): \(.ask.text)"
+        + (if (.asks_open // 0) > (if .ask.open then 1 else 0 end) then " [\((.asks_open // 0) - (if .ask.open then 1 else 0 end)) more queued]" else "" end)
+      end' 2>/dev/null) || ask_line=""
   fi
 
   # Do now (see header): the command for the action, so the first tool call
@@ -290,6 +316,23 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       [[ -n "$tally" ]] && listing="$listing"$'\n'"Tally:"$'\n'"$tally"
       [[ -n "$listing" ]] && listing="Rule activity so far:"$'\n'"$listing"
       ;;
+    contribute:answer)
+      run="write stuff/${ask_id}.md answering the operator question below, then bin/zstuff --answers ${ask_id} <agent> stuff/${ask_id}.md"
+      read_first="nothing; the question, this cycle's rules and its stuff/ are listed below"
+      # Earlier cycles' answers (--cycles N): the one to build on.
+      earlier=$(printf '%s' "$state" | jq -r '.ask.answers[]? | "  cycle \(.cycle): git show \(.commit[0:12]):\(.file)"' 2>/dev/null) || earlier=""
+      if [[ -n "$earlier" ]]; then
+        read_first="the latest earlier answer (listed below; git show it): build on it, correct it or dispute it, and do not restate it"
+      fi
+      cycle_start=$(git --no-pager log -1 --format=%H --grep='^\[direction\]' 2>/dev/null) || cycle_start=""
+      rules=$(git --no-pager log --reverse --format='  %s' --grep='^\[pass\]' ${cycle_start:+"${cycle_start}.."} 2>/dev/null) || rules=""
+      listing=$(printf '%s' "$state" | jq -r '"Operator question \(.ask.id) (asked in cycle \(.ask.asked_cycle); this cycle gives answer \(.ask.answered + 1) of \(.ask.cycles)):\n  \(.ask.text)"' 2>/dev/null) || listing=""
+      listing="$listing"$'\n'"Answer it in the first paragraph, then give the reasoning. Say what you are unsure of and what would settle it. Use this cycle's rules and stuff/ where they bear on the question, and say so when they do not. The answer is the cycle's, written for the operator, not a new direction."
+      [[ -n "$earlier" ]] && listing="$listing"$'\n'"Earlier answers:"$'\n'"$earlier"
+      [[ -n "$rules" ]] && listing="$listing"$'\n'"Rules passed this cycle:"$'\n'"$rules"
+      stuff_now=$(stuff_listing)
+      [[ -n "$stuff_now" ]] && listing="$listing"$'\n'"Existing stuff/:"$'\n'"$stuff_now"
+      ;;
     contribute:stuff)
       run='write one new file under stuff/, then bin/zstuff <agent> stuff/<file> [traversal]'
       read_first="nothing; the stuff/ files that already exist are listed below"
@@ -310,6 +353,9 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the question"
       listing=$(stuff_listing)
       [[ -n "$listing" ]] && listing="This cycle's stuff/:"$'\n'"$listing"
+      if [[ -n "$ask_id" && "$(printf '%s' "$state" | jq -r '.ask.status' 2>/dev/null)" == "answered" ]]; then
+        listing="$listing"$'\n'"This cycle answered operator question $ask_id. The next cycle's question is still the society's to choose; cite the answer only if it bears on it."
+      fi
       ;;
     promise)
       run='bin/zpromise'
@@ -319,12 +365,23 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       ;;
   esac
 
+  who="<agent> is your member name (member-N) or a short handle."
+  case "$next_raw" in
+    join|contribute:member) ;;
+    *)
+      if [[ -n "$you" ]]; then
+        run="${run//<agent>/$you}"
+        who="This turn acts for $you, the member who has gone longest without acting; use that name, not another."
+      fi
+      ;;
+  esac
+
   printf '\n%s\n' "## Do now (generated for this turn; this is the current state, do not re-derive it)"
   [[ -n "$nxt" ]] && printf '%s\n' "Action: $nxt"
   [[ -n "$run" ]] && printf '%s\n' "Run: $run"
   printf '%s\n' "Read first: $read_first."
   [[ -n "$listing" ]] && printf '%s\n' "$listing"
-  printf '%s\n' "PROMPT.md is above and AGENTS.md is not needed for this: do not re-read either. Make the action your first tool call; <agent> is your member name (member-N) or a short handle."
+  printf '%s\n' "PROMPT.md is above and AGENTS.md is not needed for this: do not re-read either. Make the action your first tool call. $who"
 
   # Previous iteration (see Memory in the header).
   prev=$(jq -c . "$PREV_FILE" 2>/dev/null) || prev=""
@@ -367,6 +424,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   [[ -n "$nxt" ]]        && printf '%s\n' "Do this: $nxt"
   [[ -n "$branch" ]]     && printf '%s\n' "Branch: $branch"
   [[ -n "$direction" ]]  && printf '%s\n' "Latest direction: $direction"
+  [[ -n "$ask_line" ]]   && printf '%s\n' "$ask_line"
   [[ -n "$heap_death" ]] && printf '%s\n' "Latest heap-death: $heap_death"
   if [[ -n "$recent" ]]; then
     printf '%s\n' "Recent commits:"

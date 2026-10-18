@@ -449,18 +449,20 @@ echo ""
 
 echo "=== Case 5: zjoin assigns member-{N} and records no model ==="
 fresh_repo join
-run env ANTHROPIC_MODEL=claude-opus-4-5 bin/zjoin
+# A join needs a runner turn id and is credited once per turn, so each join
+# here is its own turn.
+run env ZOCIETY_TURN_ID=join-1 ANTHROPIC_MODEL=claude-opus-4-5 bin/zjoin
 assert_rc 0
 assert_eq "subject" "$(git log -1 --format=%s)" "[join] member-1: joining cycle"
 JOIN1=$(git log -1 --format=%b | jq -c .)
 assert_eq "data" "$(printf '%s' "$JOIN1" | jq -c .data)" '{"role":"agent","greeting":"joining cycle"}'
 assert_eq "no model anywhere" "$(printf '%s' "$JOIN1" | grep -c model || true)" 0
-run bin/zjoin alice builder "hello there"
+run env ZOCIETY_TURN_ID=join-2 bin/zjoin alice builder "hello there"
 assert_rc 0
 assert_err "^zjoin: name 'alice' ignored; members are named by the harness \(member-\{N\}\)$"
 assert_eq "subject" "$(git log -1 --format=%s)" "[join] member-2: hello there"
 assert_eq "data" "$(git log -1 --format=%b | jq -c .data)" '{"role":"builder","greeting":"hello there"}'
-run bin/zjoin - voter
+run env ZOCIETY_TURN_ID=join-3 bin/zjoin - voter
 assert_rc 0
 assert_no_err 'ignored'
 assert_eq "subject" "$(git log -1 --format=%s)" "[join] member-3: joining cycle"
@@ -530,7 +532,7 @@ echo "=== Case 7b: event commits get no trailer; zstate ignores a stray one ==="
 # Code shell (CLAUDECODE=1; --no-verify does not skip prepare-commit-msg) must
 # keep its JSON body as the last thing in the message, or bin/zstate cannot
 # see it: this is how every loop member ended up named member-1.
-run env CLAUDECODE=1 bin/zevent join member-1 "joining cycle" '{"role":"agent","greeting":"joining cycle"}'
+run env CLAUDECODE=1 ZOCIETY_TURN_ID=join-1 bin/zevent join member-1 "joining cycle" '{"role":"agent","greeting":"joining cycle"}'
 assert_rc 0
 assert_eq "event subject" "$(git log -1 --format=%s)" "[join] member-1: joining cycle"
 assert_lacks "event commit" "$(git log -1 --format=%B)" '^Agent:'

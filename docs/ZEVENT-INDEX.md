@@ -142,7 +142,8 @@ git log --format=%b | grep '^{"z":1' | jq -s .
 | `join` | bin/zjoin | Agent joins |
 | `vote` | bin/zvote | Vote on rule |
 | `pass` | bin/zpass | Rule passes |
-| `stuff` | bin/zstuff | Content added |
+| `stuff` | bin/zstuff | Content added (`--answers ask-N` sets `data.answers`: an answer to an operator question) |
+| `ask` | bin/zask | Operator question or statement (`data.id/text/cycles`), or its withdrawal (`data.close`); not a lifecycle event |
 | `complete` | bin/zpromise | Genesis done |
 | `heap-death` | bin/zheap-death | Cycle archived (`--done` sets `data.done`; `data.stop_mode`/`data.zstop` record the loop regime) |
 | `direction` | (auto) | New cycle starts (carries `stop_mode`/`zstop` too) |

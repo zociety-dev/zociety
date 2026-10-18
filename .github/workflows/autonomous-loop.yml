@@ -30,8 +30,8 @@ on:
         required: false
         default: '1'
         type: string
-      direction:
-        description: 'Direction question (optional)'
+      ask:
+        description: 'Question or statement for the zociety to answer beside its own direction (optional; bin/zask)'
         required: false
         type: string
       model:
@@ -83,6 +83,12 @@ jobs:
           echo ""
           echo "=== Recent Events ==="
           git log --oneline -5
+
+      - name: Record Operator Question
+        if: ${{ github.event.inputs.ask != '' }}
+        env:
+          ASK: ${{ github.event.inputs.ask }}
+        run: bin/zask "$ASK"
 
       - name: Run Autonomous Loop
         env:

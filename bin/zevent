@@ -41,9 +41,12 @@ SEQ=$(echo "$CURRENT" | jq -r '.seq + 1')
 MEMBERS=$(echo "$CURRENT" | jq -r '.genesis.members')
 RULES=$(echo "$CURRENT" | jq -r '.genesis.rules')
 STUFF=$(echo "$CURRENT" | jq -r '.genesis.stuff')
+ANSWER_DUE=$(echo "$CURRENT" | jq -r '.needs.answers // 0')
 SESSION_CREDITS=$(echo "$CURRENT" | jq -c --arg session "$SESSION_ID" '.session_credits[$session] // {}')
 
-# Adjust counts based on event type
+# Adjust counts based on event type. A [stuff] that answers an operator
+# question (data.answers, bin/zstuff --answers) settles the answer leg
+# instead of counting as stuff, as bin/zstate credits it.
 case "$TYPE" in
   join)
     [[ "$(echo "$SESSION_CREDITS" | jq -r '.join // false')" == "true" ]] || MEMBERS=$((MEMBERS + 1))
@@ -52,12 +55,16 @@ case "$TYPE" in
     [[ "$(echo "$SESSION_CREDITS" | jq -r '.pass // false')" == "true" ]] || RULES=$((RULES + 1))
     ;;
   stuff)
-    [[ "$(echo "$SESSION_CREDITS" | jq -r '.stuff // false')" == "true" ]] || STUFF=$((STUFF + 1))
+    if [[ -n "$(echo "$DATA" | jq -r '.answers // empty')" ]]; then
+      ANSWER_DUE=0
+    else
+      [[ "$(echo "$SESSION_CREDITS" | jq -r '.stuff // false')" == "true" ]] || STUFF=$((STUFF + 1))
+    fi
     ;;
 esac
 
 # Check completion (as JSON boolean)
-if [[ $MEMBERS -ge 3 && $RULES -ge 2 && $STUFF -ge 3 ]]; then
+if [[ $MEMBERS -ge 3 && $RULES -ge 2 && $STUFF -ge 3 && $ANSWER_DUE -eq 0 ]]; then
   COMPLETE="true"
 else
   COMPLETE="false"
