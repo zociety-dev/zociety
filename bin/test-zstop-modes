@@ -1234,7 +1234,7 @@ assert_rc 0
 assert_eq "stdout" "$(cat "$OUT")" "partial answer"
 assert_err '^… thinking [12]s$'
 assert_err '^duration 1m05s · turns 7 · [$]1\.50 · error$'
-assert_eq "metrics" "$(cat "$metrics")" "65000 7 1.5 true"
+assert_eq "metrics" "$(cat "$metrics")" "65000 7 1.5 true claude-fake"
 echo ""
 
 # An undifferentiated action="contribute" let iterations pile onto the
@@ -1528,6 +1528,22 @@ assert_eq "latest vote per turn" "$(bin/zstate | jq -c '.votes["2"]')" '{"yes":1
 run env ZOCIETY_TURN_ID=turn-5 bin/zpass member-3 2 "second rule"
 assert_rc 1
 assert_err '^zpass: rule 2 has 1 yes / 2 no from distinct runner turns'
+echo ""
+
+# A run with no model variable sealed "unknown" on every turn, so the
+# heap-death reveal of cycle 41 said "gemini-3-5-flash,unknown".
+echo "=== Case 43: the seal names the model the stream ran when no variable does ==="
+fresh_repo seal-model
+printf '#!/bin/bash\necho "$*" >> %q\n' "$TMP/zblind.args" > bin/zblind
+chmod +x bin/zblind
+run env -u ANTHROPIC_MODEL -u GEMINI_MODEL bin/zloop --budget 30 --max 1
+assert_eq "compact: the init event's model" "$(grep -c '^seal [0-9a-f]* [0-9a-f]* claude-fake claude local$' "$TMP/zblind.args")" 1
+rm -f "$TMP/zblind.args"
+run env ANTHROPIC_MODEL=pinned-model bin/zloop --budget 30 --max 1
+assert_eq "a variable still wins" "$(grep -c ' pinned-model claude local$' "$TMP/zblind.args")" 1
+rm -f "$TMP/zblind.args"
+run env -u ANTHROPIC_MODEL -u GEMINI_MODEL bin/zloop --quiet --budget 30 --max 1
+assert_eq "quiet: no stream, unknown" "$(grep -c ' unknown claude local$' "$TMP/zblind.args")" 1
 echo ""
 
 #############################################

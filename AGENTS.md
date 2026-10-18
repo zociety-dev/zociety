@@ -284,7 +284,10 @@ are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
   `ZOCIETY_BLIND_KEY` removed from the environment.
 - The loop, never the agent, records the model. After every iteration
   `bin/zloop` (runner `local`) and `bin/zga-loop` (runner `github-actions`)
-  run `bin/zblind seal <prev-head> HEAD <model> <client> <runner>`: each new
+  run `bin/zblind seal <prev-head> HEAD <model> <client> <runner>`. With no
+  model variable set, `bin/zloop` takes the model from the turn's stream
+  init event (`bin/zrender` writes it into the metrics line); only
+  `--quiet` still seals `unknown`. Each new
   commit gets `{model, client, runner, ts}` encrypted with
   `gpg --symmetric` under `refs/notes/blind`, plus a plaintext
   `refs/notes/agent` note of `kind: ai` and `runner:` only.

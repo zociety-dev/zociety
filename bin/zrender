@@ -21,8 +21,10 @@
 #
 # Environment:
 #   ZRENDER_HEARTBEAT=10   Seconds of silence before a heartbeat (0 disables)
-#   ZRENDER_METRICS=path   Append "duration_ms turns cost is_error" per result
-#                          event; bin/zloop sums these at the end of a run
+#   ZRENDER_METRICS=path   Append "duration_ms turns cost is_error model" per
+#                          result event (model from the init event, "-" when
+#                          none came); bin/zloop sums these at the end of a
+#                          run and seals the model when no variable named one
 #   NO_COLOR               Disable colour (also off when stderr is not a TTY)
 #   COLUMNS                Width for truncation (default: tput cols, else 120)
 #
@@ -57,6 +59,8 @@ fi
 START=$SECONDS
 LAST=$SECONDS
 HEARTBEAT_SHOWN=0
+# The model the init event names, for the metrics line ("-" if none came).
+MODEL_SEEN="-"
 
 # One jq program classifies an event into tab-separated records, one per
 # content block: tool <name> <arg>, toolerr <text>, text <line>,
@@ -165,7 +169,7 @@ line_result() {
   printf '%sduration %s · turns %s · $%.2f%s%s\n' "$DIM" "$(fmt_duration "$ms")" "$turns" \
     "$cost" "$tail" "$RESET" >&2
   if [[ -n "$METRICS" ]]; then
-    printf '%s %s %s %s\n' "$ms" "$turns" "$cost" "$is_error" >> "$METRICS"
+    printf '%s %s %s %s %s\n' "$ms" "$turns" "$cost" "$is_error" "$MODEL_SEEN" >> "$METRICS"
   fi
 }
 
@@ -175,7 +179,7 @@ handle() {
   LAST=$SECONDS
   while IFS=$'\t' read -r kind a b c d; do
     case "$kind" in
-      init)    line_init "$a" ;;
+      init)    line_init "$a"; [[ -n "$a" ]] && MODEL_SEEN="${a// /_}" ;;
       tool)    line_tool "$a" "$b" ;;
       toolerr) line_toolerr "$a" ;;
       text)    line_text "$a" ;;
