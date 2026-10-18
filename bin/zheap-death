@@ -2,13 +2,22 @@
 # zheap-death: Archive the current cycle and prepare the next one
 #
 # Usage:
-#   bin/zheap-death [--done] [--cite FILE | --challenge FILE]... <agent> <question> [batch_size]
+#   bin/zheap-death [--done] [--cite FILE | --challenge FILE]... --learning TEXT <agent> <question> [batch_size]
 #   bin/zheap-death -h | --help
 #
 # Options:
 #   --done       Set "done": true in the heap-death event data. The agent is
 #                saying the hypothesis is settled; bin/zstop-feedback stops
 #                the loop on it. Flags go before positional arguments.
+#   --learning TEXT
+#                Required. One finding from this cycle that should change
+#                what the next cycle does: a claim its stuff/ supports, not
+#                a summary of what was made (at most 500 characters). Stored
+#                as data.learning in the heap-death event and appended to
+#                the learnings branch; bin/zprompt shows the latest to every
+#                turn and the last three to the next heap-death turn. The
+#                question carries the cycle's direction forward; the
+#                learning carries what it found.
 #
 # Arguments:
 #   agent        Name of the agent recording the heap-death (e.g. sonnet)
@@ -39,12 +48,13 @@
 #      changed since it, else attempt bumped. On a cycle branch also names
 #      the successor (bin/zcycle-id next) and refuses, before anything is
 #      written, if that branch already exists.
-#   2. Saves new PROMPT.md lines to the learnings branch (bin/save-learning).
+#   2. Appends the learning to the learnings branch (bin/save-learning) under
+#      the cycle id. A failed save warns and carries on: the event keeps it.
 #   3. Records a [heap-death] event commit via bin/zevent.
 #   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
 #      it), tag rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
-#   5. Pushes HEAD, tag, branch, and notes to origin if a remote exists, and
-#      opens a PR for the cycle branch via bin/zpr-flow.
+#   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
+#      a remote exists, and opens a PR for the cycle branch via bin/zpr-flow.
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
 #      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
 #      (gitignored) .claude/zloop.state.
@@ -64,6 +74,7 @@ usage() {
 }
 
 DONE=false
+LEARNING=""
 POSITIONAL=()
 CITES=()
 CHALLENGES=()
@@ -76,9 +87,17 @@ while [[ $# -gt 0 ]]; do
     --done)
       DONE=true
       ;;
+    --learning)
+      [[ $# -ge 2 ]] || { echo "zheap-death: --learning requires the finding" >&2; exit 1; }
+      LEARNING="$2"
+      shift
+      ;;
     --cite|--challenge)
       [[ $# -ge 2 ]] || { echo "zheap-death: $1 requires a stuff/ file" >&2; exit 1; }
-      if [[ "$1" == "--cite" ]]; then CITES+=("$2"); else CHALLENGES+=("$2"); fi
+      # Named relative to stuff/; a stuff/ prefix is accepted and dropped
+      # (a live turn passed stuff/allowed-signers.md and spent 15s on the
+      # refusal).
+      if [[ "$1" == "--cite" ]]; then CITES+=("${2#stuff/}"); else CHALLENGES+=("${2#stuff/}"); fi
       shift
       ;;
     --)
@@ -181,6 +200,22 @@ if [[ "$BATCH_SIZE" -gt 1 ]]; then
     }
   done
 fi
+# The learning is what the cycle found, as against the question, which is
+# where the next one goes. Before this flag nothing carried it: the learnings
+# branch only took PROMPT.md diff lines, and PROMPT.md has not changed since
+# rev66, so it last grew in January 2026. Required, and gated before any
+# write.
+LEARNING="${LEARNING#"${LEARNING%%[![:space:]]*}"}"
+LEARNING="${LEARNING%"${LEARNING##*[![:space:]]}"}"
+if [[ -z "$LEARNING" ]]; then
+  echo "zheap-death: --learning TEXT is required: one finding from this cycle that should change what the next cycle does" >&2
+  exit 1
+fi
+if [[ ${#LEARNING} -gt 500 ]]; then
+  echo "zheap-death: --learning is ${#LEARNING} characters; keep it to one finding of at most 500" >&2
+  exit 1
+fi
+
 INHERITANCE='{"cite":[],"challenge":[]}'
 for artifact in "${CITES[@]}"; do
   INHERITANCE=$(jq -c --arg artifact "$artifact" '.cite += [$artifact]' <<<"$INHERITANCE")
@@ -240,9 +275,6 @@ if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
   fi
 fi
 
-# Still needed by step 2 (new PROMPT.md lines since the last tag).
-LAST_TAG=$(git tag --sort=-version:refname | head -1)
-
 # Get iteration count from zloop state or estimate from commits
 if [[ -f "$STATE_FILE" ]]; then
   ITERATIONS=$(grep '^iteration:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "0")
@@ -266,22 +298,15 @@ echo "╚═══════════════════════�
 echo ""
 
 #############################################
-# 2. Save learning to orphan branch (if insight provided)
+# 2. Save the learning to the orphan branch
 #############################################
 
-# Extract insight from PROMPT.md learnings section if it changed
-if [[ -n "$LAST_TAG" ]] && ! git diff --quiet "$LAST_TAG" -- PROMPT.md 2>/dev/null; then
-  # PROMPT.md changed - there might be new learnings
-  INSIGHT=$(git diff "$LAST_TAG" -- PROMPT.md 2>/dev/null | grep "^+" | grep -v "^+++" | head -5 | sed 's/^+//')
-  if [[ -n "$INSIGHT" ]]; then
-    echo "Saving insight to learnings branch..."
-    # stderr stays visible: save-learning prints the git error and the full
-    # insight when the commit fails. Repeat the first line here so the loss
-    # is obvious in the heap-death output.
-    if ! bin/save-learning "rev$REV" "$INSIGHT"; then
-      echo "WARNING: learnings branch NOT updated; insight lost unless saved by hand: ${INSIGHT%%$'\n'*}" >&2
-    fi
-  fi
+echo "Saving learning to learnings branch..."
+# stderr stays visible: save-learning prints the git error and the full
+# learning when the commit fails. The [heap-death] event below still carries
+# it, so a failed save loses the branch copy, not the learning.
+if ! bin/save-learning "rev${REV}-attempt${ATTEMPT}" "$LEARNING"; then
+  echo "WARNING: learnings branch NOT updated; the learning is still in the [heap-death] event (data.learning)" >&2
 fi
 
 # save-learning writes the orphan `learnings` branch with plumbing
@@ -317,6 +342,7 @@ DATA=$(jq -nc \
   --arg tag "$TAG" \
   --arg branch "$CYCLE_BRANCH" \
   --arg question "$QUESTION" \
+  --arg learning "$LEARNING" \
   --argjson remaining "$REMAINING" \
   --argjson is_done "$DONE" \
   --argjson measures "$MEASURES" \
@@ -325,6 +351,7 @@ DATA=$(jq -nc \
     tag: $tag,
     branch: $branch,
     question: $question,
+    learning: $learning,
     batch_remaining: $remaining,
     done: $is_done,
     measures: $measures
@@ -357,6 +384,7 @@ echo "Adding git notes..."
 git notes add -f -m "cycle: rev$REV attempt$ATTEMPT
 genesis_complete: true
 question: $QUESTION
+learning: $LEARNING
 batch_remaining: $REMAINING" HEAD 2>/dev/null || true
 
 #############################################
@@ -369,6 +397,9 @@ if git remote get-url origin &>/dev/null; then
   git push origin "$TAG" --quiet 2>/dev/null || echo "  (tag push failed)"
   git push origin "$CYCLE_BRANCH" --quiet 2>/dev/null || echo "  (branch push failed)"
   git push origin refs/notes/commits --quiet 2>/dev/null || echo "  (notes push failed)"
+  # Nothing else pushes it, and bin/zsite-generate builds docs/learnings.html
+  # from origin's copy, which had fallen behind the local branch.
+  git push origin learnings --quiet 2>/dev/null || echo "  (learnings push failed)"
 fi
 
 #############################################
