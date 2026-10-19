@@ -69,6 +69,11 @@
 
 set -e
 
+# Tag, branch, notes, pushes and the PR must reach the container on the host,
+# whatever PATH the calling turn's shell ended up with (bin/zroute.sh).
+# shellcheck source=bin/zroute.sh
+. bin/zroute.sh
+
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 }

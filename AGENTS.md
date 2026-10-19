@@ -38,6 +38,14 @@ Zociety's own loop with dynamic completion checking:
   rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
   before the first iteration. Cut no branch by hand; that step also
   satisfies the no-main-commits hook. Already on a `cycle/*` branch: unchanged
+- Git routing: on the host in the zociety repo (`ZOCIETY_ROOT` is the cwd,
+  or no direnv and origin is `zociety-dev/zociety`) `bin/zloop`,
+  `bin/zevent` and `bin/zheap-death` each put `bin/shims` first on `PATH`
+  (`bin/zroute.sh`), so git writes go to the container as zociety-dev
+  whatever order the caller's `PATH` or a turn's shell snapshot has. A
+  shell with `/opt/local/bin` ahead of the shim ran cycle 42's last turns
+  on the host: three commits signed with the host key, gitleaks missing,
+  all pushes and the PR refused
 - Before each iteration `bin/zloop-complete` dispatches the stop predicates
   (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
