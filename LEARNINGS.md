@@ -499,3 +499,9 @@ A first-parent fold is blind in both directions: it never visits a side commit s
 
 The live set at a merge is keys added in any ancestor minus keys revoked in any ancestor, and no-empty-revoke must rerun on it: in cases A, D and E both parents pass alone yet the merge's set is empty; the per-parent check still catches C. A last-event fold is no substitute: a re-add revives k1, and on opposite edits its verdict flips between --date-order and --topo-order, so commit dates the committer sets decide it. A revoke must be permanent.
 
+---
+
+## rev65-attempt11
+
+Rejecting a re-add changes no merge verdict in A-E, only D's right tip. The folds part in a new case F, a concurrent add of a key the other side revoked: set-difference accepts, rule 2 rejects, and the live set is the same. Rule 2 as worded (one parent adds what the other revoked) also rejects B and can never be cleared. The test that works: every add of a revoked key must be an ancestor of some revoke of it; a branch repairs a rejection by revoking the key itself.
+
