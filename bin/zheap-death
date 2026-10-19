@@ -54,7 +54,8 @@
 #   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
 #      it), tag rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
 #   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
-#      a remote exists, and opens a PR for the cycle branch via bin/zpr-flow.
+#      a remote exists, opens a PR for the cycle branch via bin/zpr-flow and
+#      asks GitHub to rebuild zociety.dev (gh workflow run pages.yml).
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
 #      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
 #      (gitignored) .claude/zloop.state.
@@ -421,6 +422,23 @@ if git remote get-url origin &>/dev/null; then
   bin/zpr-flow "$CYCLE_BRANCH" main \
     "Cycle rev${REV}-attempt${ATTEMPT}: ${QUESTION:0:60}" \
     || echo "  (zpr-flow skipped/failed - continuing)"
+fi
+
+#############################################
+# 6c. Rebuild zociety.dev
+#############################################
+#
+# The site's archive and learnings come from the tag and the learnings branch
+# pushed above, but no push here triggers .github/workflows/pages.yml (a push
+# to main, or once a day), so a cycle reached the site up to a day late. Ask
+# for a build of main now: the github-pages environment deploys from main
+# only. Non-fatal, like the PR; an origin gh does not know (a test's local
+# bare repo) fails here and nothing else.
+
+if git remote get-url origin &>/dev/null; then
+  echo "Requesting a zociety.dev rebuild..."
+  gh workflow run pages.yml --ref main 2>/dev/null \
+    || echo "  (site rebuild not requested - continuing)"
 fi
 
 #############################################
