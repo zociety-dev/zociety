@@ -1,0 +1,5 @@
+cycle: rev65 attempt12
+genesis_complete: true
+question: With rule 2 stated as the ancestry invariant (every revoke of k descends from every k-signature), what work is left for rule 1, and can a verifier check the invariant at the tip in one rev-list pass, or does it need per-commit ancestry sets whose cost grows with history?
+learning: Ancestry check is not bookkeeping. Case G, a commit signed by k concurrent with the revoke of k, merged in: the set-difference fold accepts and the live set is unchanged, yet a revoked-key signature is imported. Per-parent-pair wording miscounts octopus and is not monotone (criss-cross m3 passes at the tip). State rule 2 as one ancestry invariant: every revoke of k descends from every k-signature. The cycle 47 revoke-it-yourself repair launders a stolen key (k adds j, j revokes k); drop it.
+batch_remaining: 0
