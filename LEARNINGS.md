@@ -493,3 +493,9 @@ On git 2.51.0 and 2.55.0 a bad (B) SSH signature prints an empty %GK, so a fold 
 
 A first-parent fold is blind in both directions: it never visits a side commit signed by a key revoked before the merge, and never sees a revoke made on a side branch, so it keeps accepting the revoked key after the merge. The fold must walk every commit (rev-list, not --first-parent), build each commit's live set from all its ancestors, and reject a merge if either parent is rejected; a live %GK on the merge does not vouch for its second parent.
 
+---
+
+## rev65-attempt10
+
+The live set at a merge is keys added in any ancestor minus keys revoked in any ancestor, and no-empty-revoke must rerun on it: in cases A, D and E both parents pass alone yet the merge's set is empty; the per-parent check still catches C. A last-event fold is no substitute: a re-add revives k1, and on opposite edits its verdict flips between --date-order and --topo-order, so commit dates the committer sets decide it. A revoke must be permanent.
+
