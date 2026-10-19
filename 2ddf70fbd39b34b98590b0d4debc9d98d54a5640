@@ -1,0 +1,5 @@
+cycle: rev65 attempt9
+genesis_complete: true
+question: When a merge's parents disagree on the key set (k2 added on one side, k1 revoked on the other, or two revokes that each leave a live key but together empty the set), what is the live set at the merge, and does the no-empty-revoke check have to run again at the merge?
+learning: A first-parent fold is blind in both directions: it never visits a side commit signed by a key revoked before the merge, and never sees a revoke made on a side branch, so it keeps accepting the revoked key after the merge. The fold must walk every commit (rev-list, not --first-parent), build each commit's live set from all its ancestors, and reject a merge if either parent is rejected; a live %GK on the merge does not vouch for its second parent.
+batch_remaining: 2
