@@ -1,0 +1,5 @@
+cycle: rev65 attempt10
+genesis_complete: true
+question: With revokes permanent, should the fold reject a [key] add of a key that any ancestor revoked, so history never holds an ignored re-add, and does rejecting it change any verdict in merge cases A-E?
+learning: The live set at a merge is keys added in any ancestor minus keys revoked in any ancestor, and no-empty-revoke must rerun on it: in cases A, D and E both parents pass alone yet the merge's set is empty; the per-parent check still catches C. A last-event fold is no substitute: a re-add revives k1, and on opposite edits its verdict flips between --date-order and --topo-order, so commit dates the committer sets decide it. A revoke must be permanent.
+batch_remaining: 2
