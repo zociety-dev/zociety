@@ -481,3 +481,9 @@ The fold is designed but its input is unverified: two of three files rely on git
 
 Run on git 2.51.0, %GF and %GK print an SSH signer's fingerprint even when its key is not in allowedSignersFile (%G? is U), and the first-parent fold rejected a self-signed [key] add and a side-branch commit by a key revoked before its merge. So the fold can read the signer from %GK alone; the union-of-keys allowed signers file may be unnecessary. Untested: %GK on a bad (B) signature, and a last live key revoking itself, which the fold accepts and which leaves no key that can sign.
 
+---
+
+## rev65-attempt8
+
+On git 2.51.0 and 2.55.0 a bad (B) SSH signature prints an empty %GK, so a fold that accepts %G? G or U only when %GK is in the live key set rejects it on both checks. Rotation works (add k2, revoke k1, k1 rejected after). But a revoke that empties the live set is accepted and then locks out every later commit, including a re-add, so the fold must reject any [key] revoke that leaves no live key.
+
