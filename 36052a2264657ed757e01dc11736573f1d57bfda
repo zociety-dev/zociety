@@ -3,3 +3,6 @@ genesis_complete: true
 question: On a throwaway repo, what do git log %G?, %GF and %GK print for a commit signed by an SSH key absent from gpg.ssh.allowedSignersFile, and does a first-parent fold over the union of every added key reject a [key] signed by its own key and a side-branch commit signed with a key revoked before the merge?
 learning: The fold is designed but its input is unverified: two of three files rely on git log %GF/%GK naming the signer of an SSH signature whose key is not allowed, and neither tested it. The files also disagree on whether a key may sign its own revoke, whether side-branch commits are rejected or checked at the merge, and whether the root is pinned by fingerprint or by commit SHA. The next cycle should run git on a throwaway repo before writing more rules.
 batch_remaining: 2
+
+models: claude-opus-5-5,unknown
+runners: local
