@@ -78,6 +78,25 @@ Zociety's own loop with dynamic completion checking:
   rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
   before the first iteration. Cut no branch by hand; that step also
   satisfies the no-main-commits hook. Already on a `cycle/*` branch: unchanged
+- Landing and main sync: `bin/zheap-death` lands each cycle on main with a
+  merge commit (`bin/zpr-flow` with `ZPR_MERGE=1`, method `merge`; squash
+  and rebase would leave the tag, the notes and the successor pointing at
+  commits main never has; `ZPR_MERGE=0` opens the PR only). A refused merge
+  leaves the PR open and the run goes on; the next cycle's PR carries it.
+  The run then merges `origin/main` back into the cycle branch before its
+  first turn and after every turn that made a `[heap-death]`
+  (`ZLOOP_SYNC_MAIN=1`), between turns so no seal covers main's commits, and
+  aborts a merge that does not apply cleanly with a WARNING. Before cycles
+  42-47 nothing set `ZPR_MERGE`, so main stayed at cycle 41, six nested
+  cycle PRs sat open and a tooling fix merged to main never reached the loop
+- Object store: before every turn `bin/zobjects` gives each hard-linked file
+  under `.git/objects` its own copy and removes a `maintenance.lock` over an
+  hour old. A local `git clone` hard-links the objects, and through the
+  podman machine's file sharing such a file can come back "Permission denied"
+  in the next container; cycle 44's heap-death failed twice in pre-commit on
+  two such objects. `bin/setup` sets `gc.autoDetach` and
+  `maintenance.autoDetach` to false, since a detached gc dies with the
+  container its command ran in and its lock then skips every later auto-gc
 - Git routing: on the host in the zociety repo (`ZOCIETY_ROOT` is the cwd,
   or no direnv and origin is `zociety-dev/zociety`) `bin/zloop`,
   `bin/zevent` and `bin/zheap-death` each put `bin/shims` first on `PATH`
@@ -163,7 +182,7 @@ Zociety's own loop with dynamic completion checking:
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
-| `bin/test-zcycle-id` | Dry-run harness for cycle identity: `zcycle-id`, the heap-death successor checkout, the zloop preflight |
+| `bin/test-zcycle-id` | Dry-run harness for cycle identity and landing: `zcycle-id`, the heap-death successor checkout, the zloop preflight; against a bare origin and a fake `gh`, heap-death landing the cycle with a merge commit (and a refused merge, `ZPR_MERGE=0`, a refused commit writing no learning), the run's main sync before the first turn and after a heap-death outside the turn's seal, and `bin/zobjects` |
 | `bin/test-zga-loop` | Dry-run harness for `bin/zga-loop`: throwaway bare origin + clone + fake `claude`; budget delivery, hard kill and abort, per-iteration prompt, seal-failure abort, push after commit, knob validation |
 
 ### Stop Modes
@@ -222,6 +241,7 @@ are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
 | `ZLOOP_VERBOSE` | 0 | Same as `--verbose`: raw stream-json events (1 = on) |
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
+| `ZLOOP_SYNC_MAIN` | 1 | Merge `origin/main` into the cycle branch before the first turn and after each heap-death, between turns (0 = never; see Landing and main sync) |
 
 ### ZSTOP Environment Variables
 
@@ -254,10 +274,11 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event; after the pushes and the PR it asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its pushes triggers the Pages workflow |
+| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
-| `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
+| `bin/zpr-flow` | Open a cycle branch PR into main and, with `ZPR_MERGE=1` (as `bin/zheap-death` runs it), merge it: `ZPR_MERGE_METHOD` defaults to `merge` (the repo allows no squash merges, and a rewritten commit would orphan the tag and notes), `ZPR_MERGE_TRIES`/`ZPR_MERGE_WAIT` retry a merge GitHub refuses while it computes mergeability. Exit 4: merge asked for and not done, PR left open |
+| `bin/zobjects` | Give every hard-linked file under `.git/objects` its own copy and remove a stale `maintenance.lock` (`--check` reports only); run by `bin/zloop` before every turn. See Object store |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
 | `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host. Read-only verbs (`log`, `diff`, `status`, `show`, `rev-parse`, ...) always stay; mixed verbs stay only in their read forms: `branch` listing (`--show-current`, `-a`/`-r`/`-v`, `--contains`, `--merged`, ... with no positional), `tag -l`, `notes list`/`show`, `remote [-v]`/`show`/`get-url`, `config --get`/`--get-all`/`--list`, `worktree list`, `stash list`/`show`. Anything else, including unrecognised options, goes to the container |
