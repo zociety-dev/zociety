@@ -74,6 +74,9 @@
 #   ZLOOP_BACKOFF_MAX=300   Cap on the sleep after consecutive claude failures
 #   ZLOOP_KILL_GRACE=10     Seconds to wait for the agent to exit on Ctrl-C
 #                           before it is killed outright
+#   ZLOOP_SYNC_MAIN=1       Merge origin/main into the cycle branch before the
+#                           first turn and after each heap-death (see Main
+#                           sync below; 0 = never)
 #   ZSTOP_*                 Per-mode knobs; see bin/zstop-<mode> --help
 #
 # Time: four different things, four different flags. Conflating them is the
@@ -144,6 +147,24 @@
 # the run names itself. bin/zheap-death births each later cycle's branch
 # (attempt+1) at death, so this covers only the first cycle of a run. To bump
 # rev, check out cycle/rev{N+1}-attempt1 yourself before starting.
+#
+# Main sync: the run merges origin/main into the cycle branch before its
+# first turn and after every turn that made a [heap-death], when main has
+# commits the branch lacks. Heap-death lands each cycle on main with a merge
+# commit (bin/zpr-flow), and the sync brings main back, with the tooling
+# fixes merged there since: the loop runs bin/ from the cycle branch, so
+# before this a fix on main reached the loop only when someone merged main
+# in by hand, and each cycle's PR carried every unmerged cycle before it.
+# The runner makes the merge between turns, so no turn's seal covers it or
+# main's commits; while a failed seal's range is pending it waits, since the
+# retry would seal them as agent work. A merge that does not apply cleanly
+# is aborted with a WARNING and the run goes on as it is.
+#
+# Object store: before every turn bin/zobjects gives each hard-linked file in
+# .git/objects its own copy. A local `git clone` of this repo hard-links the
+# objects, and through the podman machine's file sharing a file linked from
+# outside the repo can come back "Permission denied" in the next container;
+# cycle 44's heap-death failed twice in pre-commit on two such objects.
 #
 # Git routing: on the host in the zociety repo the run puts bin/shims first on
 # PATH (and sets ZOCIETY_ROOT; bin/zroute.sh), so its own git writes go to
@@ -246,6 +267,7 @@ RENDER="compact"
 [[ "${ZLOOP_QUIET:-0}" == "1" ]] && RENDER="text"
 BACKOFF_MAX="${ZLOOP_BACKOFF_MAX:-300}"
 KILL_GRACE="${ZLOOP_KILL_GRACE:-10}"
+SYNC_MAIN="${ZLOOP_SYNC_MAIN:-1}"
 # Seed for the failure backoff only (2s, 4s, 8s ...). Deliberately not
 # --interval: an interval of 0 is a legitimate cadence but would flatten the
 # backoff to zero and hammer a failing API.
@@ -387,6 +409,7 @@ require_int "ZLOOP_MAX_SEAL_FAILURES" "$MAX_SEAL_FAILURES"
 require_int "ZLOOP_MAX_IDLE" "$MAX_IDLE"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
+[[ "$SYNC_MAIN" == "0" || "$SYNC_MAIN" == "1" ]] || die "ZLOOP_SYNC_MAIN expects 0 or 1, got '$SYNC_MAIN'"
 [[ "$BUDGET_SECS" -gt 0 ]] || die "--budget/ZLOOP_BUDGET must be greater than 0"
 BUDGET_FLOOR="${ZLOOP_BUDGET_FLOOR:-120}"
 require_int "ZLOOP_BUDGET_FLOOR" "$BUDGET_FLOOR"
@@ -597,6 +620,35 @@ if command -v caffeinate >/dev/null 2>&1; then
   disown "$!" 2>/dev/null || true
 fi
 
+# sync_main <when>: merge origin/main into the cycle branch (see Main sync in
+# the header), <when> naming the moment for the log ("before the first
+# turn"). Quiet when there is nothing to do; never fails the run.
+sync_main() {
+  local behind branch
+  [[ "$SYNC_MAIN" == "1" ]] || return 0
+  git remote get-url origin >/dev/null 2>&1 || return 0
+  if [[ -n "${SEAL_FROM:-}" ]]; then
+    log "[zloop] main not merged $1: ${SEAL_FROM:0:7}..HEAD is unsealed, and the next seal would cover main's commits"
+    return 0
+  fi
+  if ! git fetch origin main --quiet 2>/dev/null; then
+    log "[zloop] WARNING: could not fetch origin/main $1; the branch stays as it is"
+    return 0
+  fi
+  behind=$(git rev-list --count HEAD..refs/remotes/origin/main 2>/dev/null) || behind=0
+  [[ "$behind" -gt 0 ]] || return 0
+  branch=$(git branch --show-current)
+  # The index as the container sees it: a merge right after host git wrote
+  # it failed with "fatal: stash failed" until it was refreshed.
+  git update-index -q --refresh >/dev/null 2>&1 || true
+  if git merge --no-edit -m "Merge origin/main into $branch" refs/remotes/origin/main >/dev/null 2>&1; then
+    log "[zloop] Merged origin/main into $branch $1 ($behind commit(s) from main)"
+  else
+    git merge --abort >/dev/null 2>&1 || true
+    log "[zloop] WARNING: origin/main does not merge cleanly into $branch $1; the branch stays as it is (merge main by hand)"
+  fi
+}
+
 # Identity at birth (see header): name the first cycle and check out its
 # branch when not already on a cycle branch. A successor that already exists
 # must be resumed explicitly; the runner never guesses or bypasses it.
@@ -616,6 +668,11 @@ if [[ ! "$current_branch" =~ ^cycle/ ]]; then
     log "[zloop] Branch: $cycle_branch (from ${current_branch:-detached HEAD})"
   fi
 fi
+
+# The object store, then main: the merge reads objects in the container (see
+# Object store and Main sync in the header).
+bin/zobjects >&2 || log "[zloop] WARNING: bin/zobjects could not fix the object store (see above)"
+sync_main "before the first turn"
 
 # A terminal [observation] left by an earlier run (see Failure to continue in
 # the header) stops the branch until an operator lifts it. With --resume the
@@ -834,6 +891,10 @@ log ""
 while true; do
   ITERATION=$((ITERATION + 1))
 
+  # Before the turn's commits read the store (see Object store in the header):
+  # a clone made since the last turn would have linked it again.
+  bin/zobjects >&2 || log "[zloop] WARNING: bin/zobjects could not fix the object store (see above)"
+
   # Asks the operator made while this run went (bin/zask queues them; see
   # Running unattended), recorded now, between turns, so no turn's seal
   # claims them. One that cannot be recorded yet (a dirty tree) waits, and
@@ -1050,10 +1111,15 @@ EOF
         "zblind could not seal provenance $SEAL_FAILURES iterations in a row (last: iteration $ITERATION)" 4
     fi
   fi
-  for death_sha in $(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}"); do
+  deaths=$(git rev-list --grep='^\[heap-death\]' "${PREV_HEAD}..${CUR_HEAD}")
+  for death_sha in $deaths; do
     bin/zblind reveal "$death_sha" \
       || log "[zloop] zblind reveal failed for ${death_sha:0:7} (continuing)"
   done
+  # A cycle died this turn and heap-death has tried to land it: bring main,
+  # with it, into the successor (see Main sync in the header). After the
+  # seal, so the merge is in no turn's range.
+  [[ -z "$deaths" ]] || sync_main "after the heap-death"
 
   # No progress: every turn of a working cycle commits, so ZLOOP_MAX_IDLE
   # turns in a row that commit nothing, whatever their exit, mean something
