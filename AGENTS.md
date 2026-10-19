@@ -17,9 +17,18 @@ Note: It's "zociety" not "society".
 ### Native zloop (recommended)
 
 ```bash
+# Unattended, bounded by its start parameters
+bin/zloop --for 8h --cost 25 --detach        # until 8h or $25, in the background
+bin/zloop --cycles 3 --ask "What is a rule for?"  # ask, then three cycles
+bin/zloop --for 3d --interval 10m --detach   # three days at a slow cadence
+bin/zloop status                             # limits left, iteration, cycles archived
+bin/zloop watch                              # follow a detached run's log
+bin/zloop stop                               # end it before its next turn (--now: at once)
+bin/zask "And what is a rule against?"       # queued while a run goes, recorded between turns
+
 # Direct execution
 bin/zloop 60
-bin/zloop --max 60 --budget 600 --verbose    # flags override ZLOOP_* env
+bin/zloop --max 60 --budget 10m --verbose    # flags override ZLOOP_* env
 bin/zloop --budget 600 --interval 30         # 10m of work per turn, 30s between turns
 bin/zloop --quiet 60                         # buffered output, no live render
 bin/zloop --stop action,file 60              # pick stop modes (default: action)
@@ -33,6 +42,27 @@ bin/zociety bin/zloop --stop budget,file 60
 ```
 
 Zociety's own loop with dynamic completion checking:
+- Run limits: `--for TIME` (90s, 45m, 8h, 3d, 1h30m; a turn starts only if
+  its budget fits before the limit), `--cost USD` (summed from each turn's
+  reported cost; a turn starts only if the run's average turn cost still
+  fits, so one costly turn can go over; not with `--quiet`) and `--cycles N`
+  (the `budget` stop mode with `ZSTOP_BUDGET=N`). Any of them lifts the
+  default 60-turn cap unless `--max` is given too. `--budget`, `--interval`
+  and `--timeout` take the same durations; a bare number is seconds. A
+  limit reached exits 1, as `--max` does, and says which
+- Running unattended: `--detach` starts the same command line under
+  `nohup` (closing the terminal does not end it), output in
+  `.zociety/runs/<id>.log`, and returns once the first turn is under way.
+  On macOS every run holds off idle sleep with `caffeinate` while it lasts
+  (a closed lid still sleeps). The run keeps `.zociety/run.json`
+  (`bin/zrun.sh`): pid, limits, iteration, spend. It is the lock (one run
+  per worktree; a record whose pid is gone is stale and replaced) and what
+  `bin/zloop status` reads; on exit it becomes `.zociety/run.last.json` with
+  the reason the run ended. `bin/zloop stop` leaves `.zociety/run.stop`,
+  checked before every turn and every 5s of the wait between turns, whatever
+  the stop modes; `stop --now` is SIGTERM. `bin/zask` during a run queues
+  the ask in `.zociety/asks.inbox` with its id, and the run records it
+  before its next turn, so no turn's seal claims it
 - Identity at birth: started on any branch that is not `cycle/*`, the run
   names its first cycle (`bin/zcycle-id current`: last tag, attempt+1, or
   rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
@@ -51,7 +81,7 @@ Zociety's own loop with dynamic completion checking:
   1 continue, 2 abort the loop (unknown mode or predicate error)
 - No static promise strings - uses exit codes
 - Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`
-- `--max N` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional safety caps, not modes;
+- `--max N`, `--for`, `--cost` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional caps, not modes;
   the predicates run once more after the final permitted iteration, so
   finishing on the last iteration exits 0 (`Loop Complete`), not 1
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
@@ -65,7 +95,9 @@ Zociety's own loop with dynamic completion checking:
   from the result event (`duration 4m58s · turns 17 · $0.83`) and run totals
   at the end. `--quiet` is the old buffered output; `--verbose` is the raw
   stream-json events with partial messages
-- Three separate time knobs; do not conflate them. `--interval` is cadence
+- Four separate time knobs; do not conflate them. `--for` is the run's
+  lifetime (no turn starts that could not finish its budget inside it),
+  `--interval` is cadence
   (quiet between turns, what `watch -n` and cron mean, and it bounds no
   work), `--budget` is the working budget handed to the agent in its prompt so
   it can scope the turn and commit before time runs out, and `--timeout` is the
@@ -105,13 +137,16 @@ Zociety's own loop with dynamic completion checking:
 - Ctrl-C (or SIGTERM/SIGHUP) stops the run immediately, in the container too:
   the agent gets SIGTERM, then SIGKILL after `ZLOOP_KILL_GRACE` seconds, the
   state file is removed and zloop exits 128+signal (130 for Ctrl-C). For a
-  graceful stop between iterations use `--stop file` and touch `.claude/STOP`.
+  graceful stop between iterations run `bin/zloop stop` from any shell (or,
+  with `--stop file`, touch `.claude/STOP`).
   Ctrl-Z is not job control inside the container; if a run is ever stuck,
   detach with `ctrl-p ctrl-q` and `podman kill zociety-sandbox`
 
 | Script | Purpose |
 |--------|---------|
-| `bin/zloop [options] [n]` | Run autonomous loop, max n iterations (`--help` for flags) |
+| `bin/zloop [options] [n]` | Run autonomous loop, max n iterations or within `--for`/`--cost`/`--cycles`, `--detach` to the background (`--help` for flags) |
+| `bin/zloop status\|watch\|stop [--now]` | Run control, handed to `bin/zloop-ctl`: the run going (limits left, iteration, spend, cycles archived) or how the last one ended plus the zociety's state; follow a detached run's log; end the run before its next turn (`--now`: SIGTERM) |
+| `bin/zrun.sh` | Sourced by `bin/zloop`, `bin/zloop-ctl` and `bin/zask`: durations (`zrun_secs`, `zrun_fmt`), the run record paths under `.zociety/` and `zrun_live_pid` |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
 | `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline) plus an instruction not to re-read PROMPT.md/AGENTS.md, the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
@@ -124,8 +159,8 @@ Zociety's own loop with dynamic completion checking:
 ### Stop Modes
 
 Comma-separated list via `bin/zloop --stop LIST` or `ZLOOP_STOP=LIST` (flag wins).
-The first predicate that exits 0 stops the loop. Always include `file` so a
-human can halt a run with `touch .claude/STOP`.
+The first predicate that exits 0 stops the loop. `bin/zloop stop` halts a
+run whatever the modes; `file` adds `touch .claude/STOP` as another way.
 
 | Mode | Stops when | Knobs |
 |------|------------|-------|
@@ -157,8 +192,13 @@ archive remains in a reviewable cycle lineage.
 
 ### zloop Environment Variables
 
+Time values (`ZLOOP_FOR`, `ZLOOP_BUDGET`, `ZLOOP_INTERVAL`, `ZLOOP_TIMEOUT`)
+are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `ZLOOP_FOR` | - | Time limit for the run (`--for`); lifts the default turn cap |
+| `ZLOOP_COST` | - | Spend limit for the run in dollars (`--cost`); lifts the default turn cap |
 | `ZLOOP_BUDGET` | 300 | Seconds of work an iteration is told it has. Passed to the agent in its prompt so it can scope the turn and commit in time |
 | `ZLOOP_BUDGET_FLOOR` | 120 | Budgets below this get a WARNING at start (heap-death and contribute turns need 180s+; the run will overrun). Never a refusal |
 | `ZLOOP_INTERVAL` | 1 | Seconds of quiet between iterations (cadence, as `watch -n` means it). Bounds no work |
@@ -213,9 +253,9 @@ All state is derived from git history. No mutable state files.
 | `bin/zpromise` | Output completion promise |
 | `bin/zobserve` | Record a terminal `[observation]` (the runner does this when it stops on a hard-kill or seal-failure streak); the branch then answers `action: stop` |
 | `bin/zresume` | Lift a terminal observation with an `[intervention]` event naming it and the reason; run by `bin/zloop --resume "<reason>"`. `bin/zcycle-measure` scores it against constraint adherence |
-| `bin/zask` | Put an operator question or statement to the zociety (`[ask]` event); `--cycles N`, `--list`, `--show ID`, `--close ID REASON`. See Operator Questions |
+| `bin/zask` | Put an operator question or statement to the zociety (`[ask]` event); `--cycles N`, `--list`, `--show ID`, `--close ID REASON`; queued while a run goes and recorded between its turns (`--drain`). See Operator Questions |
 | `bin/zevent` | Low-level event creation |
-| `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes) |
+| `bin/zloop` | Autonomous loop with dynamic completion (`--stop` modes), run limits (`--for`, `--cost`, `--cycles`), `--detach`, and `status`/`watch`/`stop` |
 | `bin/zloop-complete` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
 | `bin/zprompt` | Per-iteration agent prompt: PROMPT.md pointer, generated state/direction/commands context, working budget (single source for both loops) |
 | `bin/zrender` | Compact live render of claude's stream-json (used by `bin/zagent --render compact`) |
@@ -387,7 +427,7 @@ to it beside that direction with `bin/zask`:
 ```bash
 bin/zask "What would make a rule worth keeping?"   # [ask] operator: ask-1: ...
 bin/zask --cycles 3 "Is the zociety one mind or three?"  # worked through 3 cycles
-bin/zloop --ask "What is a rule for?" 15            # record, then run
+bin/zloop --ask "What is a rule for?" --cycles 2    # record, then run two cycles
 bin/zask --list                                     # status, where each answer is
 bin/zask --show ask-1                               # the question and every answer
 bin/zask --close ask-1 "superseded"                 # withdraw an open ask
@@ -409,9 +449,15 @@ bin/zask --close ask-1 "superseded"                 # withdraw an open ask
   the question, the cycle's rules and stuff/, and the earlier answers.
 - Asks come from outside: `bin/zask` refuses inside a loop turn
   (`ZOCIETY_TURN_ID` set) and on a dirty tree (`bin/zevent` stages
-  everything). Record one between runs or with `bin/zloop --ask`, so no
-  turn's seal claims it. `zask`, `zresume` and `zobserve` are left out of
-  the command list turns are shown.
+  everything). A commit made while a turn runs would be sealed as that
+  turn's, so while a run goes in the worktree an ask (or a close) is queued
+  in `.zociety/asks.inbox` with its id, and the run records the queue before
+  its next turn (`bin/zask --drain`); a queued ask waits for a clean tree.
+  Between runs, and from `bin/zloop --ask`, it is recorded at once. `zask`,
+  `zresume` and `zobserve` are left out of the command list turns are shown.
+- `bin/zloop --ask` records with one answering cycle whatever `--cycles`
+  says: the run's `--cycles` bounds the run, not the ask. For an ask worked
+  through several cycles, `bin/zask --cycles N` first.
 - Answers are archived with their cycle; `--show` reads them from the
   `[stuff]` commits, so they survive heap-death clearing `stuff/`.
 - The CI workflow's `ask` input records one before `bin/zga-loop` runs.

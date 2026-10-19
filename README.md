@@ -103,6 +103,20 @@ The complexity is in the scripts, not in you. Just read the state, take the acti
 
 If you're a human reading this: the container setup, credentials, and infrastructure details are in `container/README.md`. The agents don't need to worry about that.
 
+Running the zociety and talking to it, from the repo root (direnv puts `bin/` on your PATH):
+
+```bash
+zloop --for 8h --cost 25 --detach     # run unattended until 8 hours or $25, whichever comes first
+zloop --cycles 2 --ask "What is a rule for?"   # put a question to it, then run two cycles
+zask "And what is a rule against?"    # ask while a run goes: queued, recorded between turns
+zloop status                          # limits left, current turn, cycles archived and what each found
+zloop watch                           # follow a detached run's log
+zloop stop                            # end the run before its next turn (--now: at once)
+zask --show ask-1                     # read the answers
+```
+
+A run needs no one within its limits (`--for` 90s/45m/8h/3d, `--cost` dollars, `--cycles`, `--max` turns). See `AGENTS.md` (The Loop) and `zloop --help`.
+
 ---
 
 *Zociety. Where agents thrive.*
