@@ -67,8 +67,8 @@ zociety_rows() {
   local state learning queued
   state=$(bin/zstate 2>/dev/null) || state="{}"
   row "Zociety" "$(printf '%s' "$state" | jq -r '"cycle \(.cycle // "?") · next \(.next // .action // "?") · needs \(.needs // {} | to_entries | map("\(.key) \(.value)") | join(" "))"')"
-  queued=0
-  [[ -s "$ZRUN_INBOX" ]] && queued=$(grep -c . "$ZRUN_INBOX")
+  # cat fails on whichever file is missing; the count stands.
+  queued=$(cat "$ZRUN_INBOX" "$ZRUN_INBOX.draining" 2>/dev/null | grep -c . || true)
   if [[ "$(printf '%s' "$state" | jq -r '.ask.id // empty')" != "" ]]; then
     row "Ask" "$(printf '%s' "$state" | jq -r '"\(.ask.id) (\(.ask.status // "open")): \(.ask.text | .[0:100])\(if (.asks_open // 0) > 1 then " [\(.asks_open - 1) more open]" else "" end)"')"
   fi
@@ -113,7 +113,7 @@ limits_row() {
 }
 
 status() {
-  local pid rec host now started updated ended log
+  local pid rec foreign now started updated ended log
   now=$(date +%s)
   if pid=$(zrun_live_pid); then
     rec="$ZRUN_RECORD"
@@ -132,10 +132,10 @@ status() {
     return 0
   fi
   if [[ -f "$ZRUN_RECORD" ]]; then
-    host=$(get "$ZRUN_RECORD" .host)
-    updated=$(get "$ZRUN_RECORD" .updated)
-    if [[ "$host" != "$(hostname)" ]]; then
-      row "Run" "recorded by pid $(get "$ZRUN_RECORD" .pid) on $host (the container?), updated $(zrun_fmt $((now - ${updated:-$now}))) ago; not checkable from here"
+    if foreign=$(zrun_foreign); then
+      row "Run" "may be going, recorded elsewhere ($foreign); its pid cannot be checked from here"
+      limits_row "$ZRUN_RECORD"
+      row "Now" "iteration $(get "$ZRUN_RECORD" .iteration): $(get "$ZRUN_RECORD" .action) on $(get "$ZRUN_RECORD" .branch)"
     else
       row "Run" "none going; a stale record from pid $(get "$ZRUN_RECORD" .pid), which ended without closing it (the next run replaces it)"
     fi
@@ -190,13 +190,21 @@ watch_run() {
 }
 
 stop_run() {
-  local now=0 pid i
+  local now=0 pid i foreign=""
   case "${1:-}" in
     "") ;;
     --now) now=1 ;;
     *) die "stop takes only --now, got '$1'" ;;
   esac
   if ! pid=$(zrun_live_pid); then
+    # A run in the container shares the worktree, so the marker reaches it;
+    # a signal does not.
+    if foreign=$(zrun_foreign) && [[ $now -eq 0 ]]; then
+      : > "$ZRUN_STOP"
+      echo "zloop: the run recorded elsewhere ($foreign) ends before its next turn"
+      return 0
+    fi
+    [[ -z "${foreign:-}" ]] || die "the run recorded elsewhere ($foreign) cannot be signalled from here; bin/zloop stop without --now"
     echo "zloop: no run is going here"
     exit 1
   fi

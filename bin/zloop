@@ -21,7 +21,8 @@
 #   --cost USD         Spend limit in dollars, summed from each turn's
 #                      reported cost. A turn starts only if the run's average
 #                      turn cost still fits under it (one costly turn can go
-#                      over). Not with --quiet, which sees no cost
+#                      over, and a hard-killed turn reports no cost). Not
+#                      with --quiet, which sees no cost
 #   --cycles N         Stop after N cycles (heap-deaths) this run: the budget
 #                      stop mode with ZSTOP_BUDGET=N. An --ask is still
 #                      answered by one cycle; for more, bin/zask --cycles
@@ -64,6 +65,8 @@
 #   ZLOOP_MAX_SEAL_FAILURES=3  Consecutive bin/zblind seal failures that stop
 #                           the run (exit 4; 0 = never). A seal skipped for a
 #                           missing ZOCIETY_BLIND_KEY exits 0 and never counts
+#   ZLOOP_MAX_IDLE=10       Consecutive turns that commit nothing, whatever
+#                           their exit, that stop the run (exit 5; 0 = never)
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_QUIET=1           Same as --quiet
@@ -194,8 +197,8 @@
 # Exit codes: 0 complete or stopped by `bin/zloop stop`, 1 a limit reached
 # (--max, --for or --cost), 2 usage error or an aborting stop predicate, 3
 # too many consecutive hard kills, 4 too many consecutive bin/zblind seal
-# failures (3 and 4 leave a terminal [observation]; see --resume), 128+N a
-# signal.
+# failures (3 and 4 leave a terminal [observation]; see --resume), 5
+# ZLOOP_MAX_IDLE turns in a row with no commit, 128+N a signal.
 # Each iteration reads PROMPT.md and follows instructions.
 # State persists in git between iterations; .claude/zloop.state carries
 # iteration/max/start/mode for zheap-death and the predicates.
@@ -233,6 +236,7 @@ TIMEOUT_SOURCE=""
 [[ -n "$TIMEOUT_SECS" ]] && TIMEOUT_SOURCE="env"
 MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
 MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
+MAX_IDLE="${ZLOOP_MAX_IDLE:-10}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 # Render level handed to bin/zagent --render: compact (default), text
@@ -380,6 +384,7 @@ set_secs BUDGET_SECS "ZLOOP_BUDGET" "$BUDGET_SECS"
 set_secs INTERVAL_SECS "ZLOOP_INTERVAL" "$INTERVAL_SECS"
 require_int "ZLOOP_MAX_TIMEOUTS" "$MAX_TIMEOUTS"
 require_int "ZLOOP_MAX_SEAL_FAILURES" "$MAX_SEAL_FAILURES"
+require_int "ZLOOP_MAX_IDLE" "$MAX_IDLE"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 [[ "$BUDGET_SECS" -gt 0 ]] || die "--budget/ZLOOP_BUDGET must be greater than 0"
@@ -441,6 +446,19 @@ if [[ -z "$MAX_SOURCE" && -n "$FOR_SECS$COST_CAP$CYCLES" ]]; then
   MAX_ITERATIONS=""
 fi
 
+# refuse_if_running: one run per worktree (see Running unattended). A run in
+# the container and one on the host share the worktree but not a pid space,
+# so a fresh record from the other side refuses too.
+refuse_if_running() {
+  local live
+  if live=$(zrun_live_pid); then
+    die "a run is already going here (pid $live); bin/zloop status shows it, bin/zloop stop ends it"
+  fi
+  if live=$(zrun_foreign); then
+    die "a run recorded elsewhere may be going ($live); bin/zloop stop asks it to end. If it is gone, remove $ZRUN_RECORD"
+  fi
+}
+
 # --detach (see Running unattended): the same command line again in the
 # background, marked by ZLOOP_DETACHED (its run id) so it does not detach a
 # second time. Wait until its first turn is under way, or until it has
@@ -448,26 +466,28 @@ fi
 if [[ $DETACH -eq 1 && -z "${ZLOOP_DETACHED:-}" ]]; then
   [[ ! -f /run/.containerenv && ! -f /.dockerenv && -z "${container:-}" ]] \
     || die "--detach is for the host; in the container run the loop in the foreground"
-  if live=$(zrun_live_pid); then
-    die "a run is already going here (pid $live); bin/zloop status shows it, bin/zloop stop ends it"
-  fi
+  # Nobody watches a detached run: without the hard kill one hung turn
+  # would hold it, past --for and bin/zloop stop, until someone looks.
+  command -v timeout >/dev/null 2>&1 \
+    || die "--detach needs timeout(1) for the hard kill (brew install coreutils)"
+  refuse_if_running
   run_id=$(date -u +%Y%m%dT%H%M%SZ)
   mkdir -p "$ZRUN_LOGS"
   run_log="$ZRUN_LOGS/$run_id.log"
   ZLOOP_DETACHED="$run_id" nohup "$0" "${ORIG_ARGS[@]}" >"$run_log" 2>&1 </dev/null &
   child=$!
   for _ in $(seq 1 300); do
+    if [[ -f "$ZRUN_LAST" ]] && jq -e --arg id "$run_id" '.id == $id' "$ZRUN_LAST" >/dev/null 2>&1; then
+      echo "zloop: run $run_id ended at once: $(jq -r .reason "$ZRUN_LAST")"
+      tail -n 15 "$run_log"
+      exit "$(jq -r .exit "$ZRUN_LAST")"
+    fi
     if [[ -f "$ZRUN_RECORD" ]] \
       && jq -e --arg id "$run_id" '.id == $id and .iteration >= 1' "$ZRUN_RECORD" >/dev/null 2>&1; then
       echo "zloop: run $run_id is going in the background (pid $(jq -r .pid "$ZRUN_RECORD"))"
       echo "  log: $run_log"
       echo "  bin/zloop status · bin/zloop watch · bin/zloop stop"
       exit 0
-    fi
-    if [[ -f "$ZRUN_LAST" ]] && jq -e --arg id "$run_id" '.id == $id' "$ZRUN_LAST" >/dev/null 2>&1; then
-      echo "zloop: run $run_id ended at once: $(jq -r .reason "$ZRUN_LAST")"
-      tail -n 15 "$run_log"
-      exit "$(jq -r .exit "$ZRUN_LAST")"
     fi
     kill -0 "$child" 2>/dev/null || break
     sleep 0.2
@@ -491,9 +511,6 @@ fi
 # bin/zrun.sh). Taken before the first write, so a second start is refused
 # before it touches the branch, and the EXIT trap is set only once it is
 # ours: a refused start must not remove the live run's files.
-if live=$(zrun_live_pid); then
-  die "a run is already going here (pid $live); bin/zloop status shows it, bin/zloop stop ends it"
-fi
 RUN_ID="${ZLOOP_DETACHED:-$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_LOG=""
 [[ -z "${ZLOOP_DETACHED:-}" ]] || RUN_LOG="$ZRUN_LOGS/$RUN_ID.log"
@@ -508,35 +525,55 @@ COSTED=0
 END_REASON=""
 iter_action=""
 
-# write_record: .zociety/run.json from the run's variables, replaced whole
+# write_record [FILE]: .zociety/run.json (or FILE) from the run's variables,
+# replaced whole
 write_record() {
+  local out="${1:-$ZRUN_RECORD}"
   mkdir -p .zociety
-  jq -nc --arg id "$RUN_ID" --argjson pid "$$" --arg host "$(hostname)" --arg log "$RUN_LOG" \
+  jq -nc --arg id "$RUN_ID" --argjson pid "$$" --arg host "$(zrun_where)" --arg log "$RUN_LOG" \
     --argjson started "$RUN_STARTED" --arg start_sha "$START_SHA" \
     --arg branch "$(git branch --show-current 2>/dev/null || true)" --arg stop "$STOP_MODES" \
     --argjson budget "$BUDGET_SECS" --argjson interval "$INTERVAL_SECS" \
-    --arg max "$MAX_ITERATIONS" --arg deadline "$DEADLINE" --arg for "$FOR_SECS" \
+    --argjson timeout "$TIMEOUT_SECS" --arg max "$MAX_ITERATIONS" --arg deadline "$DEADLINE" --arg for "$FOR_SECS" \
     --arg cost "$COST_CAP" --arg cycles "$CYCLES" --argjson iteration "$ITERATION" \
     --argjson turns "$TURNS" --arg spent "$SPENT" --arg action "$iter_action" \
     'def num: if . == "" then null else tonumber end;
      {id: $id, pid: $pid, host: $host, log: $log, started: $started, updated: (now | floor),
       start_sha: $start_sha, branch: $branch, stop: $stop, budget: $budget, interval: $interval,
+      timeout: $timeout,
       limits: {max: ($max | num), deadline: ($deadline | num), for: ($for | num),
                cost: ($cost | num), cycles: ($cycles | num)},
       iteration: $iteration, turns: $turns, spent: ($spent | tonumber), action: $action}' \
-    > "$ZRUN_RECORD.tmp" && mv "$ZRUN_RECORD.tmp" "$ZRUN_RECORD"
+    > "$out.tmp" && mv "$out.tmp" "$out"
 }
 
 # finish_record <exit>: the record becomes .zociety/run.last.json, with why
-# and how the run ended
+# and how the run ended. run.json itself is not rewritten on the way out:
+# the --detach parent would read a run that stopped before its first turn
+# as one under way.
 finish_record() {
   [[ -f "$ZRUN_RECORD" ]] || return 0
-  write_record || true
+  write_record "$ZRUN_LAST.part" || true
   jq -c --argjson exit "$1" --arg reason "${END_REASON:-exited $1}" \
     --arg end_sha "$(git rev-parse HEAD 2>/dev/null || true)" \
     '. + {ended: (now | floor), exit: $exit, reason: $reason, end_sha: $end_sha}' \
-    "$ZRUN_RECORD" > "$ZRUN_LAST.tmp" && mv "$ZRUN_LAST.tmp" "$ZRUN_LAST"
-  rm -f "$ZRUN_RECORD" "$ZRUN_STOP"
+    "$ZRUN_LAST.part" > "$ZRUN_LAST.tmp" && mv "$ZRUN_LAST.tmp" "$ZRUN_LAST"
+  rm -f "$ZRUN_LAST.part" "$ZRUN_RECORD" "$ZRUN_STOP"
+}
+
+# take_record: the check and the first write under a mkdir lock, so two
+# starts at the same moment cannot both find no run and both go
+take_record() {
+  local i
+  mkdir -p .zociety
+  for ((i = 0; i < 50; i++)); do
+    mkdir "$ZRUN_RECORD.lock" 2>/dev/null && break
+    sleep 0.1
+  done
+  [[ $i -lt 50 ]] || die "$ZRUN_RECORD.lock has been held for 5s; if no run is starting here, remove it"
+  (refuse_if_running) || { rmdir "$ZRUN_RECORD.lock"; exit 2; }
+  write_record
+  rmdir "$ZRUN_RECORD.lock"
 }
 
 # On any exit (signal, abort, normal finish): close the record and remove the
@@ -550,7 +587,7 @@ on_exit() {
   done
 }
 
-write_record
+take_record
 rm -f "$ZRUN_STOP"
 trap 'on_exit $?' EXIT
 
@@ -742,6 +779,7 @@ limit_reached() {
 }
 
 FAILURES=0
+IDLE=0
 TIMEOUTS=0
 SEAL_FAILURES=0
 SEAL_FROM=""
@@ -798,8 +836,10 @@ while true; do
 
   # Asks the operator made while this run went (bin/zask queues them; see
   # Running unattended), recorded now, between turns, so no turn's seal
-  # claims them. One that cannot be recorded yet (a dirty tree) waits.
-  if [[ -s "$ZRUN_INBOX" ]]; then
+  # claims them. One that cannot be recorded yet (a dirty tree) waits, and
+  # so does the queue while an unsealed range is pending: the next seal
+  # covers SEAL_FROM..HEAD and would mark the asks as agent work.
+  if [[ -s "$ZRUN_INBOX" || -s "$ZRUN_INBOX.draining" ]] && [[ -z "$SEAL_FROM" ]]; then
     bin/zask --drain >&2 \
       || log "[zloop] WARNING: queued asks not recorded yet (see above); trying again before the next turn"
   fi
@@ -956,6 +996,7 @@ EOF
   # it went. Best-effort; a failed record costs the next turn its memory, not
   # the run.
   iter_commits=$(git rev-list --count "${PREV_HEAD}..${CUR_HEAD}" 2>/dev/null) || iter_commits=0
+  if [[ "$iter_commits" -eq 0 ]]; then IDLE=$((IDLE + 1)); else IDLE=0; fi
   bin/zprompt --record --iteration "$ITERATION" --action "$iter_action" \
     --exit "$exit_code" --elapsed "$iter_secs" --budget "$BUDGET_SECS" \
     --commits "$iter_commits" --result "$RESULT_FILE" --render "$RENDER" \
@@ -1013,6 +1054,21 @@ EOF
     bin/zblind reveal "$death_sha" \
       || log "[zloop] zblind reveal failed for ${death_sha:0:7} (continuing)"
   done
+
+  # No progress: every turn of a working cycle commits, so ZLOOP_MAX_IDLE
+  # turns in a row that commit nothing, whatever their exit, mean something
+  # outside the turn is wrong (an expired login, an API outage past the
+  # backoff, a stuck cycle). Stop rather than retry until the run's time or
+  # money runs out. Not an observation: the next run may well work.
+  if [[ $MAX_IDLE -gt 0 && $IDLE -ge $MAX_IDLE ]]; then
+    END_REASON="aborted: $IDLE turns in a row made no commit"
+    log ""
+    log "=== Loop Aborted ==="
+    log "$IDLE turns in a row made no commit (last exit $exit_code); nothing is getting done."
+    log "See the turns above for why. ZLOOP_MAX_IDLE=0 never stops on this."
+    print_totals
+    exit 5
+  fi
 
   # The configured interval on success. On consecutive non-zero exits (rate
   # limits, transient API errors) back off exponentially instead of hammering

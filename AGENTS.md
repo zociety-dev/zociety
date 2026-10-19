@@ -53,16 +53,26 @@ Zociety's own loop with dynamic completion checking:
 - Running unattended: `--detach` starts the same command line under
   `nohup` (closing the terminal does not end it), output in
   `.zociety/runs/<id>.log`, and returns once the first turn is under way.
+  It needs `timeout(1)`: nobody is there to kill a hung turn. Within its
+  limits a run also ends itself on `ZLOOP_MAX_IDLE` (10) turns in a row
+  that commit nothing (exit 5), so a run with an expired login does not
+  retry until its time or money runs out.
   On macOS every run holds off idle sleep with `caffeinate` while it lasts
   (a closed lid still sleeps). The run keeps `.zociety/run.json`
   (`bin/zrun.sh`): pid, limits, iteration, spend. It is the lock (one run
   per worktree; a record whose pid is gone is stale and replaced) and what
   `bin/zloop status` reads; on exit it becomes `.zociety/run.last.json` with
-  the reason the run ended. `bin/zloop stop` leaves `.zociety/run.stop`,
+  the reason the run ended. A run in the container and one on the host
+  share the worktree but not a pid space, so a record written on the other
+  side counts as live while it is fresher than a turn's hard kill plus the
+  longest wait between turns plus a minute (`zrun_foreign`): a start is
+  refused, an ask is queued, and `bin/zloop stop` (not `--now`) reaches it
+  through the marker. `bin/zloop stop` leaves `.zociety/run.stop`,
   checked before every turn and every 5s of the wait between turns, whatever
   the stop modes; `stop --now` is SIGTERM. `bin/zask` during a run queues
   the ask in `.zociety/asks.inbox` with its id, and the run records it
-  before its next turn, so no turn's seal claims it
+  before its next turn, so no turn's seal claims it (the queue also waits
+  while a failed seal's range is pending, since the retry would cover it)
 - Identity at birth: started on any branch that is not `cycle/*`, the run
   names its first cycle (`bin/zcycle-id current`: last tag, attempt+1, or
   rev+1 if `PROMPT.md` changed) and checks out `cycle/rev{N}-attempt{M}`
@@ -146,7 +156,7 @@ Zociety's own loop with dynamic completion checking:
 |--------|---------|
 | `bin/zloop [options] [n]` | Run autonomous loop, max n iterations or within `--for`/`--cost`/`--cycles`, `--detach` to the background (`--help` for flags) |
 | `bin/zloop status\|watch\|stop [--now]` | Run control, handed to `bin/zloop-ctl`: the run going (limits left, iteration, spend, cycles archived) or how the last one ended plus the zociety's state; follow a detached run's log; end the run before its next turn (`--now`: SIGTERM) |
-| `bin/zrun.sh` | Sourced by `bin/zloop`, `bin/zloop-ctl` and `bin/zask`: durations (`zrun_secs`, `zrun_fmt`), the run record paths under `.zociety/` and `zrun_live_pid` |
+| `bin/zrun.sh` | Sourced by `bin/zloop`, `bin/zloop-ctl` and `bin/zask`: durations (`zrun_secs`, `zrun_fmt`), the run record paths under `.zociety/`, `zrun_live_pid` and `zrun_foreign` |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
 | `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline) plus an instruction not to re-read PROMPT.md/AGENTS.md, the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
@@ -205,6 +215,7 @@ are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
 | `ZLOOP_TIMEOUT` | 2x budget | Hard kill: `timeout` SIGTERMs the agent mid-token and uncommitted work is lost. A backstop for a hung process, not the working budget. Must exceed `ZLOOP_BUDGET` |
 | `ZLOOP_MAX_TIMEOUTS` | 3 | Consecutive hard kills that abort the run with exit 3 (0 = never abort) |
 | `ZLOOP_MAX_SEAL_FAILURES` | 3 | Consecutive `bin/zblind seal` failures that abort the run with exit 4 (0 = never abort). A skipped seal (`ZOCIETY_BLIND_KEY` unset) exits 0 and does not count |
+| `ZLOOP_MAX_IDLE` | 10 | Consecutive turns that commit nothing, whatever their exit, that abort the run with exit 5 (0 = never). Every turn of a working cycle commits, so this is an expired login, an outage past the backoff or a stuck cycle; no observation is left |
 | `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_QUIET` | 0 | Same as `--quiet`: buffered result only, no live render (1 = on) |

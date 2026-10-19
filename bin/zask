@@ -69,21 +69,29 @@ record_guard() {
     || die "the working tree has changes; commit or remove them first (bin/zevent stages everything into the event)"
 }
 
-# run_going: the pid of a run going in this worktree that is not our caller
-# (bin/zloop records its own --ask and the queue directly)
+# run_going: the run going in this worktree, unless it is our caller
+# (bin/zloop records its own --ask and the queue directly). A fresh record
+# from the other side of the container counts: its pid cannot be checked
+# from here, and a queued ask waits for the next run at worst.
 run_going() {
   local pid
-  pid=$(zrun_live_pid) || return 1
-  [[ "$pid" != "$PPID" ]] || return 1
-  echo "$pid"
+  if pid=$(zrun_live_pid); then
+    [[ "$pid" != "$PPID" ]] || return 1
+    echo "pid $pid"
+    return 0
+  fi
+  zrun_foreign
 }
 
 # Ids run over the whole history, not bin/zstate's window, so one is never
-# reused: the highest ask-N any [ask] subject or queued ask names, plus one.
+# reused: the highest ask-N any [ask] subject or queued ask names (in the
+# inbox or in a drain under way), plus one.
 next_id() {
-  local last
+  local last q
   last=$({ git log --format=%s --grep='^\[ask\] ' 2>/dev/null
-           [[ ! -s "$ZRUN_INBOX" ]] || jq -r '.id // empty' "$ZRUN_INBOX" 2>/dev/null
+           for q in "$ZRUN_INBOX" "$ZRUN_INBOX.draining"; do
+             [[ ! -s "$q" ]] || jq -r '.id // empty' "$q" 2>/dev/null
+           done
          } | grep -o 'ask-[0-9]*' | cut -d- -f2 | sort -n | tail -n1)
   echo "ask-$(( ${last:-0} + 1 ))"
 }
@@ -116,14 +124,18 @@ close_ask() {
   echo "zask: closed $1"
 }
 
-# drain_one <json>: record one queued line. 0 when it is done with (recorded,
-# or dropped because it no longer applies), 1 when the record failed.
+# drain_one <json>: record one queued line. 0 when it is done with (recorded
+# now or by a drain that was cut off, or dropped because it no longer
+# applies), 1 when it could not be recorded and must stay queued. Explicit
+# returns throughout: drain calls this where set -e does not apply.
 drain_one() {
-  local line="$1" id text cycles reason
+  local line="$1" id text cycles reason asks open subject
   id=$(printf '%s' "$line" | jq -r '.close // empty' 2>/dev/null) || id=""
   if [[ -n "$id" ]]; then
     reason=$(printf '%s' "$line" | jq -r '.reason')
-    if [[ "$(ask_by_id "$id" | jq -r '.open // false')" != "true" ]]; then
+    asks=$(bin/zstate --asks) || return 1
+    open=$(printf '%s' "$asks" | jq -r --arg id "$id" '.[] | select(.id == $id) | .open') || return 1
+    if [[ "$open" != "true" ]]; then
       echo "zask: dropped the queued close of $id: it is no longer open" >&2
       return 0
     fi
@@ -137,31 +149,41 @@ drain_one() {
   fi
   cycles=$(printf '%s' "$line" | jq -r '.cycles // 1')
   id=$(printf '%s' "$line" | jq -r '.id // empty')
-  # The id given at queue time, unless something took it since.
-  if [[ -z "$id" ]] || git log --format=%s --grep='^\[ask\] ' | grep -q "^\[ask\] operator: $id: "; then
-    id=$(next_id)
+  # The id given at queue time, unless something took it since; the same id
+  # and text already recorded is this ask, from a drain that was cut off.
+  if [[ -n "$id" ]]; then
+    subject=$(git log -n1 --format=%s --grep="^\[ask\] operator: $id: " 2>/dev/null) || return 1
+    if [[ "$subject" == "[ask] operator: $id: ${text%%$'\n'*}" ]]; then
+      echo "zask: $id was already recorded" >&2
+      return 0
+    fi
+    [[ -z "$subject" ]] || id=""
   fi
+  [[ -n "$id" ]] || id=$(next_id)
   record_ask "$id" "$text" "$cycles"
 }
 
-# drain: record the queue in order. On a failure the line that failed and
-# those after it go back to the head of the queue, ahead of any queued since.
+# drain: record the queue in order. The inbox is taken aside with mv, so an
+# ask queued meanwhile starts a new one, and appended to what a cut-off
+# drain left in .draining. On a failure the line that failed and those after
+# it stay in .draining, ahead of anything queued since.
 drain() {
-  local work line lines=() i
-  [[ -s "$ZRUN_INBOX" ]] || return 0
+  local work="$ZRUN_INBOX.draining" line lines=() i
+  [[ -s "$ZRUN_INBOX" || -s "$work" ]] || return 0
   record_guard
-  # Taken aside first, so an ask queued meanwhile lands in a new inbox.
-  work="$ZRUN_INBOX.draining"
-  mv "$ZRUN_INBOX" "$work"
+  if [[ -e "$ZRUN_INBOX" ]]; then
+    mv "$ZRUN_INBOX" "$ZRUN_INBOX.taken"
+    cat "$ZRUN_INBOX.taken" >> "$work"
+    rm -f "$ZRUN_INBOX.taken"
+  fi
   while IFS= read -r line || [[ -n "$line" ]]; do
     lines+=("$line")
   done < "$work"
   for ((i = 0; i < ${#lines[@]}; i++)); do
     [[ -n "${lines[i]}" ]] || continue
     if ! drain_one "${lines[i]}"; then
-      { printf '%s\n' "${lines[@]:i}"; cat "$ZRUN_INBOX" 2>/dev/null || true; } > "$ZRUN_INBOX.rest"
-      mv "$ZRUN_INBOX.rest" "$ZRUN_INBOX"
-      rm -f "$work"
+      printf '%s\n' "${lines[@]:i}" > "$work.rest"
+      mv "$work.rest" "$work"
       return 1
     fi
   done
@@ -203,7 +225,7 @@ case "${1:-}" in
     [[ "$(printf '%s' "$ASK" | jq -r '.open')" == "true" ]] || die "ask '$2' is not open"
     if pid=$(run_going); then
       queue "$(jq -nc --arg id "$2" --arg reason "$3" '{close: $id, reason: $reason}')"
-      echo "zask: a run is going here (pid $pid); the close of $2 is queued for its next turn"
+      echo "zask: a run is going here ($pid); the close of $2 is queued for its next turn"
       exit 0
     fi
     record_guard
@@ -233,7 +255,7 @@ ID=$(next_id)
 if pid=$(run_going); then
   queue "$(jq -nc --arg id "$ID" --arg text "$TEXT" --argjson cycles "$CYCLES" \
     '{id: $id, text: $text, cycles: $cycles}')"
-  echo "zask: a run is going here (pid $pid); $ID is queued and recorded before its next turn"
+  echo "zask: a run is going here ($pid); $ID is queued and recorded before its next turn"
   echo "zask: bin/zloop status shows the queue; bin/zask --show $ID reads the answer once given"
   exit 0
 fi
