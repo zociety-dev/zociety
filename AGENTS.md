@@ -247,14 +247,14 @@ All state is derived from git history. No mutable state files.
 
 | Script | Purpose |
 |--------|---------|
-| `bin/zstate` | Get current state and next action (JSON output). One `git log` pass and one `jq` over the last 1000 commits (about 1s; never a process per commit, which cost 30s and, through `bin/zlog`, a minute per z* command). Also `direction` (this cycle's question), `session_credits` (one join/pass/stuff/answer credited per turn id), `votes` (per rule, one vote per turn), `roster` (this cycle's members, least recently active first) and `ask`/`asks_open` (the operator question this cycle answers). `--asks` prints every operator question |
+| `bin/zstate` | Get current state and next action (JSON output). One `git log` pass and one `jq` over the last 1000 commits (about 1s; never a process per commit, which cost 30s and, through `bin/zlog`, a minute per z* command). Also `direction` (this cycle's question), `session_credits` (one join/pass/stuff/answer credited per turn id), `votes` (per rule, one vote per turn), `roster` (this cycle's members, least recently active first) and `ask`/`asks_open` (the operator question this cycle answers). `--asks` prints every operator question; `--ref REF` reads REF's history instead of HEAD's |
 | `bin/zjoin` | Join as a member (name assigned: `member-{N}`; no model in the event) |
 | `bin/zblind` | Seal each loop turn's model under `refs/notes/blind` (`seal`), mark it `kind: ai` under `refs/notes/agent`, and decrypt a cycle's models at heap-death (`reveal`) |
 | `bin/zstuff` | Record stuff creation |
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event |
+| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event; after the pushes and the PR it asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its pushes triggers the Pages workflow |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
 | `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
@@ -280,14 +280,14 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
-| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back |
+| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; and that the front page and `stuff.html` follow the highest cycle branch, not main |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
 | `bin/nfprov.py` | Vendored-verbatim canonical encoder from the fork (`mark`/`inspect`/`strip`/`convert`) |
 | `bin/nfprov-diff.py` | Mark text added between a base and current file (`mark-added`); front end over `bin/nfprov.py` |
 | `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
-| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout). The archive is gathered in four git calls for the whole `rev*` tag set (`for-each-ref` for names and dates, `grep -L` for each tag's `stuff/*.md`, `grep` for their h1s, `cat-file --batch` for the bodies), never per tag or per artifact |
+| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout). The archive is gathered in four git calls for the whole `rev*` tag set (`for-each-ref` for names and dates, `grep -L` for each tag's `stuff/*.md`, `grep` for their h1s, `cat-file --batch` for the bodies), never per tag or per artifact. The front page, `stuff.html` and `site.json` describe the live cycle: the highest `cycle/rev{N}-attempt{M}` branch (origin's when it is ahead or the only one), read with `bin/zstate --ref`, because main takes a cycle only when its PR merges |
 | `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
 
 ### Provenance (delano/nerd-fonts#15)
