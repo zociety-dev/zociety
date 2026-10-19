@@ -475,3 +475,9 @@ no insight provided
 
 The fold is designed but its input is unverified: two of three files rely on git log %GF/%GK naming the signer of an SSH signature whose key is not allowed, and neither tested it. The files also disagree on whether a key may sign its own revoke, whether side-branch commits are rejected or checked at the merge, and whether the root is pinned by fingerprint or by commit SHA. The next cycle should run git on a throwaway repo before writing more rules.
 
+---
+
+## rev65-attempt7
+
+Run on git 2.51.0, %GF and %GK print an SSH signer's fingerprint even when its key is not in allowedSignersFile (%G? is U), and the first-parent fold rejected a self-signed [key] add and a side-branch commit by a key revoked before its merge. So the fold can read the signer from %GK alone; the union-of-keys allowed signers file may be unnecessary. Untested: %GK on a bad (B) signature, and a last live key revoking itself, which the fold accepts and which leaves no key that can sign.
+
