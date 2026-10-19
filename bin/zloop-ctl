@@ -40,15 +40,36 @@ get() {
   jq -r "($2) // empty" "$1" 2>/dev/null
 }
 
-# row <label> <text>: one aligned line of the status
+# Width the rows wrap to: COLUMNS when it is set, else the terminal's. Piped
+# with no COLUMNS, each row stays one line for grep.
+WRAP=0
+if [[ "${COLUMNS:-}" =~ ^[0-9]+$ ]]; then
+  WRAP=$COLUMNS
+elif [[ -t 1 ]]; then
+  WRAP=$(tput cols 2>/dev/null) || WRAP=80
+fi
+[[ "$WRAP" =~ ^[0-9]+$ ]] || WRAP=80
+(( WRAP == 0 || WRAP >= 50 )) || WRAP=50
+
+# row <label> <text>: one aligned row of the status. Text is never cut: it
+# wraps at spaces under the text column, so a learning (up to 500 characters,
+# bin/zheap-death) is shown whole.
 row() {
-  printf '%-10s%s\n' "$1" "$2"
+  local label="$1" line
+  if (( WRAP == 0 )); then
+    printf '%-10s%s\n' "$label" "$2"
+    return 0
+  fi
+  while IFS= read -r line; do
+    printf '%-10s%s\n' "$label" "${line%"${line##*[! ]}"}"
+    label=""
+  done < <(printf '%s\n' "$2" | fold -s -w $((WRAP - 10)))
 }
 
 # cycles_in <from> <to> <verb>: the cycles a run archived, newest first, and
 # what each found
 cycles_in() {
-  local from="$1" to="$2" verb="$3" n
+  local from="$1" to="$2" verb="$3" n branch found
   [[ -n "$from" ]] || return 0
   n=$(git rev-list --count --grep='^\[heap-death\]' "$from..$to" 2>/dev/null) || n=0
   if [[ "$n" -eq 0 ]]; then
@@ -56,11 +77,13 @@ cycles_in() {
     return 0
   fi
   row "Cycles" "$n archived $verb$([[ $n -gt 5 ]] && echo ", the latest 5"):"
-  git --no-pager log -n 5 --format='%x1e%b' --grep='^\[heap-death\]' "$from..$to" 2>/dev/null \
+  while IFS=$'\t' read -r branch found; do
+    row "" "$branch: $found"
+  done < <(git --no-pager log -n 5 --format='%x1e%b' --grep='^\[heap-death\]' "$from..$to" 2>/dev/null \
     | jq -R -s -r 'split("\u001e")[1:]
         | map(split("\n") | map(select(startswith("{"))) | first | fromjson?) | .[]
-        | "  \(.data.branch // "cycle \(.cycle)" | sub("^cycle/"; ""))  \(.data.learning // .data.question // "" | .[0:110])"' \
-    2>/dev/null || true
+        | "\(.data.branch // "cycle \(.cycle)" | sub("^cycle/"; ""))\t\(.data.learning // .data.question // "" | gsub("\\s+"; " "))"' \
+    2>/dev/null || true)
 }
 
 zociety_rows() {
@@ -70,14 +93,14 @@ zociety_rows() {
   # cat fails on whichever file is missing; the count stands.
   queued=$(cat "$ZRUN_INBOX" "$ZRUN_INBOX.draining" 2>/dev/null | grep -c . || true)
   if [[ "$(printf '%s' "$state" | jq -r '.ask.id // empty')" != "" ]]; then
-    row "Ask" "$(printf '%s' "$state" | jq -r '"\(.ask.id) (\(.ask.status // "open")): \(.ask.text | .[0:100])\(if (.asks_open // 0) > 1 then " [\(.asks_open - 1) more open]" else "" end)"')"
+    row "Ask" "$(printf '%s' "$state" | jq -r '"\(.ask.id) (\(.ask.status // "open")): \(.ask.text | gsub("\\s+"; " "))\(if (.asks_open // 0) > 1 then " [\(.asks_open - 1) more open]" else "" end)"')"
   fi
   [[ "$queued" -eq 0 ]] || row "Queued" "$queued ask(s) made while the run goes, recorded before its next turn"
   learning=$(git --no-pager log -n 10 --format='%x1e%b' --grep='^\[heap-death\]' 2>/dev/null \
     | jq -R -s -r 'split("\u001e")[1:]
         | map(split("\n") | map(select(startswith("{"))) | first | fromjson?
               | select((.data.learning? // "") | length > 0))
-        | .[0] // empty | "cycle \(.cycle): \(.data.learning | .[0:160])"' 2>/dev/null) || learning=""
+        | .[0] // empty | "cycle \(.cycle): \(.data.learning | gsub("\\s+"; " "))"' 2>/dev/null) || learning=""
   [[ -z "$learning" ]] || row "Learning" "$learning"
 }
 
