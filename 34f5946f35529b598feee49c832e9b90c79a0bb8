@@ -3,3 +3,6 @@ genesis_complete: true
 question: On a throwaway repo with an empty allowedSignersFile, does a fold that checks %GK against the live key set and accepts %G? G or U still reject a bad (B) signature, and should it reject a [key] revoke that leaves no live key?
 learning: Run on git 2.51.0, %GF and %GK print an SSH signer's fingerprint even when its key is not in allowedSignersFile (%G? is U), and the first-parent fold rejected a self-signed [key] add and a side-branch commit by a key revoked before its merge. So the fold can read the signer from %GK alone; the union-of-keys allowed signers file may be unnecessary. Untested: %GK on a bad (B) signature, and a last live key revoking itself, which the fold accepts and which leaves no key that can sign.
 batch_remaining: 2
+
+models: claude-opus-5-5
+runners: local
