@@ -114,6 +114,12 @@
 # (attempt+1) at death, so this covers only the first cycle of a run. To bump
 # rev, check out cycle/rev{N+1}-attempt1 yourself before starting.
 #
+# Git routing: on the host in the zociety repo the run puts bin/shims first on
+# PATH (and sets ZOCIETY_ROOT; bin/zroute.sh), so its own git writes go to
+# the container as zociety-dev whatever order the caller's PATH had. A turn's
+# shell may reorder PATH again, so bin/zevent and bin/zheap-death do the same
+# for themselves.
+#
 # Blind model record: the model (ANTHROPIC_MODEL, or GEMINI_MODEL for the
 # gemini client) and client are captured once at start; when neither
 # variable is set, each turn's model is read from its stream's init event
@@ -322,6 +328,12 @@ fi
 for _mode in ${STOP_MODES//,/ }; do
   [[ -x "bin/zstop-$_mode" ]] || die "unknown stop mode '$_mode' (no executable bin/zstop-$_mode)"
 done
+
+# Git routing (see header and bin/zroute.sh): on the host in the zociety
+# repo, bin/shims goes first on PATH for this run's own writes (seals,
+# notes) and as the starting PATH of every turn.
+# shellcheck source=bin/zroute.sh
+. bin/zroute.sh
 
 # Identity at birth (see header): name the first cycle and check out its
 # branch when not already on a cycle branch. A successor that already exists

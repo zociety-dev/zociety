@@ -1676,6 +1676,44 @@ assert_eq "the first turn saw it" "$(sed -n 1p "$FAKE_LOG" | grep -c 'Operator q
 assert_eq "no turn sealed it" "$(git log --format=%H --grep='^\[ask\]' | xargs -n1 git notes --ref=agent show 2>/dev/null | grep -c 'kind: ai')" 0
 echo ""
 
+# Cycle 42's heap-death ran from a shell whose PATH put /opt/local/bin ahead
+# of bin/shims: commits were made and signed on the host and every push failed
+# as the host user. bin/zloop now puts the shim first itself, in the repo
+# direnv set up (ZOCIETY_ROOT is the cwd), and the turns inherit it.
+echo "=== Case 45: on the host, bin/zloop puts bin/shims/git first for itself and its turns ==="
+fresh_repo git-routing
+# A cycle branch already, so the preflight makes no write (a write would go
+# to the container, which cannot see this throwaway repo).
+git checkout -q -b cycle/rev1-attempt1
+printf '#!/bin/bash\nexit 0\n' > bin/zblind
+chmod +x bin/zblind
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+printf '#!/bin/bash\ncommand -v git > %q\necho "fake claude ran"\n' "$TMP/agent-git" > "$FAKEBIN/claude"
+chmod +x "$FAKEBIN/claude"
+run env ZOCIETY_ROOT="$PWD" PATH="/usr/bin:$PATH" bin/zloop --quiet --budget 30 --max 1
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+if [[ -f /run/.containerenv || -f /.dockerenv ]]; then
+  assert_eq "in the container the shim stays out" "$([[ "$(cat "$TMP/agent-git")" != "$PWD/bin/shims/git" ]] && echo yes)" yes
+else
+  assert_eq "the turn's git is the shim" "$(cat "$TMP/agent-git")" "$PWD/bin/shims/git"
+fi
+rm -f "$TMP/agent-git"
+cp "$TMP/claude.real" "$TMP/claude.keep"
+printf '#!/bin/bash\ncommand -v git > %q\necho "fake claude ran"\n' "$TMP/agent-git" > "$FAKEBIN/claude"
+run env ZOCIETY_ROOT=/elsewhere PATH="/usr/bin:$PATH" bin/zloop --quiet --budget 30 --max 1
+cp "$TMP/claude.keep" "$FAKEBIN/claude"
+assert_eq "another repo's ZOCIETY_ROOT leaves PATH alone" "$([[ "$(cat "$TMP/agent-git")" != "$PWD/bin/shims/git" ]] && echo yes)" yes
+# A turn's shell can reorder PATH again (its own snapshot), so bin/zevent
+# routes its writes itself. A stub bin/zgit stands in for the container.
+if [[ ! -f /run/.containerenv && ! -f /.dockerenv ]]; then
+  printf '#!/bin/bash\necho "zgit $*" >> %q\n' "$TMP/zgit.log" > bin/zgit
+  chmod +x bin/zgit
+  run env ZOCIETY_ROOT="$PWD" PATH="/usr/bin:$PATH" ZOCIETY_TURN_ID=t1 bin/zevent join member-1 "routed" '{}'
+  assert_rc 0
+  assert_eq "zevent's writes go to bin/zgit" "$(grep '^zgit ' "$TMP/zgit.log" | cut -d' ' -f2 | tr '\n' ' ')" "add commit "
+fi
+echo ""
+
 #############################################
 # Summary
 #############################################
