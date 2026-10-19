@@ -16,7 +16,13 @@ live(){ comm -23 <(git log --format=%s "$1" | awk '$1=="add"{print $2}' | sort -
 c "add k1"; c "add k2"; git branch base
 git checkout -b left base;  c "revoke k2"
 git checkout -b right base; c "revoke k1"; c "add k1"
+echo "left:  {$(live left)}"; echo "right: {$(live right)}"
+# last-event fold, for comparison: the newest add/revoke of each key wins
+fold(){ git log "$@" --reverse --format=%s | awk '{s[$2]=$1} END{for(k in s) if(s[k]=="add") printf "%s ", k; print ""}'; }
+fold right
 git checkout left; git merge --no-ff right -m "merge right"
+echo "merge: {$(live HEAD)}"
+fold --topo-order HEAD; fold --date-order HEAD
 ```
 
 ## Output
