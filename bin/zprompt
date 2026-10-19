@@ -44,6 +44,10 @@
 #   operator question (bin/zask) is owed an answer, contribute:answer carries
 #   the question, this cycle's rules and stuff/, and any earlier answers to
 #   build on; every turn sees the open question under Where things stand.
+#   The heap-death turn is asked for a --learning, what the cycle found, and
+#   shown the last three; every turn sees the latest under Where things
+#   stand. They are read from the [heap-death] events, not the learnings
+#   branch, so the prompt needs no second ref.
 #
 #   Memory. The loop records each iteration's outcome (--record) and the
 #   next prompt gets a "Previous iteration" section: action attempted, exit
@@ -291,6 +295,16 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       end' 2>/dev/null) || ask_line=""
   fi
 
+  # What earlier cycles found (bin/zheap-death --learning), newest first,
+  # from the last [heap-death] events that carry one. The question each
+  # heap-death writes says where to go next; without these nothing said what
+  # a cycle had found, and the directions only narrowed.
+  learnings=$(git --no-pager log -n 10 --format='%x1e%b' --grep='^\[heap-death\]' 2>/dev/null \
+    | jq -R -s -r 'split("\u001e")[1:]
+        | map(split("\n") | map(select(startswith("{"))) | first | fromjson?
+              | select((.data.learning? // "") | length > 0))
+        | .[0:3][] | "  cycle \(.cycle): \(.data.learning)"' 2>/dev/null) || learnings=""
+
   # Do now (see header): the command for the action, so the first tool call
   # is the action. <agent> is the member name bin/zjoin assigned (member-N).
   # stuff_listing: up to 20 files under stuff/, indented; empty when none.
@@ -349,10 +363,12 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       run='bin/zcomplete <agent>'
       ;;
     heap-death)
-      run='bin/zheap-death --cite <stuff-file> <agent> "<question the next cycle should answer>"  (or --challenge <stuff-file>; archives, measures the cycle, and births the successor)'
-      read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the question"
+      run='bin/zheap-death --cite <stuff-file> --learning "<what this cycle found>" <agent> "<question the next cycle should answer>"  (or --challenge <stuff-file>; archives, measures the cycle, and births the successor)'
+      read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the learning or the question"
       listing=$(stuff_listing)
       [[ -n "$listing" ]] && listing="This cycle's stuff/:"$'\n'"$listing"
+      listing="$listing"$'\n'"--learning is what this cycle found, not what it made and not where to go next: one claim its stuff/ supports that should change what the next cycle does, at most 500 characters. A learning that repeats one below is not a finding."
+      [[ -n "$learnings" ]] && listing="$listing"$'\n'"Learnings from recent cycles (newest first):"$'\n'"$learnings"
       if [[ -n "$ask_id" && "$(printf '%s' "$state" | jq -r '.ask.status' 2>/dev/null)" == "answered" ]]; then
         listing="$listing"$'\n'"This cycle answered operator question $ask_id. The next cycle's question is still the society's to choose; cite the answer only if it bears on it."
       fi
@@ -425,6 +441,10 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   [[ -n "$branch" ]]     && printf '%s\n' "Branch: $branch"
   [[ -n "$direction" ]]  && printf '%s\n' "Latest direction: $direction"
   [[ -n "$ask_line" ]]   && printf '%s\n' "$ask_line"
+  if [[ -n "$learnings" ]]; then
+    latest="${learnings%%$'\n'*}"
+    printf '%s\n' "Latest learning, ${latest#  }"
+  fi
   [[ -n "$heap_death" ]] && printf '%s\n' "Latest heap-death: $heap_death"
   if [[ -n "$recent" ]]; then
     printf '%s\n' "Recent commits:"

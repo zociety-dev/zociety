@@ -195,7 +195,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event |
+| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
 | `bin/zpr-flow` | Open (and optionally merge) a cycle branch PR into main (workflow step, run by `bin/zheap-death`) |
@@ -344,7 +344,12 @@ bin/zstate | jq .                       # current state
   cycle. The machine only ever bumps `attempt`; to bump `rev` (after a
   `PROMPT.md` change), check out `cycle/rev{N+1}-attempt1` yourself before
   starting the loop
-- `learnings` - orphan branch with accumulated insights. Written by
+- `learnings` - orphan branch with accumulated insights: one `## rev{N}-attempt{M}`
+  block per cycle, the heap-death's `--learning`, pushed with the cycle's
+  other refs. (Until that flag it took only `PROMPT.md` diff lines, so it
+  stopped growing at rev66; those 46 old blocks are left as they are.) It
+  is a view: `bin/zprompt` reads learnings from the `[heap-death]` events.
+  Written by
   `bin/save-learning` with plumbing only, never a checkout: `git show
   learnings:LEARNINGS.md` plus the new block goes to a temp file under
   `.zociety/`, `hash-object -w` (blob, then the raw one-entry tree with
@@ -422,7 +427,12 @@ bin/zstate → action field tells you what to do:
                   has gone longest without acting (`bin/zstate .roster[0]`).
   "complete"   → Run bin/zcomplete
   "heap-death" → Run bin/zheap-death --cite <stuff-file> (or --challenge
-                  <stuff-file>) to explicitly inherit or dispute an artifact
+                  <stuff-file>) to explicitly inherit or dispute an artifact,
+                  with --learning "<what this cycle found>": one claim its
+                  stuff/ supports that should change what the next cycle
+                  does. The question says where to go; the learning says
+                  what was found. The turn is shown the last three
+                  learnings, every turn the latest
   "promise"    → Run bin/zpromise and STOP
   "stop"       → Do nothing, exit cleanly
 ```
