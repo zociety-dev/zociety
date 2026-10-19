@@ -30,6 +30,14 @@ else
   echo "✓ Learnings branch exists"
 fi
 
+# Auto-gc in the foreground: git commands here run in a container that is
+# removed when the command exits, which kills a detached gc and leaves
+# objects/maintenance.lock behind, and every later auto-gc skips while it
+# stays (bin/zobjects removes a stale one).
+git config gc.autoDetach false
+git config maintenance.autoDetach false
+echo "✓ Auto-gc runs in the foreground (gc.autoDetach, maintenance.autoDetach)"
+
 # Install pre-commit hooks if pre-commit is available
 if command -v pre-commit &> /dev/null; then
   # prepare-commit-msg carries the Agent: trailer hook (.githooks/prepare-commit-msg)

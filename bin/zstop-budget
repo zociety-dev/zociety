@@ -51,7 +51,9 @@ START=$(grep '^start:' "$STATE_FILE" | cut -d: -f2 | tr -d ' ' || true)
 git rev-parse --verify -q "${START}^{commit}" >/dev/null 2>&1 \
   || die "start sha '$START' from $STATE_FILE is not a commit"
 
-COUNT=$(git rev-list --count --grep='^\[heap-death\]' "${START}..HEAD")
+# First parents only: the cycle branch's own line, not the history bin/zloop's
+# merges from main bring in.
+COUNT=$(git rev-list --count --first-parent --grep='^\[heap-death\]' "${START}..HEAD")
 
 if [[ "$COUNT" -ge "$BUDGET" ]]; then
   echo "STOP: budget heap-deaths=$COUNT/$BUDGET since ${START:0:7}"

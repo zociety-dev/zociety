@@ -1,0 +1,86 @@
+#!/bin/bash
+# zobjects: Keep the object store readable from the container
+#
+# Usage:
+#   bin/zobjects            Give every hard-linked file under .git/objects its
+#                           own copy, and remove a stale maintenance lock
+#   bin/zobjects --check    Report only: exit 1 when either needs doing
+#   bin/zobjects -h | --help
+#
+# A `git clone` of this repo by local path hard-links the clone's objects to
+# these (git's default for a local clone). Through the podman machine's file
+# sharing such a file can come back "Permission denied" in the next container
+# while the one before read it (reproduced 2026-10-19 with plain cat on a file
+# linked from outside the repo; never on a file with one link). In a loop turn
+# that is the pre-commit hook unable to read an object: cycle 44's heap-death
+# failed twice that way, on objects linked from a clone in an old scratchpad.
+# A copy holds the same bytes under one link, and an object never changes, so
+# replacing the file with its copy is safe, packs included.
+#
+# A maintenance.lock older than an hour is an auto-gc that died holding it: a
+# detached gc is killed with the container its command ran in. While the lock
+# stays, git skips every auto-gc (the one removed on 2026-10-19 dated from
+# 2026-09-10, with 6369 loose objects behind it). bin/setup sets
+# gc.autoDetach and maintenance.autoDetach to false so auto-gc ends inside
+# the command that started it.
+#
+# bin/zloop runs this before the first turn and before every turn after it.
+# Exit codes: 0 nothing to do or done, 1 --check found work (or a copy
+# failed), 2 usage or no object store.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+CHECK=0
+case "${1:-}" in
+  "") ;;
+  --check) CHECK=1 ;;
+  -h|--help) usage; exit 0 ;;
+  *) echo "zobjects: unknown argument '$1'" >&2; usage >&2; exit 2 ;;
+esac
+
+common=$(git rev-parse --git-common-dir 2>/dev/null) \
+  || { echo "zobjects: not in a git repository" >&2; exit 2; }
+objects="$common/objects"
+[[ -d "$objects" ]] || { echo "zobjects: no object store at $objects" >&2; exit 2; }
+
+# Loose objects (objects/xx/...) and packs; other files under objects/ are
+# git's own temporaries and locks.
+linked=()
+while IFS= read -r f; do
+  linked+=("$f")
+done < <(find "$objects" -type f -links +1 \( -path "$objects/??/*" -o -path "$objects/pack/*" \) 2>/dev/null)
+stale=$(find "$objects" -maxdepth 1 -name maintenance.lock -mmin +60 2>/dev/null)
+
+[[ ${#linked[@]} -gt 0 || -n "$stale" ]] || exit 0
+
+if [[ $CHECK -eq 1 ]]; then
+  [[ ${#linked[@]} -eq 0 ]] || echo "zobjects: ${#linked[@]} object file(s) share a hard link with a copy outside this repo"
+  [[ -z "$stale" ]] || echo "zobjects: $stale is over an hour old"
+  exit 1
+fi
+
+copied=0
+failed=0
+for f in "${linked[@]}"; do
+  if cp -p "$f" "$f.zobjects" 2>/dev/null && mv -f "$f.zobjects" "$f"; then
+    copied=$((copied + 1))
+  else
+    rm -f "$f.zobjects"
+    failed=$((failed + 1))
+  fi
+done
+[[ $copied -eq 0 ]] \
+  || echo "zobjects: gave $copied hard-linked object file(s) their own copy (a clone outside the repo shared them)"
+if [[ -n "$stale" ]]; then
+  rm -f "$stale"
+  echo "zobjects: removed $stale, left by an auto-gc that died over an hour ago"
+fi
+if [[ $failed -gt 0 ]]; then
+  echo "zobjects: $failed hard-linked object file(s) could not be copied; run bin/zobjects on the host" >&2
+  exit 1
+fi
+exit 0

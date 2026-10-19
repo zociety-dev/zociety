@@ -48,14 +48,20 @@
 #      changed since it, else attempt bumped. On a cycle branch also names
 #      the successor (bin/zcycle-id next) and refuses, before anything is
 #      written, if that branch already exists.
-#   2. Appends the learning to the learnings branch (bin/save-learning) under
-#      the cycle id. A failed save warns and carries on: the event keeps it.
-#   3. Records a [heap-death] event commit via bin/zevent.
+#   2. Records a [heap-death] event commit via bin/zevent.
+#   3. Appends the learning to the learnings branch (bin/save-learning) under
+#      the cycle id, after the commit: a heap-death whose commit fails has
+#      written nothing, so its retry writes the block once. A failed save
+#      warns and carries on: the event keeps the learning.
 #   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
 #      it), tag rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
 #   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
-#      a remote exists, opens a PR for the cycle branch via bin/zpr-flow and
-#      asks GitHub to rebuild zociety.dev (gh workflow run pages.yml).
+#      a remote exists, and lands the cycle on main: bin/zpr-flow opens the
+#      cycle branch's PR and merges it with a merge commit (ZPR_MERGE=0 opens
+#      it only). A cycle that did not land leaves its PR open and asks GitHub
+#      to rebuild zociety.dev (gh workflow run pages.yml); a merge pushes
+#      main, which rebuilds it anyway. bin/zloop then merges main into the
+#      successor branch between turns (ZLOOP_SYNC_MAIN).
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
 #      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
 #      (gitignored) .claude/zloop.state.
@@ -178,7 +184,9 @@ if [[ -z "$BATCH_SIZE" ]]; then
   if [[ "$BUDGET_MODE" -eq 1 && -n "$LOOP_START" ]] \
     && git rev-parse --verify -q "${LOOP_START}^{commit}" >/dev/null 2>&1; then
     BUDGET="${ZSTOP_BUDGET:-3}"
-    SO_FAR=$(git rev-list --count --grep='^\[heap-death\]' "${LOOP_START}..HEAD")
+    # First parents only: the cycle branch's own line. The merges bin/zloop
+    # makes from main bring in history no turn of this run wrote.
+    SO_FAR=$(git rev-list --count --first-parent --grep='^\[heap-death\]' "${LOOP_START}..HEAD")
     BATCH_SIZE=$((BUDGET - SO_FAR))
     [[ "$BATCH_SIZE" -lt 1 ]] && BATCH_SIZE=1
     echo "batch_size defaulted to $BATCH_SIZE (budget=$BUDGET, $SO_FAR heap-deaths since ${LOOP_START:0:7})" >&2
@@ -304,30 +312,7 @@ echo "╚═══════════════════════�
 echo ""
 
 #############################################
-# 2. Save the learning to the orphan branch
-#############################################
-
-echo "Saving learning to learnings branch..."
-# stderr stays visible: save-learning prints the git error and the full
-# learning when the commit fails. The [heap-death] event below still carries
-# it, so a failed save loses the branch copy, not the learning.
-if ! bin/save-learning "rev${REV}-attempt${ATTEMPT}" "$LEARNING"; then
-  echo "WARNING: learnings branch NOT updated; the learning is still in the [heap-death] event (data.learning)" >&2
-fi
-
-# save-learning writes the orphan `learnings` branch with plumbing
-# (commit-tree + update-ref) and never switches branches. Everything below
-# still runs bin/* from the current branch, and `learnings` has no bin/, so
-# keep the cheap invariant: die here rather than later with
-# "bin/zstate: No such file" if anything moved HEAD since we started.
-NOW_BRANCH=$(git branch --show-current)
-if [[ "$NOW_BRANCH" != "$ORIGINAL_BRANCH" ]]; then
-  echo "ERROR: branch changed during heap-death: started on '$ORIGINAL_BRANCH', now on '${NOW_BRANCH:-detached HEAD}'" >&2
-  exit 1
-fi
-
-#############################################
-# 3. Calculate remaining batch
+# 2. Calculate remaining batch
 #############################################
 
 REMAINING=$((BATCH_SIZE - 1))
@@ -341,7 +326,7 @@ CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
 MEASURES=$(bin/zcycle-measure "$CURRENT_CYCLE")
 
 #############################################
-# 4. Commit heap-death event
+# 3. Commit heap-death event
 #############################################
 
 DATA=$(jq -nc \
@@ -365,6 +350,34 @@ DATA=$(jq -nc \
 
 echo "Recording heap-death event..."
 bin/zevent heap-death "$AGENT" "$QUESTION" "$DATA"
+
+#############################################
+# 4. Save the learning to the orphan branch
+#############################################
+#
+# After the event commit, never before: a commit refused by a hook (cycle
+# 44's heap-death failed twice in pre-commit) used to leave the block on the
+# branch, and each retry wrote it again, so the turns rewound the branch by
+# hand with update-ref.
+
+echo "Saving learning to learnings branch..."
+# stderr stays visible: save-learning prints the git error and the full
+# learning when the commit fails. The [heap-death] event above carries it,
+# so a failed save loses the branch copy, not the learning.
+if ! bin/save-learning "rev${REV}-attempt${ATTEMPT}" "$LEARNING"; then
+  echo "WARNING: learnings branch NOT updated; the learning is still in the [heap-death] event (data.learning)" >&2
+fi
+
+# save-learning writes the orphan `learnings` branch with plumbing
+# (commit-tree + update-ref) and never switches branches. Everything below
+# still runs bin/* from the current branch, and `learnings` has no bin/, so
+# keep the cheap invariant: die here rather than later with
+# "bin/zstate: No such file" if anything moved HEAD since we started.
+NOW_BRANCH=$(git branch --show-current)
+if [[ "$NOW_BRANCH" != "$ORIGINAL_BRANCH" ]]; then
+  echo "ERROR: branch changed during heap-death: started on '$ORIGINAL_BRANCH', now on '${NOW_BRANCH:-detached HEAD}'" >&2
+  exit 1
+fi
 
 #############################################
 # 5. Create cycle branch and tag
@@ -409,19 +422,31 @@ if git remote get-url origin &>/dev/null; then
 fi
 
 #############################################
-# 6b. Open a pull request for this cycle
+# 6b. Land the cycle on main
 #############################################
 #
-# Opens cycle branch -> main so the cycle lands via a reviewable PR instead of
-# a silent branch push. Create-only by default; set ZPR_MERGE=1 (optionally with
-# ZPR_AUTO=1) to also merge. Non-fatal: no origin remote, or an empty diff
-# (cycle branch == main), just skips. gh runs as zociety-dev in the container.
+# Opens cycle branch -> main and merges it with a merge commit (bin/zpr-flow
+# explains why never squash or rebase). The PR used to be opened and left:
+# ZPR_MERGE was never set, so main stayed at cycle 41 while cycles 42-47 sat
+# in six nested PRs. ZPR_MERGE=0 opens it only. Non-fatal: no origin, gh
+# unable to reach GitHub, or a refused merge leave the cycle archived and its
+# PR open, and the next cycle's PR carries it too. Landed is read from git,
+# not from gh: the archived head is on origin's main. gh runs as zociety-dev
+# in the container.
 
+LANDED=0
 if git remote get-url origin &>/dev/null; then
-  echo "Opening pull request for $CYCLE_BRANCH..."
-  bin/zpr-flow "$CYCLE_BRANCH" main \
+  echo "Landing $CYCLE_BRANCH on main..."
+  ZPR_MERGE="${ZPR_MERGE:-1}" bin/zpr-flow "$CYCLE_BRANCH" main \
     "Cycle rev${REV}-attempt${ATTEMPT}: ${QUESTION:0:60}" \
     || echo "  (zpr-flow skipped/failed - continuing)"
+  if git fetch origin main --quiet 2>/dev/null \
+    && [[ "$(git rev-list --count refs/remotes/origin/main..HEAD 2>/dev/null || echo 1)" -eq 0 ]]; then
+    LANDED=1
+    echo "  $CYCLE_BRANCH is on main"
+  else
+    echo "  $CYCLE_BRANCH is not on main; its PR stays open"
+  fi
 fi
 
 #############################################
@@ -430,12 +455,13 @@ fi
 #
 # The site's archive and learnings come from the tag and the learnings branch
 # pushed above, but no push here triggers .github/workflows/pages.yml (a push
-# to main, or once a day), so a cycle reached the site up to a day late. Ask
-# for a build of main now: the github-pages environment deploys from main
-# only. Non-fatal, like the PR; an origin gh does not know (a test's local
-# bare repo) fails here and nothing else.
+# to main, or once a day), so a cycle reached the site up to a day late. A
+# cycle that landed pushed main, which runs it; for one that did not, ask for
+# a build of main now: the github-pages environment deploys from main only.
+# Non-fatal, like the PR; an origin gh does not know (a test's local bare
+# repo) fails here and nothing else.
 
-if git remote get-url origin &>/dev/null; then
+if [[ "$LANDED" -eq 0 ]] && git remote get-url origin &>/dev/null; then
   echo "Requesting a zociety.dev rebuild..."
   gh workflow run pages.yml --ref main 2>/dev/null \
     || echo "  (site rebuild not requested - continuing)"

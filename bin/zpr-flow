@@ -16,13 +16,26 @@
 #   title        PR title (default: derived from head_branch + last subject).
 #
 # Environment:
-#   ZPR_MERGE=1          After creating, merge the PR (default: 0, create only).
-#   ZPR_MERGE_METHOD=... merge | squash | rebase (default: squash).
+#   ZPR_MERGE=1          After creating, merge the PR (default: 0, create only;
+#                        bin/zheap-death sets 1).
+#   ZPR_MERGE_METHOD=... merge | squash | rebase (default: merge). A cycle
+#                        lands with a merge commit: squash and rebase write
+#                        new commits, so its tag, its notes (refs/notes/blind,
+#                        agent, commits) and the next cycle, born from its
+#                        head, would point at commits main never has. The
+#                        repo allows no squash merges anyway.
+#   ZPR_MERGE_TRIES=3    Merge attempts before giving up. GitHub works out a
+#   ZPR_MERGE_WAIT=5     new PR's mergeability in the background and can
+#                        refuse a merge right after `gh pr create`, or one
+#                        whose base just moved; seconds between attempts.
 #   ZPR_AUTO=1           Merge with --auto (waits for required checks) instead
 #                        of merging immediately.
 #   ZPR_DRAFT=1          Open the PR as a draft.
 #
-# Callers that treat the PR as optional should guard the call with `|| true`.
+# Exit codes: 0 the PR is open (and merged, when asked) or there was nothing
+# to open, 1 usage, 2 no origin, 3 the push failed, 4 a merge was asked for
+# and did not happen (the PR stays open). Callers that treat the PR as
+# optional should guard the call with `|| true`.
 #
 # Not an event: this is a GitHub side-effect utility (like zlog/zcheck). It does
 # not write a zevent and does not touch git-derived state.
@@ -45,7 +58,9 @@ BASE_BRANCH="${2:-main}"
 TITLE="${3:-}"
 
 MERGE="${ZPR_MERGE:-0}"
-MERGE_METHOD="${ZPR_MERGE_METHOD:-squash}"
+MERGE_METHOD="${ZPR_MERGE_METHOD:-merge}"
+MERGE_TRIES="${ZPR_MERGE_TRIES:-3}"
+MERGE_WAIT="${ZPR_MERGE_WAIT:-5}"
 
 if [[ -z "$HEAD_BRANCH" ]]; then
   usage >&2
@@ -56,6 +71,9 @@ if [[ "$HEAD_BRANCH" == "$BASE_BRANCH" ]]; then
   echo "zpr-flow: head and base are both '$HEAD_BRANCH'; nothing to open" >&2
   exit 1
 fi
+
+[[ "$MERGE_TRIES" =~ ^[1-9][0-9]*$ ]] || { echo "zpr-flow: ZPR_MERGE_TRIES must be at least 1, got '$MERGE_TRIES'" >&2; exit 1; }
+[[ "$MERGE_WAIT" =~ ^[0-9]+$ ]] || { echo "zpr-flow: ZPR_MERGE_WAIT must be whole seconds, got '$MERGE_WAIT'" >&2; exit 1; }
 
 if ! git remote get-url origin &>/dev/null; then
   echo "zpr-flow: no 'origin' remote; cannot open a PR" >&2
@@ -68,7 +86,10 @@ git push origin "$HEAD_BRANCH" --quiet 2>/dev/null || {
   exit 3
 }
 
-# Bail early if there is nothing to merge (e.g. cycle branch == base).
+# Bail early if there is nothing to merge (e.g. cycle branch == base). The
+# base is fetched first: a stale origin/main counts commits a merge already
+# brought in, and gh then refuses the PR.
+git fetch origin "$BASE_BRANCH" --quiet 2>/dev/null || true
 COMMITS=0
 for ref in "origin/$BASE_BRANCH" "$BASE_BRANCH"; do
   if git rev-parse --verify --quiet "$ref" >/dev/null; then
@@ -140,7 +161,11 @@ if [[ "$MERGE" == "1" && -n "$PR_NUM" ]]; then
   AUTO_FLAG=()
   [[ "${ZPR_AUTO:-0}" == "1" ]] && AUTO_FLAG=(--auto)
 
-  echo "zpr-flow: merging PR #$PR_NUM ($MERGE_METHOD${ZPR_AUTO:+, auto})..."
-  gh pr merge "$PR_NUM" "$METHOD_FLAG" "${AUTO_FLAG[@]}" \
-    || echo "  (merge not completed - PR left open for #$PR_NUM)"
+  for ((try = 1; try <= MERGE_TRIES; try++)); do
+    echo "zpr-flow: merging PR #$PR_NUM ($MERGE_METHOD${ZPR_AUTO:+, auto}), attempt $try of $MERGE_TRIES..."
+    gh pr merge "$PR_NUM" "$METHOD_FLAG" "${AUTO_FLAG[@]}" && exit 0
+    [[ $try -lt $MERGE_TRIES ]] && sleep "$MERGE_WAIT"
+  done
+  echo "zpr-flow: PR #$PR_NUM not merged after $MERGE_TRIES attempt(s); left open" >&2
+  exit 4
 fi

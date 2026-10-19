@@ -67,11 +67,12 @@ row() {
 }
 
 # cycles_in <from> <to> <verb>: the cycles a run archived, newest first, and
-# what each found
+# what each found. First parents only: the run's own line, not the history
+# its merges from main bring in.
 cycles_in() {
   local from="$1" to="$2" verb="$3" n branch found
   [[ -n "$from" ]] || return 0
-  n=$(git rev-list --count --grep='^\[heap-death\]' "$from..$to" 2>/dev/null) || n=0
+  n=$(git rev-list --count --first-parent --grep='^\[heap-death\]' "$from..$to" 2>/dev/null) || n=0
   if [[ "$n" -eq 0 ]]; then
     row "Cycles" "none archived $verb"
     return 0
@@ -79,7 +80,7 @@ cycles_in() {
   row "Cycles" "$n archived $verb$([[ $n -gt 5 ]] && echo ", the latest 5"):"
   while IFS=$'\t' read -r branch found; do
     row "" "$branch: $found"
-  done < <(git --no-pager log -n 5 --format='%x1e%b' --grep='^\[heap-death\]' "$from..$to" 2>/dev/null \
+  done < <(git --no-pager log -n 5 --first-parent --format='%x1e%b' --grep='^\[heap-death\]' "$from..$to" 2>/dev/null \
     | jq -R -s -r 'split("\u001e")[1:]
         | map(split("\n") | map(select(startswith("{"))) | first | fromjson?) | .[]
         | "\(.data.branch // "cycle \(.cycle)" | sub("^cycle/"; ""))\t\(.data.learning // .data.question // "" | gsub("\\s+"; " "))"' \

@@ -490,6 +490,298 @@ assert_eq "current branch" "$(git branch --show-current)" main
 echo ""
 
 #############################################
+# Fixtures: an origin, a fake gh, a fake turn
+#############################################
+
+# Fake gh: pull requests against the bare origin, one state file per PR
+# ("<head> <base> open|merged"). `pr merge` merges with a merge commit, as
+# GitHub's merge button does; FAKE_GH_MERGE_FAIL=1 refuses it. Every call is
+# logged to FAKE_GH_LOG.
+mkdir -p "$TMP/fakegh"
+cat > "$TMP/fakegh/gh" << 'EOF'
+#!/bin/bash
+echo "gh $*" >> "$FAKE_GH_LOG"
+mkdir -p "$FAKE_GH_STATE"
+sub="$1 $2"
+shift 2
+args=("$@")
+head="" base=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[i]}" in
+    --head) head="${args[i+1]}" ;;
+    --base) base="${args[i+1]}" ;;
+  esac
+done
+case "$sub" in
+  "pr list")
+    for f in "$FAKE_GH_STATE"/*; do
+      [[ -f "$f" ]] || continue
+      read -r h b s < "$f"
+      if [[ "$h" == "$head" && "$b" == "$base" && "$s" == open ]]; then basename "$f"; fi
+    done
+    exit 0 ;;
+  "pr create")
+    n=$(( $(find "$FAKE_GH_STATE" -type f | wc -l) + 1 ))
+    echo "$head $base open" > "$FAKE_GH_STATE/$n"
+    echo "https://example.invalid/pull/$n"
+    exit 0 ;;
+  "pr merge")
+    [[ "${FAKE_GH_MERGE_FAIL:-0}" == 1 ]] && { echo "fake gh: merge refused" >&2; exit 1; }
+    read -r h b s < "$FAKE_GH_STATE/${args[0]}"
+    export GIT_DIR="$FAKE_GH_ORIGIN" GIT_AUTHOR_NAME=fakegh GIT_AUTHOR_EMAIL=gh@example.invalid \
+      GIT_COMMITTER_NAME=fakegh GIT_COMMITTER_EMAIL=gh@example.invalid
+    tree=$(git merge-tree --write-tree "refs/heads/$b" "refs/heads/$h") || exit 1
+    c=$(git commit-tree --no-gpg-sign "$tree" -p "refs/heads/$b" -p "refs/heads/$h" -m "Merge pull request #${args[0]} from $h")
+    git update-ref "refs/heads/$b" "$c"
+    echo "$h $b merged" > "$FAKE_GH_STATE/${args[0]}"
+    exit 0 ;;
+  "workflow run") exit 0 ;;
+esac
+echo "fake gh: unsupported: $sub" >&2
+exit 1
+EOF
+chmod +x "$TMP/fakegh/gh"
+
+# Fake turn: claude that (FAKE_TURN_DEV=1) first lands a commit on origin's
+# main from a second clone, as a dev PR merged mid-run would, then commits a
+# [join] or a [heap-death] event (FAKE_TURN).
+mkdir -p "$TMP/faketurn"
+cat > "$TMP/faketurn/claude" << 'EOF'
+#!/bin/bash
+echo "fake claude ran"
+if [[ "${FAKE_TURN_DEV:-0}" == 1 ]]; then
+  (cd "$FAKE_DEV_CLONE" && echo "fix $RANDOM" >> dev.txt && git add dev.txt \
+    && git commit -q -m "Fix a tool on main mid-run" && git push -q origin main) >/dev/null 2>&1
+fi
+case "${FAKE_TURN:-}" in
+  join) bin/zevent join fake "synthetic join" '{}' >/dev/null 2>&1 ;;
+  heap-death) bin/zevent heap-death fake "synthetic heap-death" '{"batch_remaining":2}' >/dev/null 2>&1 ;;
+esac
+exit 0
+EOF
+chmod +x "$TMP/faketurn/claude"
+
+# origin_repo <name>: fresh_repo with bin/ committed, a bare origin holding
+# main, and a second clone of it (DEV) to land commits on origin's main.
+origin_repo() {
+  fresh_repo "$1"
+  ORIGIN="$TMP/origin-$1.git"
+  DEV="$TMP/dev-$1"
+  printf '.claude/\n.zociety/\n' > .gitignore
+  git add -A
+  git commit -q -m "fixture bin"
+  git init -q --bare "$ORIGIN"
+  git remote add origin "$ORIGIN"
+  git push -q origin main
+  git clone -q "$ORIGIN" "$DEV" 2>/dev/null
+  git -C "$DEV" config user.name dev
+  git -C "$DEV" config user.email dev@example.com
+  git -C "$DEV" config commit.gpgsign false
+  git -C "$DEV" config core.hooksPath "$TMP/nohooks"
+  export FAKE_GH_ORIGIN="$ORIGIN" FAKE_GH_STATE="$TMP/ghstate-$1" FAKE_GH_LOG="$TMP/ghlog-$1"
+  : > "$FAKE_GH_LOG"
+}
+
+# dev_commit <file> <text>: a commit on origin's main from DEV
+dev_commit() {
+  (cd "$DEV" && git pull -q origin main 2>/dev/null; echo "$2" >> "$1" && git add "$1" \
+    && git commit -q -m "dev: $1" && git push -q origin main)
+}
+
+# no_agent_note <sha>: no bin/zblind seal covered it
+assert_unsealed() {
+  if git notes --ref=agent show "$1" >/dev/null 2>&1; then
+    fail "${1:0:7} carries an agent note (sealed as a turn's commit)"
+  else
+    pass "${1:0:7} carries no agent note"
+  fi
+}
+
+assert_sealed() {
+  if git notes --ref=agent show "$1" 2>/dev/null | grep -q '^kind: ai$'; then
+    pass "${1:0:7} sealed as a turn's commit"
+  else
+    fail "${1:0:7} carries no kind: ai note"
+  fi
+}
+
+#############################################
+# Cases: landing a cycle on main
+#############################################
+
+echo "=== Case 16: heap-death lands the cycle on main with a merge commit ==="
+origin_repo hd-land
+git checkout -q -b cycle/rev1-attempt1
+event join
+run env PATH="$TMP/fakegh:$PATH" ZPR_MERGE_WAIT=0 \
+  bin/zheap-death --cite inherited.md --learning "Landed cycles keep main current." tester "landing question" 3
+assert_rc 0
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_out_has '^  cycle/rev1-attempt1 is on main$'
+ORIGIN_MAIN=$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)
+assert_eq "origin's main is a merge" "$(git --git-dir="$ORIGIN" rev-list --count --min-parents=2 -n 1 "$ORIGIN_MAIN")" 1
+assert_eq "its second parent is the heap-death" "$(git --git-dir="$ORIGIN" rev-parse "$ORIGIN_MAIN^2")" "$HD"
+assert_eq "merged as a merge commit" "$(grep -c '^gh pr merge 1 --merge$' "$FAKE_GH_LOG")" 1
+assert_eq "no rebuild request (the merge pushed main)" "$(grep -c '^gh workflow run' "$FAKE_GH_LOG")" 0
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
+assert_eq "one learning block" "$(git show learnings:LEARNINGS.md | grep -c '^## rev1-attempt1$')" 1
+echo ""
+
+echo "=== Case 17: a refused merge leaves the PR open and asks for the rebuild ==="
+origin_repo hd-refused
+git checkout -q -b cycle/rev1-attempt1
+event join
+BEFORE_MAIN=$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)
+run env PATH="$TMP/fakegh:$PATH" ZPR_MERGE_WAIT=0 FAKE_GH_MERGE_FAIL=1 \
+  bin/zheap-death --cite inherited.md --learning "Refused." tester "refused question" 3
+assert_rc 0
+assert_out_has '^  cycle/rev1-attempt1 is not on main; its PR stays open$'
+assert_eq "origin's main unchanged" "$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)" "$BEFORE_MAIN"
+assert_eq "three merge attempts" "$(grep -c '^gh pr merge 1 --merge$' "$FAKE_GH_LOG")" 3
+assert_eq "rebuild requested" "$(grep -c '^gh workflow run pages.yml --ref main$' "$FAKE_GH_LOG")" 1
+assert_eq "PR open" "$(cat "$FAKE_GH_STATE/1")" "cycle/rev1-attempt1 main open"
+assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
+echo ""
+
+echo "=== Case 18: ZPR_MERGE=0 opens the PR only ==="
+origin_repo hd-open-only
+git checkout -q -b cycle/rev1-attempt1
+event join
+run env PATH="$TMP/fakegh:$PATH" ZPR_MERGE=0 \
+  bin/zheap-death --cite inherited.md --learning "Opened only." tester "open question" 3
+assert_rc 0
+assert_eq "PR opened" "$(grep -c '^gh pr create --head cycle/rev1-attempt1 --base main' "$FAKE_GH_LOG")" 1
+assert_eq "no merge" "$(grep -c '^gh pr merge' "$FAKE_GH_LOG")" 0
+assert_out_has '^  cycle/rev1-attempt1 is not on main; its PR stays open$'
+echo ""
+
+echo "=== Case 19: a heap-death whose commit fails writes no learning ==="
+fresh_repo hd-commit-fails
+git checkout -q -b cycle/rev1-attempt1
+event join
+mkdir -p "$TMP/failhooks"
+printf '#!/bin/sh\necho "fixture hook refuses" >&2\nexit 1\n' > "$TMP/failhooks/pre-commit"
+chmod +x "$TMP/failhooks/pre-commit"
+git config core.hooksPath "$TMP/failhooks"
+BEFORE=$(git rev-parse HEAD)
+run bin/zheap-death --cite inherited.md --learning "Written once." tester "retry question" 3
+assert_rc 1
+assert_eq "HEAD unchanged" "$(git rev-parse HEAD)" "$BEFORE"
+assert_eq "no learnings branch" "$(git show-ref --verify --quiet refs/heads/learnings && echo yes || echo no)" no
+git config core.hooksPath "$TMP/nohooks"
+git reset -q
+run bin/zheap-death --cite inherited.md --learning "Written once." tester "retry question" 3
+assert_rc 0
+assert_eq "the retry writes the block once" "$(git show learnings:LEARNINGS.md | grep -c '^## rev1-attempt1$')" 1
+echo ""
+
+#############################################
+# Cases: the run merges main into the cycle branch
+#############################################
+
+echo "=== Case 20: zloop merges origin/main before the first turn, outside the turn's seal ==="
+origin_repo sync-start
+git checkout -q -b cycle/rev1-attempt1
+event join
+dev_commit dev.txt "a fix landed on main"
+DEV_SHA=$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)
+run env -u ZOCIETY_BLIND_KEY PATH="$TMP/faketurn:$PATH" FAKE_TURN=join bin/zloop --quiet --max 1
+assert_rc 1
+assert_err '^\[zloop\] Merged origin/main into cycle/rev1-attempt1 before the first turn \(1 commit\(s\) from main\)$'
+assert_eq "HEAD is the turn's [join]" "$(git log -1 --format=%s | cut -c1-6)" "[join]"
+assert_eq "its parent is the merge" "$(git log -1 --format=%s HEAD^)" "Merge origin/main into cycle/rev1-attempt1"
+assert_eq "main's commit is in the branch" "$(git rev-parse HEAD^^2)" "$DEV_SHA"
+assert_eq "main's file is checked out" "$(cat dev.txt)" "a fix landed on main"
+assert_sealed "$(git rev-parse HEAD)"
+assert_unsealed "$(git rev-parse HEAD^)"
+assert_unsealed "$DEV_SHA"
+echo ""
+
+echo "=== Case 21: zloop merges origin/main after a heap-death turn, not into the turn's seal ==="
+origin_repo sync-death
+git checkout -q -b cycle/rev1-attempt1
+event join
+run env -u ZOCIETY_BLIND_KEY PATH="$TMP/faketurn:$PATH" FAKE_TURN=heap-death FAKE_TURN_DEV=1 \
+  FAKE_DEV_CLONE="$DEV" bin/zloop --quiet --max 1
+assert_rc 1
+assert_no_err 'before the first turn'
+assert_err '^\[zloop\] Merged origin/main into cycle/rev1-attempt1 after the heap-death \(1 commit\(s\) from main\)$'
+DEV_SHA=$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)
+assert_eq "HEAD is the merge" "$(git log -1 --format=%s)" "Merge origin/main into cycle/rev1-attempt1"
+assert_eq "first parent is the heap-death" "$(git log -1 --format=%s HEAD^1 | cut -c1-12)" "[heap-death]"
+assert_eq "second parent is main" "$(git rev-parse HEAD^2)" "$DEV_SHA"
+assert_sealed "$(git rev-parse HEAD^1)"
+assert_unsealed "$(git rev-parse HEAD)"
+assert_unsealed "$DEV_SHA"
+# A heap-death that reached main from another lineage, merged in later, is
+# not this run's: the counts walk first parents.
+RUN_START=$(git rev-parse HEAD^1^)
+(cd "$DEV" && git commit -q --allow-empty -m "[heap-death] other: another lineage's cycle" && git push -q origin main)
+git fetch -q origin main
+git merge -q --no-edit -m "Merge origin/main into cycle/rev1-attempt1" refs/remotes/origin/main
+mkdir -p .zociety
+printf 'start: %s\nmode: budget\n' "$RUN_START" > .zociety/zloop.state
+run env -u ZSTOP_BUDGET bin/zstop-budget
+assert_out "CONTINUE: budget heap-deaths=1/3 action=contribute"
+run bin/zstop-feedback
+assert_out "CONTINUE: feedback done=false in $(git rev-parse --short=7 HEAD^1^1)"
+rm -f .zociety/zloop.state
+echo ""
+
+echo "=== Case 22: ZLOOP_SYNC_MAIN=0 leaves the branch alone; a conflict is aborted ==="
+origin_repo sync-off
+git checkout -q -b cycle/rev1-attempt1
+event join
+dev_commit dev.txt "not wanted"
+BEFORE=$(git rev-parse HEAD)
+run env -u ZOCIETY_BLIND_KEY ZLOOP_SYNC_MAIN=0 bin/zloop --quiet --max 1
+assert_rc 1
+assert_no_err 'Merged origin/main'
+assert_eq "HEAD unchanged" "$(git rev-parse HEAD)" "$BEFORE"
+echo "cycle side" >> PROMPT.md
+git commit -q -am "cycle edits PROMPT.md"
+dev_commit PROMPT.md "main side"
+BEFORE=$(git rev-parse HEAD)
+run env -u ZOCIETY_BLIND_KEY bin/zloop --quiet --max 1
+assert_rc 1
+assert_err '^\[zloop\] WARNING: origin/main does not merge cleanly into cycle/rev1-attempt1 before the first turn; the branch stays as it is \(merge main by hand\)$'
+assert_eq "HEAD unchanged" "$(git rev-parse HEAD)" "$BEFORE"
+assert_eq "no merge in progress" "$(test -e .git/MERGE_HEAD && echo yes || echo no)" no
+assert_eq "tree clean" "$(git status --porcelain | wc -l | tr -d ' ')" 0
+echo ""
+
+#############################################
+# Cases: bin/zobjects
+#############################################
+
+echo "=== Case 23: zobjects gives hard-linked objects their own copy and drops a stale lock ==="
+fresh_repo objects
+git add -A
+git commit -q -m "fixture bin"
+git clone -q "$REPO" "$TMP/linked-clone" 2>/dev/null
+linked=$(find .git/objects -type f -links +1 | wc -l | tr -d ' ')
+assert_eq "the local clone hard-linked objects" "$([[ $linked -gt 0 ]] && echo yes || echo "no ($linked)")" yes
+run bin/zobjects --check
+assert_rc 1
+assert_out_has "^zobjects: $linked object file\(s\) share a hard link with a copy outside this repo$"
+run bin/zobjects
+assert_rc 0
+assert_out_has "^zobjects: gave $linked hard-linked object file\(s\) their own copy"
+assert_eq "no file under objects/ has a second link" "$(find .git/objects -type f -links +1 | wc -l | tr -d ' ')" 0
+assert_eq "fsck" "$(git fsck --no-dangling 2>&1 | grep -c . || true)" 0
+assert_eq "the clone still reads" "$(git -C "$TMP/linked-clone" log -1 --format=%s)" "fixture bin"
+touch -t 202601010000 .git/objects/maintenance.lock
+run bin/zobjects
+assert_rc 0
+assert_out_has '^zobjects: removed .*maintenance\.lock, left by an auto-gc that died over an hour ago$'
+touch .git/objects/maintenance.lock
+run bin/zobjects --check
+assert_rc 0
+assert_eq "a fresh lock stays" "$(test -e .git/objects/maintenance.lock && echo yes)" yes
+rm -f .git/objects/maintenance.lock
+echo ""
+
+#############################################
 # Summary
 #############################################
 

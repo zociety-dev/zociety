@@ -241,7 +241,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
     [[ -x "$f" ]] || continue
     base="${f#bin/}"
     case "$base" in
-      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve) continue ;;
+      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve|zobjects) continue ;;
     esac
     # Usage: the "# Usage: bin/z..." one-liner, or the first "#   bin/z..."
     # under a "# Usage:" heading. The "-h | --help" form is not news.
