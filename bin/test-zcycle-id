@@ -325,7 +325,19 @@ event stuff
 run bin/zheap-death tester "first question" 3
 assert_rc 1
 assert_err '^zheap-death: successor direction requires --cite FILE or --challenge FILE'
+BEFORE=$(git rev-parse HEAD)
 run bin/zheap-death --cite inherited.md tester "first question" 3
+assert_rc 1
+assert_err '^zheap-death: --learning TEXT is required: one finding from this cycle'
+run bin/zheap-death --cite inherited.md --learning "   " tester "first question" 3
+assert_rc 1
+assert_err '^zheap-death: --learning TEXT is required'
+run bin/zheap-death --cite inherited.md --learning "$(printf 'x%.0s' $(seq 1 501))" tester "first question" 3
+assert_rc 1
+assert_err '^zheap-death: --learning is 501 characters; keep it to one finding of at most 500$'
+assert_eq "refused before any write" "$(git rev-parse HEAD)" "$BEFORE"
+assert_eq "no learnings branch yet" "$(git show-ref --verify --quiet refs/heads/learnings && echo yes || echo no)" no
+run bin/zheap-death --cite inherited.md --learning "  Fixture rules only bind when zstate replays them.  " tester "first question" 3
 assert_rc 0
 assert_out_has '^On cycle branch: cycle/rev1-attempt1$'
 assert_out_has '^Birthing successor branch: cycle/rev1-attempt2$'
@@ -339,6 +351,10 @@ assert_eq "[direction] commits on cycle/rev1-attempt1" "$(git rev-list --count -
 assert_eq "[direction] commits on cycle/rev1-attempt2" "$(git rev-list --count --grep='^\[direction\]' cycle/rev1-attempt2)" 1
 assert_eq "heap-death event branch" "$(git log -1 --format=%b "$HD" | jq -r '.data.branch')" cycle/rev1-attempt1
 assert_eq "note on the heap-death" "$(git notes show "$HD" | head -1)" "cycle: rev1 attempt1"
+assert_eq "learning in the event, trimmed" "$(git log -1 --format=%b "$HD" | jq -r '.data.learning')" "Fixture rules only bind when zstate replays them."
+assert_eq "learning in the note" "$(git notes show "$HD" | grep -c '^learning: Fixture rules only bind when zstate replays them\.$')" 1
+assert_eq "learning on the branch" "$(git show learnings:LEARNINGS.md | grep -A2 '^## rev1-attempt1$' | tail -1)" "Fixture rules only bind when zstate replays them."
+assert_eq "every turn sees it" "$(bin/zprompt | grep -c '^Latest learning, cycle [0-9]*: Fixture rules only bind when zstate replays them\.$')" 1
 assert_eq "action after heap-death" "$(bin/zstate | jq -r .action)" contribute
 assert_eq "stuff/ cleared" "$(git ls-files stuff | wc -l | tr -d ' ')" 0
 echo ""
@@ -347,8 +363,14 @@ echo "=== Case 6b: a second heap-death chains: attempt2 dies, attempt3 is born =
 event join
 mkdir -p stuff
 echo "second fixture artifact" > stuff/inherited.md
-run bin/zheap-death --cite inherited.md tester "second question" 2
+run bin/zheap-death --cite stuff/inherited.md --learning "A second finding." tester "second question" 2
 assert_rc 0
+assert_eq "a stuff/ prefix is dropped" "$(git log -1 --format=%b | jq -c '.data.inheritance.cite')" '["inherited.md"]'
+assert_eq "both learnings on the branch" "$(git show learnings:LEARNINGS.md | grep -c '^## rev1-attempt[12]$')" 2
+event complete
+prompt=$(bin/zprompt)
+assert_eq "heap-death turn is asked for a learning" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zheap-death --cite <stuff-file> --learning "<what this cycle found>"')" 1
+assert_eq "and shown the earlier ones, newest first" "$(printf '%s\n' "$prompt" | grep -A2 '^Learnings from recent cycles (newest first):$' | tail -2 | cut -d: -f2- | tr '\n' '|')" " A second finding.| Fixture rules only bind when zstate replays them.|"
 HD2=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt3
 assert_branch_at cycle/rev1-attempt2 "$HD2"
@@ -361,7 +383,7 @@ echo "=== Case 7: heap-death on a cycle branch with the batch exhausted still bi
 fresh_repo hd-exhausted
 git checkout -q -b cycle/rev1-attempt1
 event join
-run bin/zheap-death tester "last question" 1
+run bin/zheap-death --learning "The last cycle still records what it found." tester "last question" 1
 assert_rc 0
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
@@ -377,9 +399,10 @@ git tag rev1-attempt1-iterations1of1 -m "q"
 change_prompt
 git checkout -q -b cycle/rev2-attempt1
 event join
-run bin/zheap-death --cite inherited.md tester "learned question" 3
+run bin/zheap-death --cite inherited.md --learning "Learned after a PROMPT.md change." tester "learned question" 3
 assert_rc 0
-assert_out_has '^Saving insight to learnings branch'
+assert_out_has '^Saving learning to learnings branch'
+assert_eq "the learning, not PROMPT.md lines" "$(git show learnings:LEARNINGS.md | grep -A2 '^## rev2-attempt1$' | tail -1)" "Learned after a PROMPT.md change."
 assert_eq "learnings branch exists" "$(git show-ref --verify --quiet refs/heads/learnings && echo yes)" yes
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev2-attempt2
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
@@ -403,7 +426,7 @@ run bin/zheap-death tester "leaked question"
 assert_rc 1
 assert_err "^zheap-death: refusing to run on 'feat/scratch'"
 git checkout -q -b cycle/rev1-attempt1
-run bin/zheap-death --cite inherited.md tester "allowed question" 2
+run bin/zheap-death --cite inherited.md --learning "Allowed." tester "allowed question" 2
 assert_rc 0
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
 echo ""
@@ -414,7 +437,7 @@ git checkout -q -b cycle/rev1-attempt1
 git branch cycle/rev1-attempt2
 event join
 BEFORE=$(git rev-parse HEAD)
-run bin/zheap-death --cite inherited.md tester "blocked question" 3
+run bin/zheap-death --cite inherited.md --learning "Blocked." tester "blocked question" 3
 assert_rc 1
 assert_err '^zheap-death: successor branch cycle/rev1-attempt2 already exists'
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt1

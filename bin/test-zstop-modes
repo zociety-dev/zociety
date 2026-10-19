@@ -735,7 +735,7 @@ START=$(git rev-parse HEAD)
 heap_death '{"batch_remaining":2}'
 heap_death '{"batch_remaining":1}'
 write_state "$START" budget
-run env -u ZSTOP_BUDGET bin/zheap-death tester "third question"
+run env -u ZSTOP_BUDGET bin/zheap-death --learning "fixture finding" tester "third question"
 assert_rc 0
 assert_err "^batch_size defaulted to 1 \(budget=3, 2 heap-deaths since ${START:0:7}\)$"
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
@@ -756,7 +756,7 @@ START=$(git rev-parse HEAD)
 heap_death '{"batch_remaining":2}'
 heap_death '{"batch_remaining":1}'
 write_state "$START" action,file
-run env -u ZSTOP_BUDGET bin/zheap-death --cite inherited.md tester "third question"
+run env -u ZSTOP_BUDGET bin/zheap-death --cite inherited.md --learning "fixture finding" tester "third question"
 assert_rc 0
 assert_no_err '^batch_size defaulted'
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
@@ -1066,7 +1066,7 @@ assert_eq "prompt gives zjoin's usage and purpose" "$(printf '%s\n' "$prompt" | 
 assert_eq "prompt gives zstuff's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zstuff \[--answers ASK_ID\] <agent> <file> \[traversal\] - Record stuff creation$')" 1
 assert_eq "operator tools are not offered to turns" "$(printf '%s\n' "$prompt" | grep -c '^  bin/z\(ask\|resume\|observe\)')" 0
 assert_eq "prompt gives zvote's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zvote <agent> <rule_number> <yes|no> \[reason\] - Vote on a rule$')" 1
-assert_eq "prompt gives zheap-death's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death \[--done\] \[--cite FILE | --challenge FILE\]\.\.\. <agent> <question> \[batch_size\] - ')" 1
+assert_eq "prompt gives zheap-death's usage" "$(printf '%s\n' "$prompt" | grep -c '^  bin/zheap-death \[--done\] \[--cite FILE | --challenge FILE\]\.\.\. --learning TEXT <agent> <question> \[batch_size\] - ')" 1
 # zcomplete/zpromise have no Usage: line in their headers; the name alone is
 # the usage, and the block must still list them rather than drop them.
 assert_eq "prompt lists the argument-free commands" "$(printf '%s\n' "$prompt" | grep -c -e '^  bin/zcomplete - ' -e '^  bin/zpromise - ')" 2
