@@ -35,16 +35,28 @@
 #   bin/zstate          The state above
 #   bin/zstate --asks   Every operator question in the scanned history, oldest
 #                       first, with status and answers (bin/zask --list)
+#   --ref REF           Read REF's history instead of HEAD's (bin/zsite-generate
+#                       reads the live cycle branch from a main checkout)
 
 set -e
 
 MODE=state
-case "${1:-}" in
-  "") ;;
-  --asks) MODE=asks ;;
-  -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "zstate: unknown argument '$1'" >&2; exit 2 ;;
-esac
+REF=HEAD
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --asks) MODE=asks ;;
+    --ref)
+      [[ -n "${2:-}" ]] || { echo "zstate: --ref needs a ref" >&2; exit 2; }
+      git rev-parse --verify -q "$2^{commit}" >/dev/null \
+        || { echo "zstate: --ref '$2' is not a commit" >&2; exit 2; }
+      REF="$2"
+      shift
+      ;;
+    -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "zstate: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+  shift
+done
 
 # Genesis thresholds (see AGENTS.md "Genesis")
 NEED_MEMBERS=3
@@ -64,7 +76,7 @@ NEED_STUFF=3
 # commit with the commit hash added as _hash (legacy events carry no turn id,
 # so the hash stands in as one).
 scan_events() {
-  git log --format='%x1e%H%n%B' -n 1000 2>/dev/null \
+  git log --format='%x1e%H%n%B' -n 1000 "$REF" -- 2>/dev/null \
     | jq -R -s -c '
       split("\u001e")[1:]
       | map(

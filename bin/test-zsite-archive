@@ -25,6 +25,9 @@
 #      and gets every page, artifact, title and escape right: the generator
 #      gathers the archive in a fixed number of git calls, and this case
 #      catches a slide back to per-tag or per-artifact subprocesses
+#   7. the front page and "This Cycle" describe the highest
+#      cycle/rev{N}-attempt{M} branch (origin's when only origin has it),
+#      not main or the working tree; bin/zstate --ref reads a given ref
 
 set -e
 
@@ -183,6 +186,45 @@ check "h1 title is HTML-escaped" grep -qF ">Title $SCALE_TAGS &amp; &lt;b&gt;</a
 check "artifact without h1 falls back to its filename" grep -qF '>b.md</a> <code>b.md</code>' "$PAGE"
 check "body comes from the tag, not the tree" grep -qF "body $SCALE_TAGS" "$PAGE"
 check "index lists the newest tag first" test "$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | head -1)" = "href=\"archive/$LAST.html\""
+cd "$TMP/repo"
+
+# live_commit <ref> <mark> <cycle> <stuff-file> <title> [from]: one fast-import
+# commit on <ref> holding a [join] event for <cycle> and stuff/<stuff-file>,
+# branched from mark <from> with the parent's stuff/ removed, as a cycle
+# branch starts after heap-death clears it
+live_commit() {
+  local ref="$1" mark="$2" cycle="$3" file="$4" title="$5" from="${6:-}" msg body
+  msg=$(printf '[join] member-1: joins cycle %d\n\n{"z":1,"event":"join","cycle":%d,"seq":1,"agent":"member-1","ts":"2026-01-01T00:00:00Z","state":{"members":1,"rules":0,"stuff":0,"complete":false},"data":{"role":"tester","greeting":"hi"}}' "$cycle" "$cycle")
+  body=$(printf '# %s\n\nbody of %s' "$title" "$file")
+  printf 'commit %s\nmark :%d\ncommitter Zociety Test <test@zociety.dev> %d +0000\ndata %d\n%s\n' \
+    "$ref" "$mark" $((1700000000 + mark * 86400)) "${#msg}" "$msg"
+  [[ -z "$from" ]] || printf 'from :%d\nD stuff\n' "$from"
+  printf 'M 100644 inline stuff/%s\ndata %d\n%s\n\n' "$file" "${#body}" "$body"
+}
+
+echo "Case 7: the current cycle is the highest cycle branch's, not the checkout's"
+mkdir -p "$TMP/live"
+git init -q -b main "$TMP/live"
+cp -R "$TMP/repo/bin" "$TMP/live/bin"
+cp "$TMP/repo/PROMPT.md" "$TMP/live/PROMPT.md"
+{
+  live_commit refs/heads/main 1 5 main-only.md "Main artifact"
+  live_commit refs/heads/cycle/rev2-attempt9 2 6 older.md "Older artifact" 1
+  # Version order: attempt10 is above attempt9. Only origin has it, as in CI.
+  live_commit refs/remotes/origin/cycle/rev2-attempt10 3 7 live.md "Live artifact" 1
+} | LC_ALL=C git -C "$TMP/live" fast-import --quiet
+cd "$TMP/live"
+mkdir -p stuff
+printf '# Working tree artifact\n' > stuff/untracked.md
+check "zstate reads HEAD by default" test "$(bin/zstate | jq -r .cycle)" = 5
+check "zstate --ref reads that ref" test "$(bin/zstate --ref refs/remotes/origin/cycle/rev2-attempt10 | jq -r .cycle)" = 7
+check "zstate --ref refuses a ref that is not a commit" bash -c '! bin/zstate --ref no-such-ref'
+generate
+check "front page shows the live cycle" grep -q '<div class="stat-value">7</div>' docs/index.html
+check "front page names the live branch" grep -qF 'Current Genesis Progress <code>cycle/rev2-attempt10</code>' docs/index.html
+check "This Cycle holds the live branch's stuff" grep -qF 'Live artifact' docs/stuff.html
+check "not main's, an older cycle's or the working tree's" \
+  bash -c '! grep -qE "Main artifact|Older artifact|Working tree artifact" docs/stuff.html'
 cd "$TMP/repo"
 
 echo

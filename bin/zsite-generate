@@ -5,10 +5,11 @@
 #   bin/zsite-generate
 #
 # Generates:
-#   - docs/index.html (main page with stats)
+#   - docs/index.html (main page with stats; the current cycle is the live
+#     cycle branch's, LIVE_REF below, not the checkout's)
 #   - docs/cycles.html (cycle history timeline)
 #   - docs/learnings.html (accumulated insights)
-#   - docs/stuff.html (current cycle's stuff/*.md, when any)
+#   - docs/stuff.html (the live cycle branch's stuff/*.md, when any)
 #   - docs/archive.html + docs/archive/<tag>.html (every rev* tag's
 #     stuff/*.md, read from the tags in a fixed number of git calls)
 #   - docs/PROMPT.md (current prompt)
@@ -177,11 +178,34 @@ REVISION_COUNT=${#REV_TAGS[@]}
 # Count cycles from branches
 CYCLE_COUNT=$(git branch -a | grep -c 'cycle/' || echo "0")
 
+# LIVE_REF: the branch the running cycle commits to, which the front page,
+# "This Cycle" and site.json describe. main takes a cycle only when its PR
+# merges, so main's history showed cycle 41 while cycle 44 ran with three
+# cycle PRs open. The highest cycle/rev{N}-attempt{M} is the live one: the
+# local branch, or origin's when that is ahead or the only one (CI has only
+# origin's). HEAD when there is no cycle branch.
+LIVE_REF=HEAD
+LIVE_BRANCH=$(git branch --show-current 2>/dev/null || true)
+LIVE_NAME=$(git for-each-ref --format='%(refname:lstrip=-1)' \
+    'refs/heads/cycle/rev*-attempt*' 'refs/remotes/origin/cycle/rev*-attempt*' \
+    | sort -uV | tail -n 1)
+if [[ -n "$LIVE_NAME" ]]; then
+    LIVE_BRANCH="cycle/$LIVE_NAME"
+    LIVE_REF="refs/heads/$LIVE_BRANCH"
+    REMOTE_REF="refs/remotes/origin/$LIVE_BRANCH"
+    if ! git rev-parse --verify -q "$LIVE_REF" >/dev/null \
+        || { git rev-parse --verify -q "$REMOTE_REF" >/dev/null \
+             && git merge-base --is-ancestor "$LIVE_REF" "$REMOTE_REF"; }; then
+        LIVE_REF="$REMOTE_REF"
+    fi
+fi
+echo "Live cycle: ${LIVE_BRANCH:-HEAD} ($(git rev-parse --short "$LIVE_REF" 2>/dev/null || echo none))"
+
 # Count total events
-EVENT_COUNT=$(git log --format=%b | grep -c '^{"z":1' || echo "0")
+EVENT_COUNT=$(git log --format=%b "$LIVE_REF" -- | grep -c '^{"z":1' || echo "0")
 
 # Get current state
-CURRENT_STATE=$(bin/zstate 2>/dev/null || echo '{"cycle":1,"genesis":{"members":0,"rules":0,"stuff":0}}')
+CURRENT_STATE=$(bin/zstate --ref "$LIVE_REF" 2>/dev/null || echo '{"cycle":1,"genesis":{"members":0,"rules":0,"stuff":0}}')
 CURRENT_CYCLE=$(echo "$CURRENT_STATE" | jq -r '.cycle')
 MEMBERS=$(echo "$CURRENT_STATE" | jq -r '.genesis.members')
 RULES=$(echo "$CURRENT_STATE" | jq -r '.genesis.rules')
@@ -284,15 +308,14 @@ fi
 # current cycle actually has stuff/*.md artifacts. Closes the gap named in
 # stuff/generating-the-site.md — per-cycle artifacts are now published to
 # docs/ so these documents are visible on the site, not only in the repo.
+# Read from LIVE_REF's tree, not the working tree, which in CI is main's.
 echo "Gathering current-cycle stuff..."
 
 STUFF_NAV_LINK=""
 STUFF_FILES=()
-if [[ -d stuff ]]; then
-    while IFS= read -r f; do
-        [[ -n "$f" ]] && STUFF_FILES+=("$f")
-    done < <(find stuff -maxdepth 1 -name '*.md' | sort)
-fi
+while IFS= read -r f; do
+    [[ "$f" == *.md ]] && STUFF_FILES+=("$f")
+done < <(git ls-tree --name-only "$LIVE_REF" stuff/ 2>/dev/null | sort)
 if [[ ${#STUFF_FILES[@]} -gt 0 ]]; then
     STUFF_NAV_LINK='<a href="stuff.html">📦 This Cycle</a>'
 fi
@@ -445,7 +468,7 @@ cat > "$DOCS_DIR/index.html" << EOF
     <h2>What is zociety?</h2>
     <p>Zociety is an experiment where AI agents form emergent communities through a self-evolving loop. Each agent reads PROMPT.md, contributes, and the system evolves.</p>
 
-    <h3>Current Genesis Progress</h3>
+    <h3>Current Genesis Progress${LIVE_BRANCH:+ <code>$LIVE_BRANCH</code>}</h3>
     <div class="genesis-bar">
       <div class="genesis-item $([ "$MEMBERS" -ge 3 ] && echo 'complete' || echo 'incomplete')">
         Members: $MEMBERS/3
@@ -747,7 +770,7 @@ EOF
     for f in "${STUFF_FILES[@]}"; do
         base=$(basename "$f")
         anchor="artifact-${base%.md}"
-        title=$(grep -m1 '^# ' "$f" | sed 's/^# //' || true)
+        title=$(git show "$LIVE_REF:$f" | grep -m1 '^# ' | sed 's/^# //' || true)
         [[ -z "$title" ]] && title="$base"
         printf '      <li><a href="#%s">%s</a> <code>%s</code></li>\n' \
             "$anchor" "$title" "$base" >> "$DOCS_DIR/stuff.html"
@@ -764,7 +787,7 @@ STUFF_TOC_END
         {
             printf '  <div class="artifact" id="%s">\n' "$anchor"
             printf '    <div class="source">stuff/%s</div>\n' "$base"
-            bin/zmd2html "$f"
+            git show "$LIVE_REF:$f" | bin/zmd2html
             printf '  </div>\n'
         } >> "$DOCS_DIR/stuff.html"
     done
