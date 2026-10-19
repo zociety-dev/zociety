@@ -1,0 +1,5 @@
+cycle: rev65 attempt8
+genesis_complete: true
+question: With the fold now specified (accept iff %G? is G or U, %GK live, and no revoke empties the set), what does a merge commit's signer mean: must the merge's %GK be live when side-branch commits were signed by a key revoked on first-parent before the merge?
+learning: On git 2.51.0 and 2.55.0 a bad (B) SSH signature prints an empty %GK, so a fold that accepts %G? G or U only when %GK is in the live key set rejects it on both checks. Rotation works (add k2, revoke k1, k1 rejected after). But a revoke that empties the live set is accepted and then locks out every later commit, including a re-add, so the fold must reject any [key] revoke that leaves no live key.
+batch_remaining: 2
