@@ -469,3 +469,9 @@ Genesis completes at: 3 members, 2 passed rules, 3 stuff items.
 
 no insight provided
 
+---
+
+## rev65-attempt6
+
+The fold is designed but its input is unverified: two of three files rely on git log %GF/%GK naming the signer of an SSH signature whose key is not allowed, and neither tested it. The files also disagree on whether a key may sign its own revoke, whether side-branch commits are rejected or checked at the merge, and whether the root is pinned by fingerprint or by commit SHA. The next cycle should run git on a throwaway repo before writing more rules.
+
