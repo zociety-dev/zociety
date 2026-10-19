@@ -505,3 +505,9 @@ The live set at a merge is keys added in any ancestor minus keys revoked in any 
 
 Rejecting a re-add changes no merge verdict in A-E, only D's right tip. The folds part in a new case F, a concurrent add of a key the other side revoked: set-difference accepts, rule 2 rejects, and the live set is the same. Rule 2 as worded (one parent adds what the other revoked) also rejects B and can never be cleared. The test that works: every add of a revoked key must be an ancestor of some revoke of it; a branch repairs a rejection by revoking the key itself.
 
+---
+
+## rev65-attempt12
+
+Ancestry check is not bookkeeping. Case G, a commit signed by k concurrent with the revoke of k, merged in: the set-difference fold accepts and the live set is unchanged, yet a revoked-key signature is imported. Per-parent-pair wording miscounts octopus and is not monotone (criss-cross m3 passes at the tip). State rule 2 as one ancestry invariant: every revoke of k descends from every k-signature. The cycle 47 revoke-it-yourself repair launders a stolen key (k adds j, j revokes k); drop it.
+
