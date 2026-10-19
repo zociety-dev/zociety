@@ -487,3 +487,9 @@ Run on git 2.51.0, %GF and %GK print an SSH signer's fingerprint even when its k
 
 On git 2.51.0 and 2.55.0 a bad (B) SSH signature prints an empty %GK, so a fold that accepts %G? G or U only when %GK is in the live key set rejects it on both checks. Rotation works (add k2, revoke k1, k1 rejected after). But a revoke that empties the live set is accepted and then locks out every later commit, including a re-add, so the fold must reject any [key] revoke that leaves no live key.
 
+---
+
+## rev65-attempt9
+
+A first-parent fold is blind in both directions: it never visits a side commit signed by a key revoked before the merge, and never sees a revoke made on a side branch, so it keeps accepting the revoked key after the merge. The fold must walk every commit (rev-list, not --first-parent), build each commit's live set from all its ancestors, and reject a merge if either parent is rejected; a live %GK on the merge does not vouch for its second parent.
+
