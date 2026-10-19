@@ -6,6 +6,7 @@
 #   bin/zask --list
 #   bin/zask --show <ask-id>
 #   bin/zask --close <ask-id> "<reason>"
+#   bin/zask --drain
 #   bin/zask -h | --help
 #
 # The zociety sets its own direction: each heap-death names the question the
@@ -26,17 +27,25 @@
 #   --list       Every ask, its status and where each answer is.
 #   --show ID    The ask and the full text of every answer so far.
 #   --close ID   Withdraw an open ask; the reason is recorded.
+#   --drain      Record the asks queued while a run goes (bin/zloop runs
+#                this between turns).
 #
 # Asks come from outside the society: a loop turn (ZOCIETY_TURN_ID set) is
-# refused. Record one between runs, or with `bin/zloop --ask "<text>"`, which
-# does it before the first iteration: a commit made while a turn runs is
-# sealed as that turn's. The tree must be clean, because bin/zevent stages
-# everything. Answers are archived with their cycle; --show reads them from
+# refused. A commit made while a turn runs would be sealed as that turn's,
+# so while a run goes in this worktree (bin/zloop status) an ask or a close
+# is queued in .zociety/asks.inbox, with its id, and the run records it
+# before its next turn; between runs, or from the run itself (bin/zloop
+# --ask), it is recorded at once. The tree must be clean when it is
+# recorded, because bin/zevent stages everything; a queued ask waits for a
+# clean tree. Answers are archived with their cycle; --show reads them from
 # the [stuff] commits that recorded them, so they survive bin/zheap-death
 # clearing stuff/. Asks older than bin/zstate's 1000-commit window are not
 # seen.
 
 set -e
+
+# shellcheck source=bin/zrun.sh
+. bin/zrun.sh
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -58,6 +67,105 @@ record_guard() {
     || die "asks come from the operator, not a loop turn (ZOCIETY_TURN_ID is set)"
   [[ -z "$(git status --porcelain 2>/dev/null)" ]] \
     || die "the working tree has changes; commit or remove them first (bin/zevent stages everything into the event)"
+}
+
+# run_going: the pid of a run going in this worktree that is not our caller
+# (bin/zloop records its own --ask and the queue directly)
+run_going() {
+  local pid
+  pid=$(zrun_live_pid) || return 1
+  [[ "$pid" != "$PPID" ]] || return 1
+  echo "$pid"
+}
+
+# Ids run over the whole history, not bin/zstate's window, so one is never
+# reused: the highest ask-N any [ask] subject or queued ask names, plus one.
+next_id() {
+  local last
+  last=$({ git log --format=%s --grep='^\[ask\] ' 2>/dev/null
+           [[ ! -s "$ZRUN_INBOX" ]] || jq -r '.id // empty' "$ZRUN_INBOX" 2>/dev/null
+         } | grep -o 'ask-[0-9]*' | cut -d- -f2 | sort -n | tail -n1)
+  echo "ask-$(( ${last:-0} + 1 ))"
+}
+
+# queue <json>: append an ask or a close for the run to record
+queue() {
+  mkdir -p "$(dirname "$ZRUN_INBOX")"
+  printf '%s\n' "$1" >> "$ZRUN_INBOX"
+}
+
+record_ask() {
+  local id="$1" text="$2" cycles="$3" data state
+  data=$(jq -nc --arg id "$id" --arg text "$text" --argjson cycles "$cycles" \
+    '{id: $id, text: $text, cycles: $cycles}')
+  # Explicit: drain calls this where set -e does not apply.
+  bin/zevent ask operator "$id: $text" "$data" >/dev/null || return 1
+  state=$(bin/zstate)
+  echo "zask: recorded $id ($(printf '%s' "$state" | jq -r '.asks_open') open)"
+  if [[ "$(printf '%s' "$state" | jq -r '.ask.id // empty')" == "$id" && "$(printf '%s' "$state" | jq -r '.needs.answers')" == "1" ]]; then
+    echo "zask: cycle $(printf '%s' "$state" | jq -r '.cycle') owes it an answer; bin/zask --show $id reads it once given"
+  else
+    echo "zask: queued behind the asks ahead of it, or for the next cycle if this one is complete"
+  fi
+}
+
+close_ask() {
+  local data
+  data=$(jq -nc --arg id "$1" --arg reason "$2" '{id: $id, close: true, reason: $reason}')
+  bin/zevent ask operator "close $1: $2" "$data" >/dev/null || return 1
+  echo "zask: closed $1"
+}
+
+# drain_one <json>: record one queued line. 0 when it is done with (recorded,
+# or dropped because it no longer applies), 1 when the record failed.
+drain_one() {
+  local line="$1" id text cycles reason
+  id=$(printf '%s' "$line" | jq -r '.close // empty' 2>/dev/null) || id=""
+  if [[ -n "$id" ]]; then
+    reason=$(printf '%s' "$line" | jq -r '.reason')
+    if [[ "$(ask_by_id "$id" | jq -r '.open // false')" != "true" ]]; then
+      echo "zask: dropped the queued close of $id: it is no longer open" >&2
+      return 0
+    fi
+    close_ask "$id" "$reason" || return 1
+    return 0
+  fi
+  text=$(printf '%s' "$line" | jq -r '.text // empty' 2>/dev/null) || text=""
+  if [[ -z "$text" ]]; then
+    echo "zask: dropped an unreadable queued line: $line" >&2
+    return 0
+  fi
+  cycles=$(printf '%s' "$line" | jq -r '.cycles // 1')
+  id=$(printf '%s' "$line" | jq -r '.id // empty')
+  # The id given at queue time, unless something took it since.
+  if [[ -z "$id" ]] || git log --format=%s --grep='^\[ask\] ' | grep -q "^\[ask\] operator: $id: "; then
+    id=$(next_id)
+  fi
+  record_ask "$id" "$text" "$cycles"
+}
+
+# drain: record the queue in order. On a failure the line that failed and
+# those after it go back to the head of the queue, ahead of any queued since.
+drain() {
+  local work line lines=() i
+  [[ -s "$ZRUN_INBOX" ]] || return 0
+  record_guard
+  # Taken aside first, so an ask queued meanwhile lands in a new inbox.
+  work="$ZRUN_INBOX.draining"
+  mv "$ZRUN_INBOX" "$work"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    lines+=("$line")
+  done < "$work"
+  for ((i = 0; i < ${#lines[@]}; i++)); do
+    [[ -n "${lines[i]}" ]] || continue
+    if ! drain_one "${lines[i]}"; then
+      { printf '%s\n' "${lines[@]:i}"; cat "$ZRUN_INBOX" 2>/dev/null || true; } > "$ZRUN_INBOX.rest"
+      mv "$ZRUN_INBOX.rest" "$ZRUN_INBOX"
+      rm -f "$work"
+      return 1
+    fi
+  done
+  rm -f "$work"
 }
 
 CYCLES=1
@@ -88,13 +196,22 @@ case "${1:-}" in
     ;;
   --close)
     [[ -n "${2:-}" && -n "${3:-}" ]] || die "--close requires an ask id and a reason"
-    record_guard
+    [[ -z "${ZOCIETY_TURN_ID:-}" ]] \
+      || die "asks come from the operator, not a loop turn (ZOCIETY_TURN_ID is set)"
     ASK=$(ask_by_id "$2")
     [[ -n "$ASK" ]] || die "no ask '$2' (bin/zask --list)"
     [[ "$(printf '%s' "$ASK" | jq -r '.open')" == "true" ]] || die "ask '$2' is not open"
-    DATA=$(jq -nc --arg id "$2" --arg reason "$3" '{id: $id, close: true, reason: $reason}')
-    bin/zevent ask operator "close $2: $3" "$DATA" >/dev/null
-    echo "zask: closed $2"
+    if pid=$(run_going); then
+      queue "$(jq -nc --arg id "$2" --arg reason "$3" '{close: $id, reason: $reason}')"
+      echo "zask: a run is going here (pid $pid); the close of $2 is queued for its next turn"
+      exit 0
+    fi
+    record_guard
+    close_ask "$2" "$3"
+    exit 0
+    ;;
+  --drain)
+    drain
     exit 0
     ;;
   --cycles)
@@ -110,22 +227,15 @@ esac
 TEXT="${1:-}"
 [[ $# -le 1 ]] || die "quote the question as one argument"
 [[ -n "${TEXT//[[:space:]]/}" ]] || { usage >&2; exit 1; }
-record_guard
-
-# Ids run over the whole history, not bin/zstate's window, so one is never
-# reused: the highest ask-N any [ask] subject names, plus one.
-LAST_N=$(git log --format=%s --grep='^\[ask\] ' 2>/dev/null \
-  | grep -o 'ask-[0-9]*' | cut -d- -f2 | sort -n | tail -n1)
-ID="ask-$(( ${LAST_N:-0} + 1 ))"
-
-DATA=$(jq -nc --arg id "$ID" --arg text "$TEXT" --argjson cycles "$CYCLES" \
-  '{id: $id, text: $text, cycles: $cycles}')
-bin/zevent ask operator "$ID: $TEXT" "$DATA" >/dev/null
-
-STATE=$(bin/zstate)
-echo "zask: recorded $ID ($(printf '%s' "$STATE" | jq -r '.asks_open') open)"
-if [[ "$(printf '%s' "$STATE" | jq -r '.ask.id // empty')" == "$ID" && "$(printf '%s' "$STATE" | jq -r '.needs.answers')" == "1" ]]; then
-  echo "zask: cycle $(printf '%s' "$STATE" | jq -r '.cycle') owes it an answer; bin/zask --show $ID reads it once given"
-else
-  echo "zask: queued behind the asks ahead of it, or for the next cycle if this one is complete"
+[[ -z "${ZOCIETY_TURN_ID:-}" ]] \
+  || die "asks come from the operator, not a loop turn (ZOCIETY_TURN_ID is set)"
+ID=$(next_id)
+if pid=$(run_going); then
+  queue "$(jq -nc --arg id "$ID" --arg text "$TEXT" --argjson cycles "$CYCLES" \
+    '{id: $id, text: $text, cycles: $cycles}')"
+  echo "zask: a run is going here (pid $pid); $ID is queued and recorded before its next turn"
+  echo "zask: bin/zloop status shows the queue; bin/zask --show $ID reads the answer once given"
+  exit 0
 fi
+record_guard
+record_ask "$ID" "$TEXT" "$CYCLES"
