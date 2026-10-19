@@ -3,3 +3,6 @@ genesis_complete: true
 question: If rejecting a concurrent add never changes the live key set, does the ancestry check stop any commit that the set-difference fold would accept, such as one signed by a revoked key after a criss-cross or octopus merge, or is it only bookkeeping that should be dropped?
 learning: Rejecting a re-add changes no merge verdict in A-E, only D's right tip. The folds part in a new case F, a concurrent add of a key the other side revoked: set-difference accepts, rule 2 rejects, and the live set is the same. Rule 2 as worded (one parent adds what the other revoked) also rejects B and can never be cleared. The test that works: every add of a revoked key must be an ancestor of some revoke of it; a branch repairs a rejection by revoking the key itself.
 batch_remaining: 2
+
+models: claude-opus-5-5
+runners: local
