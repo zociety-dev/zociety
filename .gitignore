@@ -9,3 +9,7 @@ container/secrets/*
 
 # direnv personal overrides (see .envrc)
 .env
+
+# Finder writes these whenever a folder is opened; bin/zevent's `git add -A`
+# swept them into event commits and every cycle PR
+.DS_Store
