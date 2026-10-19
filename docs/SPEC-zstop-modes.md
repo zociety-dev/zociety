@@ -41,10 +41,13 @@ on iteration 2, and `zheap-death` deletes the file entirely when it archives.
 
 `bin/zociety` must forward `ZSTOP_*` alongside `ZLOOP_*`.
 
-Safety caps are not modes. `--max N` and the hard kill (`--timeout`, derived
-from `--budget` when unset; `ZLOOP_TIMEOUT` is the env form) stay unconditional
-and stay where they are on `main`: the predicate chain runs first, then the
-`--max` check, and the hard kill wraps the claude call. Do not move them. Note
+Safety caps are not modes. `--max N`, the run limits `--for` and `--cost`, and
+the hard kill (`--timeout`, derived from `--budget` when unset;
+`ZLOOP_TIMEOUT` is the env form) stay unconditional and stay where they are
+on `main`: the predicate chain runs first, then `bin/zloop stop`'s marker,
+then the `--max`, `--for` and `--cost` checks, and the hard kill wraps the
+claude call. Do not move them. `--cycles N` is not a cap but this spec's
+`budget` mode with `ZSTOP_BUDGET=N`. Note
 the hard kill is not the agent's working budget -- that is `--budget`, which
 reaches the agent in its prompt and bounds nothing by itself; see
 `bin/zloop --help` (Time).
