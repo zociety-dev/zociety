@@ -1714,6 +1714,367 @@ if [[ ! -f /run/.containerenv && ! -f /.dockerenv ]]; then
 fi
 echo ""
 
+# assert_out <ere>: stdout has a line matching; print the first match
+assert_out() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$OUT"); then
+    pass "stdout: $line"
+  else
+    fail "stdout lacks /$1/"
+    sed 's/^/    stdout: /' "$OUT"
+  fi
+}
+
+# wait_for <test-expr-string> [tries]: poll every 0.2s until the bash test
+# holds (default 150 tries, 30s)
+wait_for() {
+  local i
+  for ((i = 0; i < ${2:-150}; i++)); do
+    eval "$1" && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+# Runs bounded by time, spend or cycles instead of a turn count, so a run can
+# be left to itself (#run-bounds).
+echo "=== Case 46: run limits parse durations and refuse what cannot work ==="
+fresh_repo run-limits
+assert_eq "zrun_secs" "$(. bin/zrun.sh; for d in 90 08 90s 45m 1h30m 3d 2d12h; do printf '%s=%s ' "$d" "$(zrun_secs "$d")"; done)" \
+  "90=90 08=8 90s=90 45m=2700 1h30m=5400 3d=259200 2d12h=216000 "
+assert_eq "malformed durations refused" "$(. bin/zrun.sh; for d in 1x h3 '' 1.5h -5m; do zrun_secs "$d" >/dev/null 2>&1 && printf '[%s] ' "$d"; done; true)" ""
+assert_eq "zrun_fmt" "$(. bin/zrun.sh; for s in 42 125 300 3900 7200 93600 259200; do printf '%s ' "$(zrun_fmt "$s")"; done)" \
+  "42s 2m05s 5m 1h05m 2h 1d2h 3d "
+run bin/zloop --for 4m --max 1
+assert_rc 2
+assert_err "^zloop: --for 4m is shorter than one turn's 300s budget, so no turn could start$"
+run bin/zloop --for soon
+assert_rc 2
+assert_err "^zloop: --for expects seconds or a duration \(90s, 45m, 8h, 3d, 1h30m\), got 'soon'$"
+run bin/zloop --cost 0
+assert_rc 2
+assert_err "^zloop: --cost/ZLOOP_COST expects a dollar amount above 0, got '0'$"
+run bin/zloop --cost 5 --quiet
+assert_rc 2
+assert_err "which --quiet never sees; drop --quiet$"
+assert_claude_runs 0
+run bin/zloop --budget 2m --interval 0s --max 1
+assert_rc 1
+assert_err '^Budget per iteration: 120s \(told to the agent\)$'
+assert_err '^Hard kill: 240s$'
+assert_eq "a duration budget reaches the prompt" "$(grep -c 'about 120 seconds of wall-clock time' "$FAKE_LOG")" 1
+echo ""
+
+echo "=== Case 47: --for ends the run before a turn that would outlast it, and lifts the default cap ==="
+fresh_repo run-for
+t0=$SECONDS
+# The fake turns commit nothing and, in the container, take a fraction of a
+# second: without ZLOOP_MAX_IDLE=0 ten of them end the run before the limit.
+run env ZLOOP_MAX_IDLE=0 bin/zloop --for 6 --budget 3 --interval 0
+took=$((SECONDS - t0))
+assert_rc 1
+assert_err '^Max iterations: none$'
+assert_err '^Time limit: 6s \(ends by '
+assert_err '^=== Time Limit Reached ===$'
+assert_err '^6s limit: a 3s turn started now would end after '
+assert_no_err '^=== Max Iterations Reached ===$'
+assert_eq "at least one turn ran" "$([[ $(wc -l < "$FAKE_LOG") -ge 1 ]] && echo yes)" yes
+assert_eq "ended within the limit plus one budget and slack" "$([[ $took -le 12 ]] && echo yes || echo "no (${took}s)")" yes
+assert_eq "the record says why" "$(jq -r .reason .zociety/run.last.json)" "time limit (6s) reached"
+assert_eq "and how" "$(jq -r '"\(.exit) \(.limits.max) \(.limits.for)"' .zociety/run.last.json)" "1 null 6"
+assert_absent .zociety/run.json
+echo ""
+
+# The fake claude reports $0.29987025 a turn: with --cost 1 the third turn
+# brings the spend to $0.90, and a fourth at that average would reach $1.20.
+echo "=== Case 48: --cost stops before a turn the average turn cost says would go over ==="
+fresh_repo run-cost
+run bin/zloop --cost 1 --budget 30 --interval 0
+assert_rc 1
+assert_err '^Cost limit: \$1\.00$'
+assert_err '^=== Cost Limit Reached ===$'
+assert_err '^Spent \$0\.90 of \$1; another turn at the average cost would go over$'
+assert_claude_runs 3
+assert_eq "spend on the record" "$(jq -r '.spent * 100 | round' .zociety/run.last.json)" 90
+fresh_repo run-cost-raw
+run bin/zloop --verbose --cost 0.5 --budget 30 --interval 0
+assert_rc 1
+assert_err '^=== Cost Limit Reached ===$'
+assert_claude_runs 1
+echo ""
+
+echo "=== Case 49: --cycles N is the budget stop mode with ZSTOP_BUDGET=N, with no turn cap ==="
+fresh_repo run-cycles
+export FAKE_CLAUDE_HEAP_DEATH=1
+run env -u ZSTOP_BUDGET bin/zloop --cycles 2 --budget 30 --interval 0
+unset FAKE_CLAUDE_HEAP_DEATH
+assert_rc 0
+assert_err '^Stop modes: action,budget$'
+assert_err '^Cycles: 2 \(budget stop mode, ZSTOP_BUDGET=2\)$'
+assert_err '^Max iterations: none$'
+assert_err '^STOP: budget heap-deaths=2/2 since '
+assert_claude_runs 2
+assert_eq "the record names the predicate" "$(jq -r .reason .zociety/run.last.json | cut -c1-30)" "STOP: budget heap-deaths=2/2 s"
+echo ""
+
+echo "=== Case 50: one run per worktree; an ask made while it goes is queued and recorded before its next turn ==="
+fresh_repo run-lock
+git add -A
+git commit -q -m "fixture tools"
+# A live run as bin/zrun.sh sees one: a pid, checkable from here, of a shell
+# running a script called zloop. A script with another name is not one.
+mkdir -p "$TMP/holder" .zociety
+printf '#!/bin/bash\nsleep 60\n' > "$TMP/holder/zloop"
+cp "$TMP/holder/zloop" "$TMP/holder/zloop-lookalike"
+chmod +x "$TMP/holder/zloop" "$TMP/holder/zloop-lookalike"
+held_record() {
+  jq -nc --argjson pid "$1" --arg host "$(. bin/zrun.sh; zrun_where)" --argjson now "$(date +%s)" \
+    '{id: "held", pid: $pid, host: $host, log: "", started: $now, updated: $now, start_sha: "",
+      branch: "main", stop: "action", budget: 300, interval: 1, timeout: 600,
+      limits: {max: 60, deadline: null, for: null, cost: null, cycles: null},
+      iteration: 3, turns: 2, spent: 0.6, action: "contribute:rule"}' > .zociety/run.json
+}
+"$TMP/holder/zloop-lookalike" &
+lookalike=$!
+held_record "$lookalike"
+run bin/zloop status
+assert_out "^Run       none going; a stale record from pid $lookalike"
+kill "$lookalike"
+wait "$lookalike" 2>/dev/null || true
+"$TMP/holder/zloop" &
+holder=$!
+held_record "$holder"
+run bin/zloop --max 1
+assert_rc 2
+assert_err "^zloop: a run is already going here \(pid $holder\); bin/zloop status shows it, bin/zloop stop ends it$"
+assert_claude_runs 0
+assert_eq "the live run's record is untouched" "$(jq -r .id .zociety/run.json)" held
+run bin/zask "What is a rule for?"
+assert_rc 0
+assert_out "^zask: a run is going here \(pid $holder\); ask-1 is queued and recorded before its next turn$"
+assert_eq "not recorded yet" "$(git log --oneline --grep='^\[ask\]' | wc -l | tr -d ' ')" 0
+assert_eq "queued with its id" "$(jq -r .id .zociety/asks.inbox)" ask-1
+run bin/zask "And what is it against?"
+assert_eq "the next id counts the queue" "$(jq -r .id .zociety/asks.inbox | tail -n1)" ask-2
+run bin/zloop status
+assert_rc 0
+assert_out "^Run       going · pid $holder · started "
+assert_out '^Limits    spent \$0\.60 · turns 2 of 60$'
+assert_out '^Now       iteration 3: contribute:rule on main '
+assert_out '^Queued    2 ask\(s\) made while the run goes, recorded before its next turn$'
+run bin/zloop stop
+assert_rc 0
+assert_out "^zloop: the run \(pid $holder\) ends before its next turn; iteration 3 \(contribute:rule\) finishes first$"
+assert_eq "stop marker left" "$([[ -e .zociety/run.stop ]] && echo yes)" yes
+kill "$holder"
+wait "$holder" 2>/dev/null || true
+run bin/zloop status
+assert_out "^Run       none going; a stale record from pid $holder"
+run bin/zloop stop
+assert_rc 1
+assert_out '^zloop: no run is going here$'
+run bin/zloop --budget 30 --max 1
+assert_rc 1
+assert_claude_runs 1
+assert_eq "both recorded before the first turn, in order" "$(git log --reverse --format=%s --grep='^\[ask\]' | tr '\n' '|')" \
+  "[ask] operator: ask-1: What is a rule for?|[ask] operator: ask-2: And what is it against?|"
+assert_eq "the turn saw the first" "$(grep -c 'Operator question ask-1' "$FAKE_LOG")" 1
+assert_eq "no turn sealed them" "$(git log --format=%H --grep='^\[ask\]' | xargs -n1 git notes --ref=agent show 2>/dev/null | grep -c 'kind: ai')" 0
+assert_absent .zociety/asks.inbox
+assert_absent .zociety/run.stop
+assert_eq "the stale record was replaced" "$(jq -r '.id != "held"' .zociety/run.last.json)" true
+echo ""
+
+echo "=== Case 51: bin/zloop stop ends a run between turns, cutting a long interval short ==="
+fresh_repo run-stop
+bin/zloop --budget 30 --interval 120 --max 5 >"$OUT" 2>"$ERR" &
+loop_pid=$!
+wait_for '[[ -s "$FAKE_LOG" ]]' || fail "the first turn never ran"
+sleep 1
+t0=$SECONDS
+bin/zloop stop >/dev/null
+RC=0
+wait "$loop_pid" || RC=$?
+ELAPSED=$((SECONDS - t0))
+assert_rc 0
+assert_err '^=== Loop Stopped ===$'
+assert_err '^bin/zloop stop asked for it after 1 iterations$'
+assert_claude_runs 1
+assert_elapsed_lt 10
+assert_eq "the record says why" "$(jq -r .reason .zociety/run.last.json)" "stopped by bin/zloop stop"
+echo ""
+
+echo "=== Case 52: --detach returns once the run is going; status, watch and stop --now reach it ==="
+fresh_repo run-detach
+if [[ -f /run/.containerenv || -f /.dockerenv ]]; then
+  run bin/zloop --detach --max 1
+  assert_rc 2
+  assert_err '^zloop: --detach is for the host; in the container run the loop in the foreground$'
+else
+  run bin/zloop --detach --budget 30 --interval 0 --max 2
+  assert_rc 0
+  assert_out '^zloop: run [0-9]{8}T[0-9]{6}Z is going in the background \(pid [0-9]+\)$'
+  run_log=$(sed -n 's/^  log: //p' "$OUT")
+  wait_for '[[ -f .zociety/run.last.json ]]' || fail "the detached run never ended"
+  assert_eq "it ended on its own cap" "$(jq -r .reason .zociety/run.last.json)" "turn limit (2) reached"
+  assert_claude_runs 2
+  assert_eq "its log has the run" "$(grep -c '^=== Max Iterations Reached ===$' "$run_log")" 1
+  run bin/zloop status
+  assert_out '^Last run  ended .*: turn limit \(2\) reached \(exit 1\)$'
+  assert_out "^Log       $run_log$"
+  run bin/zloop watch
+  assert_rc 1
+  assert_out '^zloop: no run is going; that was the end of the last one'"'"'s log \(turn limit \(2\) reached\)$'
+  export FAKE_CLAUDE_SLEEP=60
+  run bin/zloop --detach --budget 30 --max 2
+  unset FAKE_CLAUDE_SLEEP
+  assert_rc 0
+  wait_for '[[ -s "$FAKE_LOG.pid" ]]' || fail "the detached agent never started"
+  run bin/zloop --detach --max 1
+  assert_rc 2
+  assert_err '^zloop: a run is already going here \(pid [0-9]+\)'
+  run bin/zloop stop --now
+  assert_rc 0
+  assert_out '^zloop: the run ended: interrupted by SIGTERM$'
+  assert_agent_dead
+fi
+echo ""
+
+# A run in the container and one on the host share the worktree but not a
+# pid space: the record's age stands in for the pid check.
+echo "=== Case 53: a fresh record from another host counts as a run going; an old one is stale ==="
+fresh_repo run-foreign
+git add -A
+git commit -q -m "fixture tools"
+mkdir -p .zociety
+foreign_record() {
+  jq -nc --argjson updated "$1" \
+    '{id: "abroad", pid: 4242, host: "elsewhere", log: "", started: $updated, updated: $updated,
+      start_sha: "", branch: "main", stop: "action", budget: 300, interval: 1, timeout: 600,
+      limits: {max: 60, deadline: null, for: null, cost: null, cycles: null},
+      iteration: 2, turns: 1, spent: 0.3, action: "contribute:member"}' > .zociety/run.json
+}
+foreign_record "$(date +%s)"
+run bin/zloop --max 1
+assert_rc 2
+assert_err '^zloop: a run recorded elsewhere may be going \(pid 4242 on elsewhere, updated [0-9]+s ago\); bin/zloop stop asks it to end\. If it is gone, remove \.zociety/run\.json$'
+assert_claude_runs 0
+run bin/zask "Who is the zociety for?"
+assert_out '^zask: a run is going here \(pid 4242 on elsewhere, updated [0-9]+s ago\); ask-1 is queued'
+run bin/zloop status
+assert_out '^Run       may be going, recorded elsewhere \(pid 4242 on elsewhere'
+run bin/zloop stop --now
+assert_rc 2
+assert_err 'cannot be signalled from here; bin/zloop stop without --now$'
+run bin/zloop stop
+assert_rc 0
+assert_out '^zloop: the run recorded elsewhere \(pid 4242 on elsewhere, updated [0-9]+s ago\) ends before its next turn$'
+assert_eq "the marker reaches it" "$([[ -e .zociety/run.stop ]] && echo yes)" yes
+# 600s hard kill + 300s backoff cap + 60s: a record 1000s old is gone.
+foreign_record "$(($(date +%s) - 1000))"
+run bin/zloop status
+assert_out '^Run       none going; a stale record from pid 4242'
+run bin/zloop --budget 30 --max 1
+assert_rc 1
+assert_claude_runs 1
+assert_eq "the queued ask was recorded" "$(git log --format=%s --grep='^\[ask\]')" "[ask] operator: ask-1: Who is the zociety for?"
+echo ""
+
+echo "=== Case 54: ZLOOP_MAX_IDLE turns in a row with no commit end an uncapped run (exit 5) ==="
+fresh_repo run-idle
+# The fake claude commits nothing, as a turn whose login has expired would.
+run env ZLOOP_MAX_IDLE=3 bin/zloop --cost 100 --budget 30 --interval 0
+assert_rc 5
+assert_err '^=== Loop Aborted ===$'
+assert_err '^3 turns in a row made no commit \(last exit 0\); nothing is getting done\.$'
+assert_claude_runs 3
+assert_eq "the record says why" "$(jq -r .reason .zociety/run.last.json)" "aborted: 3 turns in a row made no commit"
+fresh_repo run-idle-progress
+export FAKE_CLAUDE_HEAP_DEATH=1
+run env ZLOOP_MAX_IDLE=1 bin/zloop --budget 30 --interval 0 --max 3
+unset FAKE_CLAUDE_HEAP_DEATH
+assert_rc 1
+assert_err '^=== Max Iterations Reached ===$'
+assert_claude_runs 3
+echo ""
+
+# A failed seal leaves SEAL_FROM pending, and the next seal covers
+# SEAL_FROM..HEAD: an ask recorded then would be sealed as agent work.
+echo "=== Case 55: queued asks wait while an unsealed range is pending ==="
+fresh_repo run-drain-seal
+printf '#!/bin/bash\nexit 1\n' > bin/zblind
+chmod +x bin/zblind
+# Committed: a queued ask is recorded only on a clean tree.
+git add -A
+git commit -q -m "fixture tools"
+cp "$FAKEBIN/claude" "$TMP/claude.real"
+# Queued during the first turn, as an operator's bin/zask would.
+printf '#!/bin/bash\n[[ -e .zociety/asks.inbox ]] || printf %q > .zociety/asks.inbox\nexec %q "$@"\n' \
+  '{"id":"ask-1","text":"Is a rule a promise?","cycles":1}\n' "$TMP/claude.real" > "$FAKEBIN/claude"
+chmod +x "$FAKEBIN/claude"
+run env ZLOOP_MAX_SEAL_FAILURES=0 bin/zloop --budget 30 --interval 0 --max 2
+assert_rc 1
+assert_err 'zblind seal failed for .* \(2 consecutive\)$'
+assert_eq "not recorded while the seal is pending" "$(git log --oneline --grep='^\[ask\]' | wc -l | tr -d ' ')" 0
+assert_eq "still queued" "$(jq -r .id .zociety/asks.inbox)" ask-1
+cp "$TMP/claude.real" "$FAKEBIN/claude"
+printf '#!/bin/bash\nexit 0\n' > bin/zblind
+git add bin/zblind
+git commit -q -m "fixture: sealing works again"
+run bin/zloop --budget 30 --max 1
+assert_rc 1
+assert_eq "recorded once the seal is clear" "$(git log --format=%s --grep='^\[ask\]')" "[ask] operator: ask-1: Is a rule a promise?"
+echo ""
+
+echo "=== Case 56: a drain cut off midway is picked up by the next, without recording an ask twice ==="
+fresh_repo run-drain-resume
+git add -A
+git commit -q -m "fixture tools"
+run bin/zask "What is a rule for?"
+assert_rc 0
+mkdir -p .zociety
+printf '%s\n' '{"id":"ask-1","text":"What is a rule for?","cycles":1}' \
+  '{"id":"ask-2","text":"And against?","cycles":1}' > .zociety/asks.inbox.draining
+printf '%s\n' '{"id":"ask-3","text":"Who decides?","cycles":1}' > .zociety/asks.inbox
+run bin/zask "Who else?"
+assert_out '^zask: recorded ask-4 '
+run bin/zask --drain
+assert_rc 0
+assert_err '^zask: ask-1 was already recorded$'
+assert_eq "each ask once, queue in order" "$(git log --reverse --format=%s --grep='^\[ask\]' | tr '\n' '|')" \
+  "[ask] operator: ask-1: What is a rule for?|[ask] operator: ask-4: Who else?|[ask] operator: ask-2: And against?|[ask] operator: ask-3: Who decides?|"
+assert_absent .zociety/asks.inbox.draining
+assert_absent .zociety/asks.inbox
+echo ""
+
+echo "=== Case 57: --detach needs timeout(1): nobody is there to kill a hung turn ==="
+fresh_repo run-detach-timeout
+nt_path=""
+nt_bin="$TMP/nt-bin"
+rm -rf "$nt_bin"
+mkdir -p "$nt_bin"
+while IFS= read -r d; do
+  [[ -z "$d" ]] && continue
+  if [[ -x "$d/timeout" ]]; then
+    ln -s "$d"/* "$nt_bin/" 2>/dev/null || true
+    continue
+  fi
+  nt_path="${nt_path:+$nt_path:}$d"
+done < <(printf '%s\n' "${PATH//:/$'\n'}")
+rm -f "$nt_bin/timeout"
+nt_path="$nt_bin${nt_path:+:$nt_path}"
+if [[ -f /run/.containerenv || -f /.dockerenv ]]; then
+  pass "skipped in the container (--detach is host-only)"
+elif PATH="$nt_path" command -v timeout >/dev/null 2>&1; then
+  fail "could not build a PATH without timeout(1)"
+else
+  run env PATH="$nt_path" bin/zloop --detach --max 1
+  assert_rc 2
+  assert_err '^zloop: --detach needs timeout\(1\) for the hard kill \(brew install coreutils\)$'
+  assert_claude_runs 0
+fi
+echo ""
+
 #############################################
 # Summary
 #############################################

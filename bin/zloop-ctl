@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# zloop-ctl: status, watch and stop for the run going in this worktree
+#
+# Usage (usually as bin/zloop status | watch | stop):
+#   bin/zloop-ctl status        The run going now (limits left, iteration,
+#                               spend) or how the last one ended, the cycles
+#                               it archived, and the zociety's state
+#   bin/zloop-ctl watch         Follow a detached run's log until it ends
+#   bin/zloop-ctl stop [--now]  End the run before its next turn; --now
+#                               sends SIGTERM, which ends it at once
+#   bin/zloop-ctl -h | --help
+#
+# Everything comes from the record bin/zloop keeps (.zociety/run.json while
+# a run goes, .zociety/run.last.json after it; see bin/zrun.sh), bin/zstate
+# and the [heap-death] events in the run's range. A record whose pid is gone
+# is reported as stale; the next run replaces it.
+#
+# Exit codes: 0 done, 1 no run going (watch, stop), 2 usage error.
+
+set -euo pipefail
+
+# shellcheck source=bin/zrun.sh
+. bin/zrun.sh
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zloop: $*" >&2
+  exit 2
+}
+
+money() {
+  LC_NUMERIC=C printf '$%.2f' "$1"
+}
+
+# get <file> <jq filter>: one field of a record, empty when null
+get() {
+  jq -r "($2) // empty" "$1" 2>/dev/null
+}
+
+# row <label> <text>: one aligned line of the status
+row() {
+  printf '%-10s%s\n' "$1" "$2"
+}
+
+# cycles_in <from> <to> <verb>: the cycles a run archived, newest first, and
+# what each found
+cycles_in() {
+  local from="$1" to="$2" verb="$3" n
+  [[ -n "$from" ]] || return 0
+  n=$(git rev-list --count --grep='^\[heap-death\]' "$from..$to" 2>/dev/null) || n=0
+  if [[ "$n" -eq 0 ]]; then
+    row "Cycles" "none archived $verb"
+    return 0
+  fi
+  row "Cycles" "$n archived $verb$([[ $n -gt 5 ]] && echo ", the latest 5"):"
+  git --no-pager log -n 5 --format='%x1e%b' --grep='^\[heap-death\]' "$from..$to" 2>/dev/null \
+    | jq -R -s -r 'split("\u001e")[1:]
+        | map(split("\n") | map(select(startswith("{"))) | first | fromjson?) | .[]
+        | "  \(.data.branch // "cycle \(.cycle)" | sub("^cycle/"; ""))  \(.data.learning // .data.question // "" | .[0:110])"' \
+    2>/dev/null || true
+}
+
+zociety_rows() {
+  local state learning queued
+  state=$(bin/zstate 2>/dev/null) || state="{}"
+  row "Zociety" "$(printf '%s' "$state" | jq -r '"cycle \(.cycle // "?") · next \(.next // .action // "?") · needs \(.needs // {} | to_entries | map("\(.key) \(.value)") | join(" "))"')"
+  # cat fails on whichever file is missing; the count stands.
+  queued=$(cat "$ZRUN_INBOX" "$ZRUN_INBOX.draining" 2>/dev/null | grep -c . || true)
+  if [[ "$(printf '%s' "$state" | jq -r '.ask.id // empty')" != "" ]]; then
+    row "Ask" "$(printf '%s' "$state" | jq -r '"\(.ask.id) (\(.ask.status // "open")): \(.ask.text | .[0:100])\(if (.asks_open // 0) > 1 then " [\(.asks_open - 1) more open]" else "" end)"')"
+  fi
+  [[ "$queued" -eq 0 ]] || row "Queued" "$queued ask(s) made while the run goes, recorded before its next turn"
+  learning=$(git --no-pager log -n 10 --format='%x1e%b' --grep='^\[heap-death\]' 2>/dev/null \
+    | jq -R -s -r 'split("\u001e")[1:]
+        | map(split("\n") | map(select(startswith("{"))) | first | fromjson?
+              | select((.data.learning? // "") | length > 0))
+        | .[0] // empty | "cycle \(.cycle): \(.data.learning | .[0:160])"' 2>/dev/null) || learning=""
+  [[ -z "$learning" ]] || row "Learning" "$learning"
+}
+
+# limits_row <record>: what bounds the run, and how much of each is used
+limits_row() {
+  local rec="$1" now parts=() max deadline for cost cycles started spent iter
+  now=$(date +%s)
+  started=$(get "$rec" .started)
+  max=$(get "$rec" .limits.max)
+  deadline=$(get "$rec" .limits.deadline)
+  for=$(get "$rec" .limits.for)
+  cost=$(get "$rec" .limits.cost)
+  cycles=$(get "$rec" .limits.cycles)
+  spent=$(get "$rec" .spent)
+  iter=$(get "$rec" .turns)
+  if [[ -n "$deadline" ]]; then
+    if [[ -f "$ZRUN_RECORD" && "$rec" == "$ZRUN_RECORD" ]]; then
+      parts+=("time $(zrun_fmt $((now - started))) of $(zrun_fmt "$for"), ends by $(zrun_clock "$deadline")")
+    else
+      parts+=("time limit $(zrun_fmt "$for")")
+    fi
+  fi
+  if [[ -n "$cost" ]]; then
+    parts+=("spent $(money "${spent:-0}") of $(money "$cost")")
+  else
+    parts+=("spent $(money "${spent:-0}")")
+  fi
+  parts+=("turns ${iter:-0}${max:+ of $max}")
+  [[ -z "$cycles" ]] || parts+=("stops after $cycles cycle(s)")
+  local out="" p
+  for p in "${parts[@]}"; do out="${out:+$out · }$p"; done
+  row "Limits" "$out"
+}
+
+status() {
+  local pid rec foreign now started updated ended log
+  now=$(date +%s)
+  if pid=$(zrun_live_pid); then
+    rec="$ZRUN_RECORD"
+    started=$(get "$rec" .started)
+    updated=$(get "$rec" .updated)
+    log=$(get "$rec" .log)
+    row "Run" "going · pid $pid · started $(zrun_clock "$started") ($(zrun_fmt $((now - started))) ago) · $([[ -n "$log" ]] && echo detached || echo "in a terminal")"
+    limits_row "$rec"
+    row "Now" "iteration $(get "$rec" .iteration): $(get "$rec" .action) on $(get "$rec" .branch) (record updated $(zrun_fmt $((now - updated))) ago)"
+    [[ ! -e "$ZRUN_STOP" ]] || row "Stopping" "asked for; the run ends before its next turn"
+    cycles_in "$(get "$rec" .start_sha)" HEAD "so far"
+    [[ -z "$log" ]] || row "Log" "$log"
+    zociety_rows
+    echo ""
+    echo "bin/zloop watch · bin/zloop stop [--now] · bin/zask \"<question>\" (queued until the next turn)"
+    return 0
+  fi
+  if [[ -f "$ZRUN_RECORD" ]]; then
+    if foreign=$(zrun_foreign); then
+      row "Run" "may be going, recorded elsewhere ($foreign); its pid cannot be checked from here"
+      limits_row "$ZRUN_RECORD"
+      row "Now" "iteration $(get "$ZRUN_RECORD" .iteration): $(get "$ZRUN_RECORD" .action) on $(get "$ZRUN_RECORD" .branch)"
+    else
+      row "Run" "none going; a stale record from pid $(get "$ZRUN_RECORD" .pid), which ended without closing it (the next run replaces it)"
+    fi
+  elif [[ -f "$ZRUN_LAST" ]]; then
+    rec="$ZRUN_LAST"
+    started=$(get "$rec" .started)
+    ended=$(get "$rec" .ended)
+    row "Run" "none going"
+    row "Last run" "ended $(zrun_clock "$ended") ($(zrun_fmt $((now - ended))) ago) after $(zrun_fmt $((ended - started))): $(get "$rec" .reason) (exit $(get "$rec" .exit))"
+    limits_row "$rec"
+    cycles_in "$(get "$rec" .start_sha)" "$(get "$rec" .end_sha)" "by it"
+    log=$(get "$rec" .log)
+    [[ -z "$log" ]] || row "Log" "$log"
+  else
+    row "Run" "none yet"
+  fi
+  zociety_rows
+  echo ""
+  echo "Start one: bin/zloop --for 2h [--cost 10] [--cycles 3] [--ask \"<question>\"] [--detach]"
+}
+
+watch_run() {
+  local pid log tpid
+  if ! pid=$(zrun_live_pid); then
+    log=""
+    [[ -f "$ZRUN_LAST" ]] && log=$(get "$ZRUN_LAST" .log)
+    if [[ -n "$log" && -f "$log" ]]; then
+      tail -n 30 "$log"
+      echo "zloop: no run is going; that was the end of the last one's log ($(get "$ZRUN_LAST" .reason))"
+    else
+      echo "zloop: no run is going here"
+    fi
+    exit 1
+  fi
+  log=$(get "$ZRUN_RECORD" .log)
+  if [[ -z "$log" ]]; then
+    echo "zloop: the run (pid $pid) is in the foreground of another terminal; only a --detach run has a log"
+    exit 1
+  fi
+  tail -n 40 -f "$log" &
+  tpid=$!
+  # A background job of a script ignores SIGINT, so Ctrl-C here must take
+  # the tail down itself.
+  trap 'kill "$tpid" 2>/dev/null; exit 130' INT TERM
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+  done
+  sleep 1
+  kill "$tpid" 2>/dev/null || true
+  wait "$tpid" 2>/dev/null || true
+  echo "zloop: the run ended: $(get "$ZRUN_LAST" .reason)"
+}
+
+stop_run() {
+  local now=0 pid i foreign=""
+  case "${1:-}" in
+    "") ;;
+    --now) now=1 ;;
+    *) die "stop takes only --now, got '$1'" ;;
+  esac
+  if ! pid=$(zrun_live_pid); then
+    # A run in the container shares the worktree, so the marker reaches it;
+    # a signal does not.
+    if foreign=$(zrun_foreign) && [[ $now -eq 0 ]]; then
+      : > "$ZRUN_STOP"
+      echo "zloop: the run recorded elsewhere ($foreign) ends before its next turn"
+      return 0
+    fi
+    [[ -z "${foreign:-}" ]] || die "the run recorded elsewhere ($foreign) cannot be signalled from here; bin/zloop stop without --now"
+    echo "zloop: no run is going here"
+    exit 1
+  fi
+  if [[ $now -eq 0 ]]; then
+    : > "$ZRUN_STOP"
+    echo "zloop: the run (pid $pid) ends before its next turn; iteration $(get "$ZRUN_RECORD" .iteration) ($(get "$ZRUN_RECORD" .action)) finishes first"
+    echo "  bin/zloop stop --now ends it at once; bin/zloop status says when it has ended"
+    return 0
+  fi
+  kill -TERM "$pid"
+  echo "zloop: sent SIGTERM to the run (pid $pid); its turn is stopped and anything uncommitted is lost"
+  for ((i = 0; i < 60; i++)); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.5
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "zloop: still running after 30s; kill -KILL $pid if it is stuck"
+    exit 1
+  fi
+  echo "zloop: the run ended: $(get "$ZRUN_LAST" .reason)"
+}
+
+case "${1:-}" in
+  -h|--help) usage ;;
+  status) [[ $# -eq 1 ]] || die "status takes no arguments"; status ;;
+  watch)  [[ $# -eq 1 ]] || die "watch takes no arguments"; watch_run ;;
+  stop)   [[ $# -le 2 ]] || die "stop takes only --now"; stop_run "${2:-}" ;;
+  *)      usage >&2; exit 2 ;;
+esac
