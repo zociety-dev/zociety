@@ -49,6 +49,9 @@ ERR="$TMP/err"
 FAKE_LOG="$TMP/claude-ran.log"
 FAKEBIN="$TMP/fakebin"
 export FAKE_CLAUDE_LOG="$FAKE_LOG"
+# bin/zloop status wraps its rows to COLUMNS when it is set; the cases match
+# whole rows, so only Case 58 sets it.
+unset COLUMNS
 
 cleanup() {
   if [[ $KEEP -eq 1 ]]; then
@@ -2073,6 +2076,31 @@ else
   assert_err '^zloop: --detach needs timeout\(1\) for the hard kill \(brew install coreutils\)$'
   assert_claude_runs 0
 fi
+echo ""
+
+echo "=== Case 58: status shows a learning whole: one line piped, wrapped to COLUMNS ==="
+fresh_repo status-wrap
+start_sha=$(git rev-parse HEAD)
+learning="the fold reads the signer from the key fingerprint alone, so the union of keys file may be unnecessary, but a bad signature and a last live key revoking itself are untested, and the second leaves no key that can sign, which the next cycle should settle on a throwaway repo before any rule depends on it, because a rule that cites an untested path is a rule nobody can check, and checking is the point of the fold, which exists so every event names a signer the zociety trusts"
+heap_death "$(jq -nc --arg l "$learning" '{learning: $l}')"
+now=$(date +%s)
+mkdir -p .zociety
+jq -nc --argjson now "$now" --arg start "$start_sha" --arg end "$(git rev-parse HEAD)" \
+  '{started: ($now - 60), ended: $now, exit: 0, reason: "Loop Complete",
+    start_sha: $start, end_sha: $end, turns: 1, spent: 0, limits: {}}' > .zociety/run.last.json
+run bin/zloop status
+assert_rc 0
+assert_out "^Learning  cycle [0-9]+: $learning\$"
+assert_out "^          cycle [0-9]+: $learning\$"
+run env COLUMNS=60 bin/zloop status
+assert_rc 0
+# The rows end at the blank line; the command hint after it stays whole.
+assert_eq "no row wider than 60" "$(LC_ALL=C awk 'NF == 0 {exit} length > 60' "$OUT")" ""
+# fold -s breaks after a space and row() trims it, so one space rejoins.
+assert_eq "the wrapped learning rejoins whole" \
+  "$(awk '/^Learning /{on=1} on && !/^Learning / && !/^          /{on=0}
+          on{sub(/^........../, ""); printf "%s%s", (n++ ? " " : ""), $0}' "$OUT" | sed 's/^cycle [0-9]*: //')" \
+  "$learning"
 echo ""
 
 #############################################
