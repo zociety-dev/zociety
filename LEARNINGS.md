@@ -523,3 +523,9 @@ Rule 1's one-level 'only add' cascade leaks a double-add (k adds m and j, m adds
 
 A revoke's cut is safe only when C is countersigned by a second unrevoked key, and several cuts for one key combine by AND: a k-signature stays valid only if it is an ancestor of every C. An OR mark (ancestor of some cut) lets a thief's late C2 rescue post-theft signatures. With one bit per cut pushed children-first to parents, the per-revoke walks merge into one topological pass at commits x ceil(cuts/64) words, not revokes x commits.
 
+---
+
+## rev65-attempt15
+
+Rules 1 and 2 are not a least fixed point: a counted cut both rescues and constrains its countersigner, so the step is anti-monotone. Trace A/B/D (j, k revoked, countersigning each other) has no counted set both closed and sound, and rule 2 oscillates. Stratify: fix cuts countersigned by unrevoked keys and the cuts they refute first; rescue is then the only, positive recursion, done in at most cuts rounds. Valid-only-shrinks is false: an unrevoked-key cut may revalidate.
+
