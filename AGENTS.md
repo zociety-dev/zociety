@@ -123,7 +123,13 @@ Zociety's own loop with dynamic completion checking:
   `complete`, $4.61, two turns from landing). The log names each such turn,
   `bin/zloop status` shows `over the limit to land the cycle`, and the hard
   kill is untouched
-- Runs without MCP servers (uses `--strict-mcp-config` for isolation)
+- Runs without MCP servers (uses `--strict-mcp-config` for isolation), with
+  the built-in tools a turn uses (`bin/zagent`: `--tools
+  Bash,Read,Write,Edit,Glob,Grep`, `ZAGENT_TOOLS` to change it, `default`
+  for the full set) and no skills (`--disable-slash-commands`). Every tool
+  definition and the skill list ride in on every call: with the full set a
+  one-word reply cost 54.6k context tokens and $0.35, with this set 33.9k
+  and $0.23, against a $0.38 floor on cycle 51's eleven working turns
 - Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so
   `bin/zloop 1 > out.txt` leaves only the answer in the file

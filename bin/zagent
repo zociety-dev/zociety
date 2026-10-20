@@ -21,6 +21,15 @@
 #   ZOCIETY_AGENT_CLIENT   Defaults to "claude" if not specified.
 #   ANTHROPIC_MODEL        Default model for claude (passed as --model).
 #   GEMINI_MODEL           Default model for gemini (passed as -m).
+#   ZAGENT_TOOLS           The built-in tools claude gets (--tools), default
+#                          Bash,Read,Write,Edit,Glob,Grep; "default" is the
+#                          client's full set. A turn needs no agent, artifact,
+#                          web or skill tool, and every tool definition and
+#                          the skill list ride in on every call: with the
+#                          default set and skills a one-word reply cost 54.6k
+#                          context tokens and $0.35, with this set and
+#                          --disable-slash-commands 33.9k and $0.23 (cycle
+#                          51's eleven working turns had a $0.38 floor each).
 #
 # The model reaches the client as a CLI flag only. The child runs with
 # ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (the CI step variable bin/zga-loop
@@ -114,6 +123,9 @@ case "$CLIENT" in
     if [[ -n "$MODEL" ]]; then
       CLAUDE_ARGS+=(--model "$MODEL")
     fi
+    # The tool set and no skills (see ZAGENT_TOOLS above). --tools takes a
+    # list, so a flag must follow it or it would swallow the prompt.
+    CLAUDE_ARGS+=(--tools "${ZAGENT_TOOLS:-Bash,Read,Write,Edit,Glob,Grep}" --disable-slash-commands)
     # --print needs --verbose for stream-json output. raw adds the partial
     # (delta) messages; compact leaves them out and pipes through bin/zrender.
     case "$RENDER" in
