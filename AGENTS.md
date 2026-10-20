@@ -115,7 +115,14 @@ Zociety's own loop with dynamic completion checking:
   see Stop Modes). A plain run therefore goes until its caps
 - `--max N`, `--for`, `--cost` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional caps, not modes;
   the predicates run once more after the final permitted iteration, so
-  finishing on the last iteration exits 0 (`Loop Complete`), not 1
+  finishing on the last iteration exits 0 (`Loop Complete`), not 1. One
+  allowance, shared by the three caps: a cap reached while `bin/zstate` says
+  `complete` or `heap-death` lets the turn run, at most two turns per
+  landing step, so the cycle lands on main instead of waiting for another
+  run to pay its way back (cycle 49's first run stopped on `--cost 5` at
+  `complete`, $4.61, two turns from landing). The log names each such turn,
+  `bin/zloop status` shows `over the limit to land the cycle`, and the hard
+  kill is untouched
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
 - Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so
