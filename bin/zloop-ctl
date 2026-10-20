@@ -129,6 +129,12 @@ limits_row() {
   else
     parts+=("spent $(money "${spent:-0}")")
   fi
+  # A cap reached at complete or heap-death lets the cycle land (bin/zloop's
+  # landing_turn): say so, or spend past the limit reads as a broken cap.
+  local landing_step landing_turns
+  landing_step=$(get "$rec" .landing.step)
+  landing_turns=$(get "$rec" .landing.turns)
+  [[ -z "$landing_step" ]] || parts+=("over the limit to land the cycle: turn $landing_turns of 2 at $landing_step")
   parts+=("turns ${iter:-0}${max:+ of $max}")
   [[ -z "$cycles" ]] || parts+=("stops after $cycles cycle(s)")
   local out="" p

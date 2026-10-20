@@ -45,10 +45,7 @@ Zociety's own loop with dynamic completion checking:
 - Run limits: `--for TIME` (90s, 45m, 8h, 3d, 1h30m; a turn starts only if
   its budget fits before the limit), `--cost USD` (summed from each turn's
   reported cost; a turn starts only if the run's average turn cost still
-  fits, so one costly turn can go over; a cycle at `complete` or
-  `heap-death` takes its two landing turns over the limit, at most two a
-  run, since a cycle stopped there lands nothing until another run resumes
-  it, as cycle 49 did at $4.61 of $5; not with `--quiet`) and `--cycles N`
+  fits, so one costly turn can go over; not with `--quiet`) and `--cycles N`
   (the `budget` stop mode with `ZSTOP_BUDGET=N`). Any of them lifts the
   default 60-turn cap unless `--max` is given too. `--budget`, `--interval`
   and `--timeout` take the same durations; a bare number is seconds. A
@@ -118,7 +115,14 @@ Zociety's own loop with dynamic completion checking:
   see Stop Modes). A plain run therefore goes until its caps
 - `--max N`, `--for`, `--cost` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional caps, not modes;
   the predicates run once more after the final permitted iteration, so
-  finishing on the last iteration exits 0 (`Loop Complete`), not 1
+  finishing on the last iteration exits 0 (`Loop Complete`), not 1. One
+  allowance, shared by the three caps: a cap reached while `bin/zstate` says
+  `complete` or `heap-death` lets the turn run, at most two turns per
+  landing step, so the cycle lands on main instead of waiting for another
+  run to pay its way back (cycle 49's first run stopped on `--cost 5` at
+  `complete`, $4.61, two turns from landing). The log names each such turn,
+  `bin/zloop status` shows `over the limit to land the cycle`, and the hard
+  kill is untouched
 - Runs without MCP servers (uses `--strict-mcp-config` for isolation)
 - Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so

@@ -43,7 +43,10 @@ on iteration 2, and `zheap-death` deletes the file entirely when it archives.
 
 Safety caps are not modes. `--max N`, the run limits `--for` and `--cost`, and
 the hard kill (`--timeout`, derived from `--budget` when unset;
-`ZLOOP_TIMEOUT` is the env form) stay unconditional and stay where they are
+`ZLOOP_TIMEOUT` is the env form) stay unconditional (one allowance since
+cycle 50: a cap reached while `bin/zstate` says `complete` or `heap-death`
+lets the turn run, at most two turns per landing step, so the cycle lands
+on main instead of waiting for another run) and stay where they are
 on `main`: the predicate chain runs first, then `bin/zloop stop`'s marker,
 then the `--max`, `--for` and `--cost` checks, and the hard kill wraps the
 claude call. Do not move them. `--cycles N` is not a cap but this spec's
