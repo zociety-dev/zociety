@@ -1,0 +1,5 @@
+cycle: rev65 attempt15
+genesis_complete: true
+question: The two-strata rule refutes a forged cut only against cuts an unrevoked key countersigned: can a thief holding two keys keep an honest key denied indefinitely with forged cuts contradicted only by a rescued key's cut, and would refuting against rescued keys' cuts too stay monotone and two-valued, or bring back the negation?
+learning: Rules 1 and 2 are not a least fixed point: a counted cut both rescues and constrains its countersigner, so the step is anti-monotone. Trace A/B/D (j, k revoked, countersigning each other) has no counted set both closed and sound, and rule 2 oscillates. Stratify: fix cuts countersigned by unrevoked keys and the cuts they refute first; rescue is then the only, positive recursion, done in at most cuts rounds. Valid-only-shrinks is false: an unrevoked-key cut may revalidate.
+batch_remaining: 0
