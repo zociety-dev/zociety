@@ -160,6 +160,14 @@
 # retry would seal them as agent work. A merge that does not apply cleanly
 # is aborted with a WARNING and the run goes on as it is.
 #
+# Owed direction: before every turn, under the same seal guard, the runner
+# runs bin/zheap-death --finish. A heap-death whose [direction] commit was
+# refused after the archive (a hook) leaves the successor branch at the
+# [heap-death], where bin/zstate answers promise and the predicates would
+# end the run; --finish writes the owed direction from the event and is
+# silent when nothing is owed. A branch parked that way by a run before
+# cycle 49 (a spent batch wrote no direction then) is finished the same way.
+#
 # Object store: before every turn bin/zobjects gives each hard-linked file in
 # .git/objects its own copy. A local `git clone` of this repo hard-links the
 # objects, and through the podman machine's file sharing a file linked from
@@ -903,6 +911,20 @@ while true; do
   if [[ -s "$ZRUN_INBOX" || -s "$ZRUN_INBOX.draining" ]] && [[ -z "$SEAL_FROM" ]]; then
     bin/zask --drain >&2 \
       || log "[zloop] WARNING: queued asks not recorded yet (see above); trying again before the next turn"
+  fi
+
+  # A heap-death whose [direction] commit was refused (a hook) leaves the
+  # successor branch at the [heap-death]: bin/zstate answers promise and the
+  # predicates below would end the run. bin/zheap-death --finish writes the
+  # owed direction from the event (silent when nothing is owed); between
+  # turns, for the seal, as the drain above. A branch parked that way by a
+  # run before cycle 49 is finished the same way.
+  if [[ -z "$SEAL_FROM" ]]; then
+    if finish_out=$(bin/zheap-death --finish 2>&1); then
+      [[ -z "$finish_out" ]] || log "[zloop] Finished the last heap-death: $(printf '%s\n' "$finish_out" | tail -1)"
+    else
+      log "[zloop] WARNING: bin/zheap-death --finish failed: $(printf '%s\n' "$finish_out" | tail -1)"
+    fi
   fi
 
   # Write state for zheap-death and the stop predicates to read. All keys go

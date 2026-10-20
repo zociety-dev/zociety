@@ -15,7 +15,9 @@
 # Reads start: from .claude/zloop.state (written by bin/zloop every iteration)
 # and counts commits whose subject matches ^[heap-death] in start..HEAD. Stops
 # when the count reaches ZSTOP_BUDGET, or when bin/zstate reports action
-# "promise" (an agent exhausted the batch on its own). A missing state file,
+# "promise" (a [promise] event, or a [heap-death] with no [direction] after
+# it: a history from before cycle 49, or a direction commit that was refused
+# and not yet finished by bin/zheap-death --finish). A missing state file,
 # missing start key, or unknown start sha is exit 2.
 
 set -e

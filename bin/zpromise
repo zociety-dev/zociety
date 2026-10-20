@@ -1,8 +1,11 @@
 #!/bin/bash
 # zpromise: Output completion promise
 #
-# Call this when zstate shows action="promise"
-# This happens after heap-death with batch_remaining=0
+# Call this when zstate shows action="promise": a [heap-death] with no
+# [direction] after it. Since cycle 49 bin/zheap-death always writes the
+# direction, so this is a history from before then, or a direction commit
+# that was refused; bin/zheap-death --finish writes the direction instead
+# of promising.
 
 set -e
 
