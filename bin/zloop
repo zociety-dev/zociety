@@ -22,7 +22,11 @@
 #                      reported cost. A turn starts only if the run's average
 #                      turn cost still fits under it (one costly turn can go
 #                      over, and a hard-killed turn reports no cost). Not
-#                      with --quiet, which sees no cost
+#                      with --quiet, which sees no cost. Landing allowance,
+#                      shared with --for and --max: a cycle at action complete
+#                      or heap-death takes its turn over the limit (at most
+#                      two turns per step), since a cycle stopped there
+#                      lands nothing until another run pays to resume it
 #   --cycles N         Stop after N cycles (heap-deaths) this run: the budget
 #                      stop mode with ZSTOP_BUDGET=N. An --ask is still
 #                      answered by one cycle; for more, bin/zask --cycles
@@ -553,6 +557,11 @@ ITERATION=0
 TURNS=0
 SPENT=0
 COSTED=0
+# Turns started past a cap to land a cycle (landing_turn): the step they
+# were granted for, how many, and the iteration of the last one.
+LANDING_STEP=""
+LANDING_TURNS=0
+LANDING_ITER=""
 END_REASON=""
 iter_action=""
 
@@ -568,13 +577,15 @@ write_record() {
     --argjson timeout "$TIMEOUT_SECS" --arg max "$MAX_ITERATIONS" --arg deadline "$DEADLINE" --arg for "$FOR_SECS" \
     --arg cost "$COST_CAP" --arg cycles "$CYCLES" --argjson iteration "$ITERATION" \
     --argjson turns "$TURNS" --arg spent "$SPENT" --arg action "$iter_action" \
+    --arg landing_step "$LANDING_STEP" --argjson landing_turns "$LANDING_TURNS" \
     'def num: if . == "" then null else tonumber end;
      {id: $id, pid: $pid, host: $host, log: $log, started: $started, updated: (now | floor),
       start_sha: $start_sha, branch: $branch, stop: $stop, budget: $budget, interval: $interval,
       timeout: $timeout,
       limits: {max: ($max | num), deadline: ($deadline | num), for: ($for | num),
                cost: ($cost | num), cycles: ($cycles | num)},
-      iteration: $iteration, turns: $turns, spent: ($spent | tonumber), action: $action}' \
+      iteration: $iteration, turns: $turns, spent: ($spent | tonumber), action: $action,
+      landing: (if $landing_step == "" then null else {step: $landing_step, turns: $landing_turns} end)}' \
     > "$out.tmp" && mv "$out.tmp" "$out"
 }
 
@@ -817,6 +828,26 @@ over_cost() {
     'BEGIN { avg = (n > 0 ? s / n : 0); exit !(s + avg > cap) }'
 }
 
+# landing_turn <action> <cap reached>: true, and logged, when a cap just
+# reached may be run over for this turn because the cycle is at complete or
+# heap-death (see the caps in the loop). At most two turns per landing step
+# (the counter resets when the action moves from complete to heap-death),
+# and several caps reached in one iteration share the one allowance.
+landing_turn() {
+  local action="$1" what="$2"
+  [[ "$action" == complete || "$action" == heap-death ]] || return 1
+  [[ "$LANDING_ITER" != "$ITERATION" ]] || return 0
+  if [[ "$action" != "$LANDING_STEP" ]]; then
+    LANDING_STEP="$action"
+    LANDING_TURNS=0
+  fi
+  [[ $LANDING_TURNS -lt 2 ]] || return 1
+  LANDING_TURNS=$((LANDING_TURNS + 1))
+  LANDING_ITER=$ITERATION
+  log "[zloop] $what; the cycle is at $action, so this turn runs to land it (over-limit turn $LANDING_TURNS of 2 for $action)"
+  return 0
+}
+
 # wait_between N: the pause after a turn, in slices of at most 5s, cut short
 # by `bin/zloop stop` or the --for limit instead of sitting out a long
 # --interval or backoff.
@@ -978,30 +1009,43 @@ EOF
     exit 0
   fi
 
-  # The caps: iterations, time, spend. Unconditional (no mode can disable
-  # them), but checked after the predicates so a run whose last permitted
-  # iteration finished the work exits 0 "Loop Complete", not 1.
-  if [[ -n "$MAX_ITERATIONS" && $ITERATION -gt $MAX_ITERATIONS ]]; then
+  # bin/zstate once per iteration: the caps' landing allowance below, the
+  # HUD line and the action the memory record names (its .next, the leg the
+  # agent is told to take).
+  iter_state=$(bin/zstate 2>/dev/null) || iter_state="{}"
+  iter_action=$(printf '%s' "$iter_state" | jq -r '.next // .action // "unknown"' 2>/dev/null) || iter_action="unknown"
+  cap_action=$(printf '%s' "$iter_state" | jq -r '.action // empty' 2>/dev/null) || cap_action=""
+
+  # The caps: iterations, time, spend. No mode can disable them, and they
+  # are checked after the predicates so a run whose last permitted iteration
+  # finished the work exits 0 "Loop Complete", not 1. One allowance, the
+  # same for all three (landing_turn): a cycle at complete or heap-death is
+  # two turns from landing on main, and a run stopped there lands nothing
+  # until another run pays to resume it (cycle 49 stopped on --cost 5 at
+  # complete, $4.61). A cap reached at either action lets the turn run, at
+  # most two turns per landing step so a failed turn gets one retry, and
+  # holds everywhere else.
+  if [[ -n "$MAX_ITERATIONS" && $ITERATION -gt $MAX_ITERATIONS ]] \
+    && ! landing_turn "$cap_action" "Turn limit ($MAX_ITERATIONS) reached"; then
     limit_reached "Max Iterations Reached" "turn limit ($MAX_ITERATIONS) reached" \
       "Stopped after $MAX_ITERATIONS iterations"
   fi
-  if past_deadline; then
+  if past_deadline && ! landing_turn "$cap_action" "Time limit ($(zrun_fmt "$FOR_SECS")) reached"; then
     limit_reached "Time Limit Reached" "time limit ($(zrun_fmt "$FOR_SECS")) reached" \
       "$(zrun_fmt "$FOR_SECS") limit: a ${BUDGET_SECS}s turn started now would end after $(zrun_clock "$DEADLINE")"
   fi
   if over_cost; then
     spent=$(LC_NUMERIC=C printf '%.2f' "$SPENT")
-    limit_reached "Cost Limit Reached" "cost limit (\$$COST_CAP) reached at \$$spent" \
-      "Spent \$$spent of \$$COST_CAP; another turn at the average cost would go over"
+    cap=$(LC_NUMERIC=C printf '%.2f' "$COST_CAP")
+    if ! landing_turn "$cap_action" "Cost limit (\$$cap) reached at \$$spent"; then
+      limit_reached "Cost Limit Reached" "cost limit (\$$cap) reached at \$$spent" \
+        "Spent \$$spent of \$$cap; another turn at the average cost would go over"
+    fi
   fi
 
   iter_label="$ITERATION${MAX_ITERATIONS:+/$MAX_ITERATIONS}"
   log ""
   log "=== Iteration $iter_label ($(date '+%H:%M:%S')) ==="
-  # bin/zstate once per iteration: the HUD line and the action the memory
-  # record names (its .next, the leg the agent is told to take).
-  iter_state=$(bin/zstate 2>/dev/null) || iter_state="{}"
-  iter_action=$(printf '%s' "$iter_state" | jq -r '.next // .action // "unknown"' 2>/dev/null) || iter_action="unknown"
   write_record
   if [[ "$RENDER" == "compact" ]]; then
     # HUD line: iter 2/5 · cycle 36 · contribute · members 1 rules 0 stuff 1 · stop=action
