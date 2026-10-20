@@ -1831,17 +1831,19 @@ assert_err '^Spent \$0\.90 of \$0\.20; another turn at the average cost would go
 assert_claude_runs 3
 assert_eq "the record says the run was landing" "$(jq -c '.landing' .zociety/run.last.json)" '{"step":"heap-death","turns":2}'
 assert_eq "and status says so" "$(bin/zloop status 2>/dev/null | grep -c 'over the limit to land the cycle: turn 2 of 2 at heap-death')" 1
-# At complete (genesis met, no [complete] yet): the allowance is per step,
-# so two turns run for complete; the fake never moves it on, and the cap
-# holds without lending heap-death's two.
+# At complete (genesis met, no [complete] yet): the preflight records the
+# [complete] itself before the first turn (Case 48c), so the step the
+# allowance sees is heap-death; the fake never moves it on, and the cap
+# holds after its two turns.
 fresh_repo cap-land-complete
 zev join; zev join; zev join; zev pass; zev pass; zev stuff; zev stuff; zev stuff
 assert_eq "fixture at complete" "$(bin/zstate | jq -r .action)" complete
 run env ZLOOP_MAX_IDLE=0 bin/zloop --cost 0.2 --budget 30 --interval 0
 assert_rc 1
-assert_err 'so this turn runs to land it \(over-limit turn 1 of 2 for complete\)$'
-assert_err 'so this turn runs to land it \(over-limit turn 2 of 2 for complete\)$'
-assert_no_err 'for heap-death\)$'
+assert_err '^\[zloop\] Genesis complete; recorded between turns, so the next turn is the heap-death$'
+assert_err 'so this turn runs to land it \(over-limit turn 1 of 2 for heap-death\)$'
+assert_err 'so this turn runs to land it \(over-limit turn 2 of 2 for heap-death\)$'
+assert_no_err 'for complete\)$'
 assert_err '^=== Cost Limit Reached ===$'
 assert_claude_runs 3
 # A heap-death that lands: the turn commits one, the successor answers
@@ -1871,14 +1873,51 @@ assert_err '^\[zloop\] Turn limit \(1\) reached; the cycle is at heap-death, so 
 assert_err 'over-limit turn 2 of 2 for heap-death\)$'
 assert_err '^=== Max Iterations Reached ===$'
 assert_claude_runs 3
+# Each fake turn sleeps 5s: the first starts inside the 8s (a 5s budget fits
+# while the preflight is under 3s; past_deadline compares whole seconds, so
+# the fraction of the start second can only cost one), the second cannot
+# (5s in, int(now)+5 is at least 110 against a deadline of start+8),
+# whatever the machine's speed either way.
 fresh_repo cap-land-for
 bin/zevent complete tester "genesis complete" '{}' >/dev/null 2>&1
-run env ZLOOP_MAX_IDLE=0 bin/zloop --for 4 --budget 3 --interval 0
+export FAKE_CLAUDE_SLEEP=5
+run env ZLOOP_MAX_IDLE=0 bin/zloop --for 8 --budget 5 --interval 0
+unset FAKE_CLAUDE_SLEEP
 assert_rc 1
-assert_err '^\[zloop\] Time limit \(4s\) reached; the cycle is at heap-death, so this turn runs to land it \(over-limit turn 1 of 2 for heap-death\)$'
+assert_err '^\[zloop\] Time limit \(8s\) reached; the cycle is at heap-death, so this turn runs to land it \(over-limit turn 1 of 2 for heap-death\)$'
 assert_err 'over-limit turn 2 of 2 for heap-death\)$'
 assert_err '^=== Time Limit Reached ===$'
 assert_claude_runs 3
+echo ""
+
+echo "=== Case 48c: genesis met, the preflight records [complete] and the turn is the heap-death ==="
+fresh_repo auto-complete
+zev join; zev join; zev join; zev pass; zev pass; zev stuff; zev stuff; zev stuff
+assert_eq "fixture at complete" "$(bin/zstate | jq -r .action)" complete
+export FAKE_CLAUDE_HEAP_DEATH=1
+run bin/zloop --cycles 1 --budget 30 --interval 0
+unset FAKE_CLAUDE_HEAP_DEATH
+assert_rc 0
+assert_err '^\[zloop\] Genesis complete; recorded between turns, so the next turn is the heap-death$'
+assert_claude_runs 1
+assert_eq "the runner wrote the event" "$(git log --format=%s --grep='^\[complete\]' | head -1)" "[complete] system: genesis complete"
+assert_eq "before the turn's commits" "$(git log --format=%s HEAD~1 -1)" "[complete] system: genesis complete"
+assert_eq "the turn landed the cycle" "$(git log --format=%s -1 | cut -c1-12)" "[heap-death]"
+# A dirty tree (a file a killed turn left behind) is left to the turn, so
+# nothing lands unsealed under the runner's name.
+fresh_repo auto-complete-dirty
+zev join; zev join; zev join; zev pass; zev pass; zev stuff; zev stuff; zev stuff
+mkdir -p stuff && echo draft > stuff/draft.md
+run bin/zloop --max 1 --budget 30 --interval 0
+assert_err '^\[zloop\] Genesis complete, but the tree is not clean, so the turn records it'
+assert_eq "no [complete] on a dirty tree" "$(git log --format=%s --grep='^\[complete\]' | wc -l | tr -d ' ')" 0
+assert_eq "the draft is still untracked" "$(git status --porcelain --untracked-files=all)" "?? stuff/draft.md"
+# Mid-cycle the preflight writes nothing.
+fresh_repo auto-complete-mid
+zev join
+run bin/zloop --max 1 --budget 30 --interval 0
+assert_no_err 'Genesis complete'
+assert_eq "no [complete] mid-cycle" "$(git log --format=%s --grep='^\[complete\]' | wc -l | tr -d ' ')" 0
 echo ""
 
 echo "=== Case 49: --cycles N is the budget stop mode with ZSTOP_BUDGET=N, with no turn cap ==="
