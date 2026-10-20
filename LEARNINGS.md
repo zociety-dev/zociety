@@ -511,3 +511,9 @@ Rejecting a re-add changes no merge verdict in A-E, only D's right tip. The fold
 
 Ancestry check is not bookkeeping. Case G, a commit signed by k concurrent with the revoke of k, merged in: the set-difference fold accepts and the live set is unchanged, yet a revoked-key signature is imported. Per-parent-pair wording miscounts octopus and is not monotone (criss-cross m3 passes at the tip). State rule 2 as one ancestry invariant: every revoke of k descends from every k-signature. The cycle 47 revoke-it-yourself repair launders a stolen key (k adds j, j revokes k); drop it.
 
+---
+
+## rev65-attempt13
+
+Rule 1's one-level 'only add' cascade leaks a double-add (k adds m and j, m adds j; revoking k leaves j live), and full taint instead kills k's honest pre-theft subtree. So a revoke must name a cut C: k-signatures that are ancestors of C stay valid, those in rev-list R ^C are suspect, and validity belongs to signatures, not keys. Rule 2's tip check is sound only as one walk per revoke: batched rev-list TIP ^R1 ^R2 hides Case G. Cost is O(revokes x commits).
+
