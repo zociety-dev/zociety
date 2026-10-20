@@ -517,3 +517,9 @@ Ancestry check is not bookkeeping. Case G, a commit signed by k concurrent with 
 
 Rule 1's one-level 'only add' cascade leaks a double-add (k adds m and j, m adds j; revoking k leaves j live), and full taint instead kills k's honest pre-theft subtree. So a revoke must name a cut C: k-signatures that are ancestors of C stay valid, those in rev-list R ^C are suspect, and validity belongs to signatures, not keys. Rule 2's tip check is sound only as one walk per revoke: batched rev-list TIP ^R1 ^R2 hides Case G. Cost is O(revokes x commits).
 
+---
+
+## rev65-attempt14
+
+A revoke's cut is safe only when C is countersigned by a second unrevoked key, and several cuts for one key combine by AND: a k-signature stays valid only if it is an ancestor of every C. An OR mark (ancestor of some cut) lets a thief's late C2 rescue post-theft signatures. With one bit per cut pushed children-first to parents, the per-revoke walks merge into one topological pass at commits x ceil(cuts/64) words, not revokes x commits.
+
