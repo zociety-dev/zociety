@@ -109,7 +109,10 @@ Zociety's own loop with dynamic completion checking:
   (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
 - No static promise strings - uses exit codes
-- Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`
+- Default mode `action`: stops when `bin/zstate` action is `stop` (a terminal
+  `[observation]`) or `promise` (a `[promise]` event, or a `[heap-death]` with
+  no `[direction]` after it, which `bin/zheap-death` no longer leaves behind;
+  see Stop Modes). A plain run therefore goes until its caps
 - `--max N`, `--for`, `--cost` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional caps, not modes;
   the predicates run once more after the final permitted iteration, so
   finishing on the last iteration exits 0 (`Loop Complete`), not 1
@@ -216,8 +219,14 @@ marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
 
 In `budget` mode `bin/zheap-death` defaults `batch_size` to
 `ZSTOP_BUDGET - <heap-deaths so far>` so its event data agrees with the loop.
-`bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}` branch so every
-archive remains in a reviewable cycle lineage.
+The batch is a record, not a switch: the successor's `[direction]` is written
+whatever `batch_remaining` says, and the predicate stops the run by counting
+`[heap-death]` commits. Before cycle 49 a spent batch wrote no direction, so
+every `--cycles N` run ended with the successor's tip at the heap-death,
+`bin/zstate` answering `action: promise`, the per-cycle deletions left staged,
+and the next run stopping before its first turn until an operator wrote the
+direction by hand. `bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}`
+branch so every archive remains in a reviewable cycle lineage.
 
 ### zloop Environment Variables
 
@@ -274,7 +283,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
+| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
 | `bin/zpr-flow` | Open a cycle branch PR into main and, with `ZPR_MERGE=1` (as `bin/zheap-death` runs it), merge it: `ZPR_MERGE_METHOD` defaults to `merge` (the repo allows no squash merges, and a rewritten commit would orphan the tag and notes), `ZPR_MERGE_TRIES`/`ZPR_MERGE_WAIT` retry a merge GitHub refuses while it computes mergeability. Exit 4: merge asked for and not done, PR left open |
@@ -282,7 +291,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
 | `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host. Read-only verbs (`log`, `diff`, `status`, `show`, `rev-parse`, ...) always stay; mixed verbs stay only in their read forms: `branch` listing (`--show-current`, `-a`/`-r`/`-v`, `--contains`, `--merged`, ... with no positional), `tag -l`, `notes list`/`show`, `remote [-v]`/`show`/`get-url`, `config --get`/`--get-all`/`--list`, `worktree list`, `stash list`/`show`. Anything else, including unrecognised options, goes to the container |
-| `bin/zpromise` | Output completion promise |
+| `bin/zpromise` | Record a `[promise]` event when `bin/zstate` says `promise` (a `[heap-death]` with no `[direction]` after it; histories before cycle 49 only) |
 | `bin/zobserve` | Record a terminal `[observation]` (the runner does this when it stops on a hard-kill or seal-failure streak); the branch then answers `action: stop` |
 | `bin/zresume` | Lift a terminal observation with an `[intervention]` event naming it and the reason; run by `bin/zloop --resume "<reason>"`. `bin/zcycle-measure` scores it against constraint adherence |
 | `bin/zask` | Put an operator question or statement to the zociety (`[ask]` event); `--cycles N`, `--list`, `--show ID`, `--close ID REASON`; queued while a run goes and recorded between its turns (`--drain`). See Operator Questions |

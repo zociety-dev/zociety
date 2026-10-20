@@ -734,18 +734,24 @@ echo ""
 echo "=== Case 28: zheap-death defaults batch_size from the budget in budget mode (ZSTOP_BUDGET unset) ==="
 fresh_repo heap-death-budget
 git checkout -q -b cycle/rev1-attempt1
+mkdir stuff
+echo "fixture inheritance artifact" > stuff/inherited.md
+git add stuff && git commit -q -m "[stuff] tester: added stuff/inherited.md"
 START=$(git rev-parse HEAD)
 heap_death '{"batch_remaining":2}'
 heap_death '{"batch_remaining":1}'
 write_state "$START" budget
-run env -u ZSTOP_BUDGET bin/zheap-death --learning "fixture finding" tester "third question"
+run env -u ZSTOP_BUDGET bin/zheap-death --cite inherited.md --learning "fixture finding" tester "third question"
 assert_rc 0
 assert_err "^batch_size defaulted to 1 \(budget=3, 2 heap-deaths since ${START:0:7}\)$"
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
 assert_eq "heap-death batch_remaining" "$(git log -1 --format=%b "$HD" | jq -c '.data.batch_remaining')" 0
 assert_eq "heap-death stop_mode" "$(git log -1 --format=%b "$HD" | jq -r '.data.stop_mode')" budget
-assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 0
-assert_eq "action after heap-death" "$(bin/zstate | jq -r .action)" promise
+# The spent batch still writes the successor's direction: the run stops on
+# the heap-death count, and the next run finds a cycle to continue.
+assert_eq "[direction] commits" "$(git rev-list --count --grep='^\[direction\]' HEAD)" 1
+assert_eq "direction batch_remaining" "$(git log -1 --format=%b | jq -c '.data.batch_remaining')" 0
+assert_eq "action after heap-death" "$(bin/zstate | jq -r .action)" contribute
 assert_absent .claude/zloop.state
 assert_eq "tracked files under .claude/" "$(git ls-files .claude | wc -l | tr -d ' ')" 0
 echo ""

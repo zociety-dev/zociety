@@ -21,11 +21,13 @@
 #
 # Arguments:
 #   agent        Name of the agent recording the heap-death (e.g. sonnet)
-#   question     Direction for the next cycle. Becomes the tag message and,
-#                if batch remains, the [direction] event the next cycle reads.
-#   batch_size   Cycles left in this batch, counting this one.
-#                remaining = batch_size - 1. With 1, no direction event is
-#                written and the next agent's action becomes "promise".
+#   question     Direction for the next cycle. Becomes the tag message and
+#                the [direction] event the next cycle reads.
+#   batch_size   Cycles left in this batch, counting this one, recorded as
+#                batch_remaining = batch_size - 1 in the heap-death and
+#                direction events. A record, not a switch: bin/zstop-budget
+#                counts [heap-death] commits, and the direction is written
+#                whatever the value (see step 8).
 #                Default: when the loop runs in budget mode (mode: in
 #                .claude/zloop.state contains "budget", or ZSTOP_BUDGET is
 #                set) and start: resolves, ZSTOP_BUDGET (default 3) minus the
@@ -70,7 +72,15 @@
 #      point, the [direction] event included, lands on the next cycle's
 #      branch and the archived branch stays at the tag. On any other branch
 #      (main in CI, a feature branch) it stays put, as before.
-#   8. If remaining > 0, commits a [direction] event for the next cycle.
+#   8. Commits a [direction] event for the next cycle, always. The commit
+#      also carries step 6's staged deletions, so the successor starts on a
+#      clean tree. Before cycle 49 a spent batch (batch_size 1, which every
+#      --cycles N run reaches on its last heap-death) wrote no direction:
+#      the successor's tip stayed the heap-death, bin/zstate answered
+#      action "promise", and the next run took no turn until an operator
+#      wrote the direction by hand. A cycle whose batch is spent still has
+#      a question; whether another cycle runs is the run's decision
+#      (bin/zstop-budget), not the archive's.
 #
 # Run this when bin/zstate reports action "heap-death".
 
@@ -174,7 +184,7 @@ fi
 
 # Default batch_size from the budget so the event data agrees with the loop:
 # what is left of ZSTOP_BUDGET after the heap-deaths already in start..HEAD,
-# counting this one. Floored at 1 (remaining 0 -> promise). Budget mode means
+# counting this one. Floored at 1. Budget mode means
 # the mode list names budget, or ZSTOP_BUDGET is exported (a by-hand run
 # outside bin/zloop that still wants the budget arithmetic).
 BUDGET_MODE=0
@@ -202,18 +212,19 @@ fi
 
 # A successor must explicitly inherit from, or challenge, something the
 # current cycle made. This gate is intentionally before any lifecycle write.
-if [[ "$BATCH_SIZE" -gt 1 ]]; then
-  if [[ ${#CITES[@]} -eq 0 && ${#CHALLENGES[@]} -eq 0 ]]; then
-    echo "zheap-death: successor direction requires --cite FILE or --challenge FILE from this cycle's stuff/" >&2
-    exit 1
-  fi
-  for artifact in "${CITES[@]}" "${CHALLENGES[@]}"; do
-    [[ "$artifact" != /* && -f "stuff/$artifact" ]] || {
-      echo "zheap-death: inheritance artifact must be a file under stuff/: '$artifact'" >&2
-      exit 1
-    }
-  done
+# There is always a successor (step 8), so the batch does not excuse it: the
+# gate used to skip at batch_size 1, and cycle 48's heap-death, the last of a
+# --cycles 1 run, landed with inheritance null.
+if [[ ${#CITES[@]} -eq 0 && ${#CHALLENGES[@]} -eq 0 ]]; then
+  echo "zheap-death: successor direction requires --cite FILE or --challenge FILE from this cycle's stuff/" >&2
+  exit 1
 fi
+for artifact in "${CITES[@]}" "${CHALLENGES[@]}"; do
+  [[ "$artifact" != /* && -f "stuff/$artifact" ]] || {
+    echo "zheap-death: inheritance artifact must be a file under stuff/: '$artifact'" >&2
+    exit 1
+  }
+done
 # The learning is what the cycle found, as against the question, which is
 # where the next one goes. Before this flag nothing carried it: the learnings
 # branch only took PROMPT.md diff lines, and PROMPT.md has not changed since
@@ -250,12 +261,6 @@ done
 REGIME=$(jq -nc --arg mode "$STOP_MODE" --argjson zstop "$KNOBS_JSON" \
   '(if $mode != "" then {stop_mode: $mode} else {} end)
    + (if ($zstop | length) > 0 then {zstop: $zstop} else {} end)')
-
-# Warn if batch_size would result in immediate promise
-if [[ "$BATCH_SIZE" -lt 2 ]]; then
-  echo "WARNING: batch_size=$BATCH_SIZE means remaining will be $((BATCH_SIZE - 1))" >&2
-  echo "         Use batch_size >= 2 for at least one more cycle" >&2
-fi
 
 bin/zlog zheap-death "Starting heap-death" \
   "$(jq -n --arg agent "$AGENT" --arg q "$QUESTION" --argjson batch "$BATCH_SIZE" \
@@ -319,7 +324,7 @@ REMAINING=$((BATCH_SIZE - 1))
 
 bin/zlog zheap-death "Calculated batch remaining: $REMAINING (from $BATCH_SIZE - 1)" \
   "$(jq -n --argjson batch "$BATCH_SIZE" --argjson remaining "$REMAINING" \
-    '{batch_size: $batch, remaining: $remaining, will_create_direction: ($remaining > 0)}')" 2>/dev/null || true
+    '{batch_size: $batch, remaining: $remaining}')" 2>/dev/null || true
 
 # Get current cycle from state
 CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
@@ -504,62 +509,60 @@ if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
 fi
 
 #############################################
-# 8. Commit direction event for next cycle (only if batch remains)
+# 8. Commit direction event for next cycle
 #############################################
+#
+# Always. A spent batch (REMAINING 0) used to skip this, which left the
+# successor's tip at the [heap-death]: bin/zstate answered "promise", the
+# action and budget predicates stopped the next run before its first turn,
+# and step 6's deletions sat staged. The question is the cycle's direction
+# whether or not this run takes another cycle; bin/zstop-budget decides that
+# by counting [heap-death] commits, not by this event's absence.
 
-if [[ "$REMAINING" -gt 0 ]]; then
-  NEXT_CYCLE=$((CURRENT_CYCLE + 1))
+NEXT_CYCLE=$((CURRENT_CYCLE + 1))
 
-  bin/zlog zheap-death "Creating direction event for next cycle (batch remains)" \
-    "$(jq -n --argjson next "$NEXT_CYCLE" --argjson remaining "$REMAINING" \
-      '{next_cycle: $next, batch_remaining: $remaining, next_action: "evolve"}')" 2>/dev/null || true
+bin/zlog zheap-death "Creating direction event for next cycle" \
+  "$(jq -n --argjson next "$NEXT_CYCLE" --argjson remaining "$REMAINING" \
+    '{next_cycle: $next, batch_remaining: $remaining}')" 2>/dev/null || true
 
-  DIRECTION_EVENT=$(jq -n \
-    --arg type "direction" \
-    --arg agent "system" \
-    --argjson cycle "$NEXT_CYCLE" \
-    --argjson seq 1 \
-    --arg question "$QUESTION" \
-    --argjson total "$BATCH_SIZE" \
-    --argjson remaining "$REMAINING" \
-    --argjson inheritance "$INHERITANCE" \
-    --argjson regime "$REGIME" \
-    '{
-      z: 1,
-      event: $type,
-      cycle: $cycle,
-      seq: $seq,
-      agent: $agent,
-      ts: (now | todate),
-      state: {
-        members: 0,
-        rules: 0,
-        stuff: 0,
-        complete: false
-      },
-      data: ({
-        question: $question,
-        batch_total: $total,
-        batch_remaining: $remaining,
-        inheritance: $inheritance
-      } + $regime)
-    }'
-  )
+DIRECTION_EVENT=$(jq -n \
+  --arg type "direction" \
+  --arg agent "system" \
+  --argjson cycle "$NEXT_CYCLE" \
+  --argjson seq 1 \
+  --arg question "$QUESTION" \
+  --argjson total "$BATCH_SIZE" \
+  --argjson remaining "$REMAINING" \
+  --argjson inheritance "$INHERITANCE" \
+  --argjson regime "$REGIME" \
+  '{
+    z: 1,
+    event: $type,
+    cycle: $cycle,
+    seq: $seq,
+    agent: $agent,
+    ts: (now | todate),
+    state: {
+      members: 0,
+      rules: 0,
+      stuff: 0,
+      complete: false
+    },
+    data: ({
+      question: $question,
+      batch_total: $total,
+      batch_remaining: $remaining,
+      inheritance: $inheritance
+    } + $regime)
+  }'
+)
 
-  DIRECTION_MSG="[direction] system: $QUESTION
+DIRECTION_MSG="[direction] system: $QUESTION
 
 $DIRECTION_EVENT"
 
-  git commit --allow-empty -m "$DIRECTION_MSG" --quiet
-  echo "Direction event committed for cycle $NEXT_CYCLE"
-else
-  # CRITICAL: This is where the self-sustainability gap originates
-  # No direction event means zstate will return action="promise"
-  # But zpromise doesn't create a commit, so state won't change
-  bin/zlog zheap-death "BATCH EXHAUSTED - no direction event created" \
-    '{"batch_remaining": 0, "next_action": "promise", "warning": "zpromise does not change git state"}' 2>/dev/null || true
-  echo "Batch exhausted - no direction event (next agent will output promise)"
-fi
+git commit --allow-empty -m "$DIRECTION_MSG" --quiet
+echo "Direction event committed for cycle $NEXT_CYCLE"
 
 echo ""
 echo "╔════════════════════════════════════════╗"
