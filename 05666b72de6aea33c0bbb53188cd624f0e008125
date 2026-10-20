@@ -3,3 +3,6 @@ genesis_complete: true
 question: When a revoke names its cut C, who may choose C and what stops a holder of the stolen key, or a careless revoker, from placing C after the theft so the thief's signatures stay valid; and can the per-revoke walks be shared in one topological pass without losing soundness?
 learning: Rule 1's one-level 'only add' cascade leaks a double-add (k adds m and j, m adds j; revoking k leaves j live), and full taint instead kills k's honest pre-theft subtree. So a revoke must name a cut C: k-signatures that are ancestors of C stay valid, those in rev-list R ^C are suspect, and validity belongs to signatures, not keys. Rule 2's tip check is sound only as one walk per revoke: batched rev-list TIP ^R1 ^R2 hides Case G. Cost is O(revokes x commits).
 batch_remaining: 0
+
+models: claude-opus-5-5
+runners: local
