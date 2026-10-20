@@ -235,7 +235,12 @@ and the next run stopping before its first turn until an operator wrote the
 direction by hand. A direction commit a hook refuses leaves the same state;
 `bin/zheap-death --finish` writes the owed direction from the heap-death
 event, and `bin/zloop` runs it before every turn (silent when nothing is
-owed), so neither case needs a hand. `bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}`
+owed), so neither case needs a hand. The same preflight records the
+`[complete]` event (agent `system`, on a clean tree, since `bin/zevent` stages
+everything) once `bin/zstate` says `complete`, so under `bin/zloop` the turn
+after the third stuff is the heap-death, not a turn that runs one command;
+`bin/zga-loop` has no preflight and still spends that turn.
+`bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}`
 branch so every archive remains in a reviewable cycle lineage.
 
 ### zloop Environment Variables
@@ -292,7 +297,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zstuff` | Record stuff creation |
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
-| `bin/zcomplete` | Record genesis completion |
+| `bin/zcomplete` | Record genesis completion. `bin/zloop` writes the event itself between turns (agent `system`, clean tree only) once `bin/zstate` says `complete`, so its turns are not spent on it; `bin/zga-loop` still gives it a turn |
 | `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); `--finish` writes a direction a refused commit left owed, from the heap-death event, and `bin/zloop` runs it before every turn; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
@@ -525,12 +530,19 @@ bin/zstate → action field tells you what to do:
                   [vote] events and needs 2 yes, more yes than no; the
                   for/against arguments are not trusted). A rule therefore
                   takes two turns: propose (vote yes), then another turn
-                  seconds and passes. A cycle is about 12 turns (3 joins,
-                  2x2 rule turns, 3 stuff, complete, heap-death; 13 with an
-                  operator question to answer), so `--max 5` cannot finish
-                  one. A turn that is not joining acts for the member who
-                  has gone longest without acting (`bin/zstate .roster[0]`).
-  "complete"   → Run bin/zcomplete
+                  seconds and passes. A cycle is about 11 turns (3 joins,
+                  2x2 rule turns, 3 stuff, heap-death; 12 with an operator
+                  question to answer), so `--max 5` cannot finish one. A
+                  turn that is not joining acts for the member who has gone
+                  longest without acting (`bin/zstate .roster[0]`).
+  "complete"   → Run bin/zcomplete. Under `bin/zloop` a turn rarely sees
+                  this: the runner records the [complete] itself (agent
+                  `system`) before the turn when genesis is met and the
+                  tree is clean, since the event records thresholds already
+                  reached and a turn spent on it ran one command (cycle 51:
+                  21s, $0.38). The turn gets it when the tree was dirty or
+                  the commit failed, and always under `bin/zga-loop`, which
+                  has no such step (its cycles are twelve turns)
   "heap-death" → Run bin/zheap-death --cite <stuff-file> (or --challenge
                   <stuff-file>) to explicitly inherit or dispute an artifact,
                   with --learning "<what this cycle found>": one claim its
