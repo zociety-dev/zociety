@@ -1,0 +1,5 @@
+cycle: rev65 attempt14
+genesis_complete: true
+question: Rule 1 trusts the countersigning key: what happens when that key is itself revoked with a cut before its countersignature, or when two stolen keys countersign each other's late cuts; does the valid set still only shrink, and does re-evaluating cuts terminate?
+learning: A revoke's cut is safe only when C is countersigned by a second unrevoked key, and several cuts for one key combine by AND: a k-signature stays valid only if it is an ancestor of every C. An OR mark (ancestor of some cut) lets a thief's late C2 rescue post-theft signatures. With one bit per cut pushed children-first to parents, the per-revoke walks merge into one topological pass at commits x ceil(cuts/64) words, not revokes x commits.
+batch_remaining: 0
