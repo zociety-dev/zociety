@@ -26,8 +26,9 @@
 #      gathers the archive in a fixed number of git calls, and this case
 #      catches a slide back to per-tag or per-artifact subprocesses
 #   7. the front page and "This Cycle" describe the highest
-#      cycle/rev{N}-attempt{M} branch (origin's when only origin has it),
-#      not main or the working tree; bin/zstate --ref reads a given ref
+#      rev{N}-attempt{M} tag, not main, a cycle branch (deleted on GitHub
+#      when its PR merges) or the working tree; bin/zstate --ref reads a
+#      given ref
 
 set -e
 
@@ -202,29 +203,36 @@ live_commit() {
   printf 'M 100644 inline stuff/%s\ndata %d\n%s\n\n' "$file" "${#body}" "$body"
 }
 
-echo "Case 7: the current cycle is the highest cycle branch's, not the checkout's"
+echo "Case 7: the current cycle is the highest rev* tag's, not a branch's or the checkout's"
 mkdir -p "$TMP/live"
 git init -q -b main "$TMP/live"
 cp -R "$TMP/repo/bin" "$TMP/live/bin"
 cp "$TMP/repo/PROMPT.md" "$TMP/live/PROMPT.md"
 {
   live_commit refs/heads/main 1 5 main-only.md "Main artifact"
-  live_commit refs/heads/cycle/rev2-attempt9 2 6 older.md "Older artifact" 1
-  # Version order: attempt10 is above attempt9. Only origin has it, as in CI.
-  live_commit refs/remotes/origin/cycle/rev2-attempt10 3 7 live.md "Live artifact" 1
+  live_commit refs/tags/rev2-attempt9-iterations1of1 2 6 older.md "Older artifact" 1
+  # Version order: attempt10 is above attempt9 (sort -V reads the numbers).
+  live_commit refs/tags/rev2-attempt10-iterations1of1 3 7 live.md "Live artifact" 1
+  # A cycle branch above every tag, local and on origin: the running cycle,
+  # which the site must not describe (CI never has it; GitHub deletes a
+  # cycle branch when its PR merges).
+  live_commit refs/heads/cycle/rev2-attempt11 4 8 branch.md "Branch artifact" 3
+  live_commit refs/remotes/origin/cycle/rev2-attempt12 5 9 remote.md "Remote branch artifact" 3
 } | LC_ALL=C git -C "$TMP/live" fast-import --quiet
 cd "$TMP/live"
 mkdir -p stuff
 printf '# Working tree artifact\n' > stuff/untracked.md
 check "zstate reads HEAD by default" test "$(bin/zstate | jq -r .cycle)" = 5
-check "zstate --ref reads that ref" test "$(bin/zstate --ref refs/remotes/origin/cycle/rev2-attempt10 | jq -r .cycle)" = 7
+check "zstate --ref reads that ref" test "$(bin/zstate --ref refs/tags/rev2-attempt10-iterations1of1 | jq -r .cycle)" = 7
 check "zstate --ref refuses a ref that is not a commit" bash -c '! bin/zstate --ref no-such-ref'
 generate
-check "front page shows the live cycle" grep -q '<div class="stat-value">7</div>' docs/index.html
-check "front page names the live branch" grep -qF 'Current Genesis Progress <code>cycle/rev2-attempt10</code>' docs/index.html
-check "This Cycle holds the live branch's stuff" grep -qF 'Live artifact' docs/stuff.html
-check "not main's, an older cycle's or the working tree's" \
-  bash -c '! grep -qE "Main artifact|Older artifact|Working tree artifact" docs/stuff.html'
+check "front page shows the newest tag's cycle" grep -q '<div class="stat-value">7</div>' docs/index.html
+check "front page names the cycle by its tag" grep -qF 'Current Genesis Progress <code>rev2-attempt10</code>' docs/index.html
+check "front page counts cycles and revisions from the tags" \
+  bash -c 'grep -qF "<div class=\"stat-value\">2</div>" docs/index.html && grep -qF "<div class=\"stat-value\">1</div>" docs/index.html'
+check "This Cycle holds the newest tag's stuff" grep -qF 'Live artifact' docs/stuff.html
+check "not main's, an older cycle's, a branch's or the working tree's" \
+  bash -c '! grep -qE "Main artifact|Older artifact|Branch artifact|Remote branch artifact|Working tree artifact" docs/stuff.html'
 cd "$TMP/repo"
 
 echo

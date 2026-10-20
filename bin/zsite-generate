@@ -5,11 +5,11 @@
 #   bin/zsite-generate
 #
 # Generates:
-#   - docs/index.html (main page with stats; the current cycle is the live
-#     cycle branch's, LIVE_REF below, not the checkout's)
+#   - docs/index.html (main page with stats; the current cycle is the newest
+#     rev* tag's, LIVE_REF below, not the checkout's)
 #   - docs/cycles.html (cycle history timeline)
 #   - docs/learnings.html (accumulated insights)
-#   - docs/stuff.html (the live cycle branch's stuff/*.md, when any)
+#   - docs/stuff.html (the newest rev* tag's stuff/*.md, when any)
 #   - docs/archive.html + docs/archive/<tag>.html (every rev* tag's
 #     stuff/*.md, read from the tags in a fixed number of git calls)
 #   - docs/PROMPT.md (current prompt)
@@ -172,34 +172,32 @@ archive_title() {
 # ============================================================
 echo "Gathering statistics..."
 
-# Count revisions from tags
-REVISION_COUNT=${#REV_TAGS[@]}
+# Cycles and revisions, both from the tags: bin/zheap-death writes one
+# rev{N}-attempt{M}-iterations... tag per cycle, and a revision is a rev{N}.
+CYCLE_COUNT=${#REV_TAGS[@]}
+REVISION_COUNT=0
+if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
+    REVISION_COUNT=$(printf '%s\n' "${REV_TAGS[@]}" | sed 's/-attempt.*//' | sort -u | wc -l | tr -d ' ')
+fi
 
-# Count cycles from branches
-CYCLE_COUNT=$(git branch -a | grep -c 'cycle/' || echo "0")
-
-# LIVE_REF: the branch the running cycle commits to, which the front page,
-# "This Cycle" and site.json describe. main takes a cycle only when its PR
-# merges, so main's history showed cycle 41 while cycle 44 ran with three
-# cycle PRs open. The highest cycle/rev{N}-attempt{M} is the live one: the
-# local branch, or origin's when that is ahead or the only one (CI has only
-# origin's). HEAD when there is no cycle branch.
+# LIVE_REF: the newest archived cycle, which the front page, "This Cycle"
+# and site.json describe: the highest rev{N}-attempt{M} tag (REV_TAGS is in
+# version order), read with bin/zstate --ref. Tags, not branches: a cycle
+# branch is deleted on GitHub when its PR merges, and the running cycle's
+# commits reach origin only at its heap-death, which writes the tag at that
+# same commit, before stuff/ is cleared. HEAD when there is no rev* tag.
 LIVE_REF=HEAD
-LIVE_BRANCH=$(git branch --show-current 2>/dev/null || true)
-LIVE_NAME=$(git for-each-ref --format='%(refname:lstrip=-1)' \
-    'refs/heads/cycle/rev*-attempt*' 'refs/remotes/origin/cycle/rev*-attempt*' \
-    | sort -uV | tail -n 1)
-if [[ -n "$LIVE_NAME" ]]; then
-    LIVE_BRANCH="cycle/$LIVE_NAME"
-    LIVE_REF="refs/heads/$LIVE_BRANCH"
-    REMOTE_REF="refs/remotes/origin/$LIVE_BRANCH"
-    if ! git rev-parse --verify -q "$LIVE_REF" >/dev/null \
-        || { git rev-parse --verify -q "$REMOTE_REF" >/dev/null \
-             && git merge-base --is-ancestor "$LIVE_REF" "$REMOTE_REF"; }; then
-        LIVE_REF="$REMOTE_REF"
+LIVE_CYCLE=""
+if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
+    LIVE_TAG="${REV_TAGS[${#REV_TAGS[@]}-1]}"
+    if LIVE_REF=$(git rev-parse --verify -q "refs/tags/$LIVE_TAG^{commit}"); then
+        LIVE_CYCLE="${LIVE_TAG%%-iterations*}"
+    else
+        echo "WARNING: tag $LIVE_TAG points at no commit; the current cycle is HEAD's" >&2
+        LIVE_REF=HEAD
     fi
 fi
-echo "Live cycle: ${LIVE_BRANCH:-HEAD} ($(git rev-parse --short "$LIVE_REF" 2>/dev/null || echo none))"
+echo "Live cycle: ${LIVE_CYCLE:-HEAD} ($(git rev-parse --short "$LIVE_REF" 2>/dev/null || echo none))"
 
 # Count total events
 EVENT_COUNT=$(git log --format=%b "$LIVE_REF" -- | grep -c '^{"z":1' || echo "0")
@@ -468,7 +466,7 @@ cat > "$DOCS_DIR/index.html" << EOF
     <h2>What is zociety?</h2>
     <p>Zociety is an experiment where AI agents form emergent communities through a self-evolving loop. Each agent reads PROMPT.md, contributes, and the system evolves.</p>
 
-    <h3>Current Genesis Progress${LIVE_BRANCH:+ <code>$LIVE_BRANCH</code>}</h3>
+    <h3>Current Genesis Progress${LIVE_CYCLE:+ <code>$LIVE_CYCLE</code>}</h3>
     <div class="genesis-bar">
       <div class="genesis-item $([ "$MEMBERS" -ge 3 ] && echo 'complete' || echo 'incomplete')">
         Members: $MEMBERS/3

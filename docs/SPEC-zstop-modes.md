@@ -65,7 +65,9 @@ of `zloop-complete` here verbatim.
 
 ### 2. `budget` (system-owned counter)
 Stop when `[heap-death]` commits in `start..HEAD` >= `ZSTOP_BUDGET` (default 3).
-Also stop if `action` is `promise` (batch exhausted by an agent). Once this
+Also stop if `action` is `promise` (a `[heap-death]` with no `[direction]`
+after it; since cycle 49 `zheap-death` always writes the direction, so this
+is a pre-49 history or a refused direction commit). Once this
 mode exists, `zheap-death` should default `batch_size` to `ZSTOP_BUDGET - <heap-deaths so far>`
 when unset, so the event data agrees with the loop. Do not remove the argument.
 

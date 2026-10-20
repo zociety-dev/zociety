@@ -109,7 +109,10 @@ Zociety's own loop with dynamic completion checking:
   (`bin/zstop-<mode>` for each name in `--stop`/`ZLOOP_STOP`): exit 0 stop,
   1 continue, 2 abort the loop (unknown mode or predicate error)
 - No static promise strings - uses exit codes
-- Default mode `action`: stops when `bin/zstate` action is `stop` or `promise`
+- Default mode `action`: stops when `bin/zstate` action is `stop` (a terminal
+  `[observation]`) or `promise` (a `[promise]` event, or a `[heap-death]` with
+  no `[direction]` after it, which `bin/zheap-death` no longer leaves behind;
+  see Stop Modes). A plain run therefore goes until its caps
 - `--max N`, `--for`, `--cost` and the hard kill (`--timeout`/`ZLOOP_TIMEOUT`) are unconditional caps, not modes;
   the predicates run once more after the final permitted iteration, so
   finishing on the last iteration exits 0 (`Loop Complete`), not 1
@@ -216,8 +219,17 @@ marker (`.claude/STOP` is removed on stop), so keep those out of a dry run.
 
 In `budget` mode `bin/zheap-death` defaults `batch_size` to
 `ZSTOP_BUDGET - <heap-deaths so far>` so its event data agrees with the loop.
-`bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}` branch so every
-archive remains in a reviewable cycle lineage.
+The batch is a record, not a switch: the successor's `[direction]` is written
+whatever `batch_remaining` says, and the predicate stops the run by counting
+`[heap-death]` commits. Before cycle 49 a spent batch wrote no direction, so
+every `--cycles N` run ended with the successor's tip at the heap-death,
+`bin/zstate` answering `action: promise`, the per-cycle deletions left staged,
+and the next run stopping before its first turn until an operator wrote the
+direction by hand. A direction commit a hook refuses leaves the same state;
+`bin/zheap-death --finish` writes the owed direction from the heap-death
+event, and `bin/zloop` runs it before every turn (silent when nothing is
+owed), so neither case needs a hand. `bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}`
+branch so every archive remains in a reviewable cycle lineage.
 
 ### zloop Environment Variables
 
@@ -274,7 +286,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion |
-| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
+| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); `--finish` writes a direction a refused commit left owed, from the heap-death event, and `bin/zloop` runs it before every turn; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
 | `bin/zpr-flow` | Open a cycle branch PR into main and, with `ZPR_MERGE=1` (as `bin/zheap-death` runs it), merge it: `ZPR_MERGE_METHOD` defaults to `merge` (the repo allows no squash merges, and a rewritten commit would orphan the tag and notes), `ZPR_MERGE_TRIES`/`ZPR_MERGE_WAIT` retry a merge GitHub refuses while it computes mergeability. Exit 4: merge asked for and not done, PR left open |
@@ -282,7 +294,7 @@ All state is derived from git history. No mutable state files.
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
 | `bin/shims/{git,gh}` | direnv PATH shims: in-worktree, route git writes + all gh through `zgit`/`zgh`; reads and out-of-worktree stay on host. Read-only verbs (`log`, `diff`, `status`, `show`, `rev-parse`, ...) always stay; mixed verbs stay only in their read forms: `branch` listing (`--show-current`, `-a`/`-r`/`-v`, `--contains`, `--merged`, ... with no positional), `tag -l`, `notes list`/`show`, `remote [-v]`/`show`/`get-url`, `config --get`/`--get-all`/`--list`, `worktree list`, `stash list`/`show`. Anything else, including unrecognised options, goes to the container |
-| `bin/zpromise` | Output completion promise |
+| `bin/zpromise` | Record a `[promise]` event when `bin/zstate` says `promise` (a `[heap-death]` with no `[direction]` after it; histories before cycle 49 only) |
 | `bin/zobserve` | Record a terminal `[observation]` (the runner does this when it stops on a hard-kill or seal-failure streak); the branch then answers `action: stop` |
 | `bin/zresume` | Lift a terminal observation with an `[intervention]` event naming it and the reason; run by `bin/zloop --resume "<reason>"`. `bin/zcycle-measure` scores it against constraint adherence |
 | `bin/zask` | Put an operator question or statement to the zociety (`[ask]` event); `--cycles N`, `--list`, `--show ID`, `--close ID REASON`; queued while a run goes and recorded between its turns (`--drain`). See Operator Questions |
@@ -301,14 +313,14 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
-| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; and that the front page and `stuff.html` follow the highest cycle branch, not main |
+| `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; and that the front page and `stuff.html` follow the highest `rev*` tag, not main, a cycle branch or the working tree |
 | `bin/zworkflow` | Propose GitHub Actions workflow |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
 | `bin/nfprov.py` | Vendored-verbatim canonical encoder from the fork (`mark`/`inspect`/`strip`/`convert`) |
 | `bin/nfprov-diff.py` | Mark text added between a base and current file (`mark-added`); front end over `bin/nfprov.py` |
 | `bin/nfprov-blame` | Attribute every character of a file to the commit that wrote it |
-| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout). The archive is gathered in four git calls for the whole `rev*` tag set (`for-each-ref` for names and dates, `grep -L` for each tag's `stuff/*.md`, `grep` for their h1s, `cat-file --batch` for the bodies), never per tag or per artifact. The front page, `stuff.html` and `site.json` describe the live cycle: the highest `cycle/rev{N}-attempt{M}` branch (origin's when it is ahead or the only one), read with `bin/zstate --ref`, because main takes a cycle only when its PR merges |
+| `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout). The archive is gathered in four git calls for the whole `rev*` tag set (`for-each-ref` for names and dates, `grep -L` for each tag's `stuff/*.md`, `grep` for their h1s, `cat-file --batch` for the bodies), never per tag or per artifact. The front page, `stuff.html` and `site.json` describe the newest archived cycle: the highest `rev{N}-attempt{M}` tag, read with `bin/zstate --ref`; the cycle and revision counts are the tags too. Never a branch: GitHub deletes a cycle branch when its PR merges, and the running cycle's commits reach origin only at its heap-death, which writes the tag at that commit |
 | `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
 
 ### Provenance (delano/nerd-fonts#15)
