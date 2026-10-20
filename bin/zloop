@@ -173,11 +173,12 @@
 # cycle 49 (a spent batch wrote no direction then) is finished the same way.
 #
 # Genesis completion: when bin/zstate says `complete` before a turn, the
-# runner records the [complete] event itself (bin/zcomplete system), under
-# the same seal guard. The event is a record of thresholds already met, not
-# a decision, and a turn spent on it ran one command (cycle 51: 21s, $0.38).
-# A cycle is therefore eleven turns, not twelve; a refused commit leaves the
-# turn to do it as before.
+# runner records the [complete] event itself (agent `system`), under the
+# same seal guard and only on a clean tree. The event is a record of
+# thresholds already met, not a decision, and a turn spent on it ran one
+# command (cycle 51: 21s, $0.38). A cycle is therefore eleven turns, not
+# twelve; a dirty tree or a refused commit leaves the turn to do it as
+# before. bin/zga-loop has no such step and still spends the turn.
 #
 # Object store: before every turn bin/zobjects gives each hard-linked file in
 # .git/objects its own copy. A local `git clone` of this repo hard-links the
@@ -1026,15 +1027,21 @@ EOF
   # runner writes it here (agent `system`) instead of spending a turn on it;
   # cycle 51's complete turn ran bin/zcomplete and nothing else, 21s, $0.38.
   # Under the seal guard of the drain and --finish above (no predicate stops
-  # on `complete`, so after them is the same as before). If the commit fails
+  # on `complete`, so after them is the same as before), and only on a clean
+  # tree, as the drain: bin/zevent stages everything, and a file a killed
+  # turn left behind must not land unsealed under the runner's name. The
+  # event goes through bin/zevent directly (bin/zcomplete would read the
+  # state iter_state already holds four more times). If it is not written
   # the turn is handed `complete` as before and does it itself.
   if [[ "$cap_action" == "complete" && -z "$SEAL_FROM" ]]; then
-    if complete_out=$(bin/zcomplete system 2>&1); then
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+      log "[zloop] Genesis complete, but the tree is not clean, so the turn records it (the runner would sweep the stray files in)"
+    elif genesis_out=$(bin/zevent complete system "genesis complete" '{}' 2>&1); then
       log "[zloop] Genesis complete; recorded between turns, so the next turn is the heap-death"
       iter_state=$(bin/zstate 2>/dev/null) || iter_state="{}"
       cap_action=$(printf '%s' "$iter_state" | jq -r '.action // empty' 2>/dev/null) || cap_action=""
     else
-      log "[zloop] WARNING: bin/zcomplete failed: $(printf '%s\n' "$complete_out" | tail -1); the turn will record it"
+      log "[zloop] WARNING: the [complete] event was not recorded: $(printf '%s\n' "$genesis_out" | tail -1); the turn will record it"
     fi
   fi
   iter_action=$(printf '%s' "$iter_state" | jq -r '.next // .action // "unknown"' 2>/dev/null) || iter_action="unknown"
