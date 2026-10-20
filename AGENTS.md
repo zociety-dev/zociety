@@ -45,7 +45,10 @@ Zociety's own loop with dynamic completion checking:
 - Run limits: `--for TIME` (90s, 45m, 8h, 3d, 1h30m; a turn starts only if
   its budget fits before the limit), `--cost USD` (summed from each turn's
   reported cost; a turn starts only if the run's average turn cost still
-  fits, so one costly turn can go over; not with `--quiet`) and `--cycles N`
+  fits, so one costly turn can go over; a cycle at `complete` or
+  `heap-death` takes its two landing turns over the limit, at most two a
+  run, since a cycle stopped there lands nothing until another run resumes
+  it, as cycle 49 did at $4.61 of $5; not with `--quiet`) and `--cycles N`
   (the `budget` stop mode with `ZSTOP_BUDGET=N`). Any of them lifts the
   default 60-turn cap unless `--max` is given too. `--budget`, `--interval`
   and `--timeout` take the same durations; a bare number is seconds. A

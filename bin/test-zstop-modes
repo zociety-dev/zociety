@@ -1810,6 +1810,26 @@ run bin/zloop --verbose --cost 0.5 --budget 30 --interval 0
 assert_rc 1
 assert_err '^=== Cost Limit Reached ===$'
 assert_claude_runs 1
+# A cycle at heap-death lands over the limit: with [complete] recorded,
+# bin/zstate says heap-death, and the fake turns commit nothing, so the
+# limit is reached after turn 1 ($0.30 of $0.2) and two more turns run to
+# land the cycle before the cap holds.
+fresh_repo run-cost-landing
+bin/zevent complete tester "genesis complete" '{}' >/dev/null 2>&1
+assert_eq "fixture at heap-death" "$(bin/zstate | jq -r .action)" heap-death
+run env ZLOOP_MAX_IDLE=0 bin/zloop --cost 0.2 --budget 30 --interval 0
+assert_rc 1
+assert_err '^\[zloop\] Cost limit \(\$0\.2\) reached at \$0\.30; the cycle is at heap-death, so this turn runs to land it \(over-limit turn 1 of 2\)$'
+assert_err '^\[zloop\] Cost limit \(\$0\.2\) reached at \$0\.60; the cycle is at heap-death, so this turn runs to land it \(over-limit turn 2 of 2\)$'
+assert_err '^=== Cost Limit Reached ===$'
+assert_err '^Spent \$0\.90 of \$0\.2; another turn at the average cost would go over$'
+assert_claude_runs 3
+# Mid-cycle (action contribute) the cap holds as before.
+fresh_repo run-cost-mid
+run bin/zloop --cost 0.2 --budget 30 --interval 0
+assert_rc 1
+assert_no_err 'so this turn runs to land it'
+assert_claude_runs 1
 echo ""
 
 echo "=== Case 49: --cycles N is the budget stop mode with ZSTOP_BUDGET=N, with no turn cap ==="
