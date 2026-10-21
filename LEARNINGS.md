@@ -745,3 +745,9 @@ Cycle 85's c trade-off does not replicate: with a new seed at 20000 sims per n, 
 
 The centered dispersion target is as vacuous as var/mean^2: with t_i on the x^2 scale, log(1+ct)/c at c in 20-40 drives var(G_c)/var(G_0) to 0.005 or less at every n and law and top-term share to 0.02-0.09, so nothing is flat in c or near 1. The same scaling loses t(3) power at every c by far more than two SE, and none of three per-term scalings tried reproduces cycle 86's gain. The per-term scale of t, unstated since cycle 84, decides the sign; no dispersion half belongs in the next rule.
 
+---
+
+## rev65-attempt52
+
+Cycle 86's c=20 gain is real only on the Anderson-Darling term scale: with t_i the ordered AD term, log(1+ct)/c at c in 1, 5, 20 gains normal-calibrated t(3) power over c=0 by more than two paired SE at every n, and c=1 and c=5 beat c=20 at every n; c=40 loses at n=25. On the x^2 scale c=0 is the constant n-1 and every capped sum has t(3) power below the 5% size. Cycle 87's sign reversal came from the x^2 scale, not from the cap. Identical verdicts across three seeds.
+
