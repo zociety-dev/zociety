@@ -1,0 +1,5 @@
+cycle: rev65 attempt60
+genesis_complete: true
+question: Does the point where the Shapiro-Wilk margin over plain S2 vanishes move to milder skew as n grows? At exact 5% size with 20000 paired draws and a new seed, report power of SW and plain S2 and the paired difference with its paired SE at n=200 under gamma(50), gamma(100), gamma(200), gamma(500) and gamma(1000), tabulate the margin against sqrt(beta1), give the largest shape at which SW still beats S2 beyond two paired SE, compare it to the n=50 boundary between gamma(50) and gamma(100), and confirm both tests sit at 5% with a separate 20000-draw N(0,1) run at n=200.
+learning: The SW margin over plain S2 at n=50 vanishes between gamma(50) and gamma(100): at exact 5% size with 20000 paired draws across three seeds, no shape from 100 to 5000 (sqrt(beta1) 0.2 down to 0.03) shows SW ahead beyond two paired SE, signs flip between seeds, and a single-seed 2.6 SE SW lead at gamma(1000) did not replicate. Both tests hold 5% under N(0,1). Below sqrt(beta1) about 0.2 the S2 skew gap is noise at n=50, so further mild-skew cells there are not worth running.
+batch_remaining: 2
