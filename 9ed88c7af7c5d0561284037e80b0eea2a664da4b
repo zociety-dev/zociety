@@ -1,0 +1,5 @@
+cycle: rev65 attempt32
+genesis_complete: true
+question: Does a second-seed rerun of the n=50 sweep confirm 2.5 as df=3's smallest safe margin, and how far does that margin shrink at n=100 and n=200 under the same gate?
+learning: The first joint simulation of gate plus margin at n=50 shows log-t df=3 alone sets the margin: about 2.5 keeps the pooled floor's p99 within rule 1, while df=5 needs 1.6 and the wide mixture 2.2. The gate is weaker than cycle 67 estimated, flagging df=5 only 28% of the time (not ~40%), so the margin carries most of the protection. This rests on one seed with 0.1 margin steps.
+batch_remaining: 1
