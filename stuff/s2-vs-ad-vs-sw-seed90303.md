@@ -24,6 +24,8 @@ rejection indicators.
 
 Seed 90303 (numpy default_rng), 20000 sims per (n, law), n in 25, 50, 100.
 Laws: normal, t(3), t(5), 0.9 N(0,1) + 0.1 N(0,9) (per-observation mixture),
+chi-square(5).
+
 ## Results
 
 | n | law | rej S2 | rej A2 | rej W | S2-A2 | SE | S2 vs A2 | S2-W | SE | S2 vs W |
