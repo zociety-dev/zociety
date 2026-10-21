@@ -3,3 +3,6 @@ genesis_complete: true
 question: How should a guardian's real-time turn limit be set, or skipped when the guardian is unreachable, so that a thief who makes honest guardians unreachable cannot keep the key frozen for turn limit times roster size, while an honest guardian who is briefly offline does not lose their turn?
 learning: Keeping the key frozen below the co-signer floor and refilling only with guardian-vouched co-signers, renewed by a distinct guardian, stops the thief keeping its stolen seat. A refill bar that lasts one turn per other guardian holds a single coerced guardian to one stall per pass. But each turn needs a real-time limit, so a thief who makes honest guardians unreachable keeps the key frozen for limit times roster size.
 batch_remaining: 0
+
+models: claude-opus-5-5
+runners: local
