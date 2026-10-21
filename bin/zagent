@@ -35,6 +35,38 @@
 #                          each). No tool reads a backgrounded Bash command,
 #                          so bin/zprompt tells the turn to run everything in
 #                          the foreground.
+#   ZAGENT_SETTING_SOURCES The claude settings a turn loads (--setting-sources:
+#                          user, project, local), unset or empty: none. With
+#                          settings a turn carries the project instructions
+#                          (AGENTS.md, 50KB, which bin/zprompt tells it not to
+#                          read), the operator's user settings (model alias,
+#                          effort, hooks, agents, plugins and the `env` block,
+#                          secrets included, into the agent's shell) and the
+#                          project permission lists, which
+#                          --dangerously-skip-permissions makes moot. And
+#                          since the context carries the git status, which
+#                          every turn's commit changes, none of it is served
+#                          from the prompt cache: a two-call bin/zstate turn
+#                          cost $0.24 with settings on the host, $0.04
+#                          without. The turn's own knobs do not come from
+#                          settings: the model is --model (ANTHROPIC_MODEL),
+#                          the effort ZAGENT_EFFORT, the tools ZAGENT_TOOLS.
+#                          What does, and is dropped with them: auth routing
+#                          an operator keeps in user settings (apiKeyHelper,
+#                          an env ANTHROPIC_BASE_URL, Bedrock or Vertex
+#                          switches). A turn that fails to authenticate under
+#                          the default needs ZAGENT_SETTING_SOURCES=user. The
+#                          child also gets DISABLE_AUTOUPDATER=1, so no turn
+#                          updates the client mid-run.
+#   ZAGENT_EFFORT          claude --effort (low, medium, high, xhigh, max);
+#                          unset: the client's default. Cycles up to 52 ran
+#                          under the operator's user settings, which set
+#                          xhigh for claude-opus-5-5; set it here to keep that
+#                          regime.
+#   The three ZAGENT_* knobs are claude's; the gemini client ignores them.
+#   bin/zheap-death records every ZAGENT_* variable present under
+#   data.zagent in the heap-death and direction events, beside the stop
+#   regime, so cycles under different turn regimes are told apart in git.
 #
 # The model reaches the client as a CLI flag only. The child runs with
 # ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (the CI step variable bin/zga-loop
@@ -115,7 +147,10 @@ if [[ -z "$MODEL" ]]; then
     gemini) MODEL="${GEMINI_MODEL:-}" ;;
   esac
 fi
-SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY)
+# DISABLE_AUTOUPDATER=1: with no settings loaded (ZAGENT_SETTING_SOURCES)
+# nothing else keeps a turn's client from updating itself between the turns
+# of one cycle.
+SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY DISABLE_AUTOUPDATER=1)
 
 case "$CLIENT" in
   claude)
@@ -132,6 +167,12 @@ case "$CLIENT" in
     # list of words, so the = form: separate, it would take the prompt as
     # another tool. An empty ZAGENT_TOOLS is claude's "no tools".
     CLAUDE_ARGS+=("--tools=${ZAGENT_TOOLS-Bash,Read,Write,Edit,Glob,Grep}" --disable-slash-commands)
+    # No settings (see ZAGENT_SETTING_SOURCES above): no project instructions
+    # (AGENTS.md), no operator settings, hooks, agents, plugins or env.
+    CLAUDE_ARGS+=(--setting-sources "${ZAGENT_SETTING_SOURCES-}")
+    if [[ -n "${ZAGENT_EFFORT:-}" ]]; then
+      CLAUDE_ARGS+=(--effort "$ZAGENT_EFFORT")
+    fi
     # --print needs --verbose for stream-json output. raw adds the partial
     # (delta) messages; compact leaves them out and pipes through bin/zrender.
     case "$RENDER" in
