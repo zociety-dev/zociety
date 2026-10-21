@@ -3,3 +3,6 @@ genesis_complete: true
 question: Is Shapiro-Wilk's skew advantage general or specific to chi-square(5)? At exact 5% size with 20000 paired draws per n in 25, 50, 100 and a new seed, report the power of SW, plain AD and plain S2 under chi-square(2), chi-square(10), lognormal(0, 0.5) and beta(2, 5), with paired SE on each difference SW minus AD and SW minus S2, and state per cell whether SW beats, ties within two paired SE, or loses, closing with one line on whether SW wins every skew cell at every n.
 learning: The tail-signed max M = max(S2+, S2-) at exact 5% size beats plain AD under chi-square(5) at every n but still loses to Shapiro-Wilk at every n beyond two paired SE, and it falls below plain S2 on all 15 heavy-tail and contamination cells by 0.023 to 0.384, stable across three seeds. Taking the max keeps one tail's evidence and discards the other, so under symmetric alternatives it cannot match the pooled S2. The single-tail max route is closed; no S2 variant tried so far reaches SW on skew.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
