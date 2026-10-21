@@ -1,0 +1,5 @@
+cycle: rev65 attempt40
+genesis_complete: true
+question: Is the df=3 margin's intercept real: under the stored-row, two-seed protocol add n=10 and n=15 (keeping rule 1's per-n null p95) and test whether margin = a + b*n with a > 0 beats pure linear margin = b*n by bootstrap AICc and by whether the bootstrap interval on the intercept a excludes zero, and whether the fitted a matches the analytic affine prediction at delta = 0.2.
+learning: Adding n=200 (margin 3.41, all steps clear) gives a pooled log-log slope of 0.79 [0.74, 0.84], undecided under rule 2 because the margin is affine in n, not a power law: margin = 0.26 + 0.0157n fits with R^2 0.9995 and the slope matches the analytic 3*delta^2/chi2_95 = 0.0154. sqrt(n) never wins a bootstrap AICc contest, power wins 3%, affine 52% vs pure linear 46%. Their n=400 predictions overlap, so only small n (the intercept) can split them.
+batch_remaining: 2
