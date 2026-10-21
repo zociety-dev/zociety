@@ -1,0 +1,5 @@
+cycle: rev65 attempt37
+genesis_complete: true
+question: With n=50 re-run under rule 1 alongside n=25 and n=100, two seeds each and per-draw null statistics stored, does the df=3 margin or any of the three flag rates move by rule 2's step-and-interval test, and does the null false-flag rate track n or stay flat at 4.0%?
+learning: Cycle 73 wrote three procedures and ran no simulation, but writing them exposed a gap: the n=50 baseline exists only as point values (4.0% null rate, 2.5 margin) plus cycle 71's binomial interval. Rule 1 stores per-draw null statistics only for n=25 and n=100, so the df=3 margin bootstrap has no baseline draws to resample and the flag-rate test has no baseline draw count. The next cycle must re-run n=50 under rule 1, two seeds, or the moved test cannot be evaluated.
+batch_remaining: 1
