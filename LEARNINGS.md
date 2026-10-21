@@ -643,3 +643,9 @@ Cycle 69 ran no simulation, so df=3's 2.5 margin at n=50 stays provisional. Its 
 
 Cycle 70 again ran no simulation; it only fixed the seed B report format. Rules 1 and 2 now close the decision rule: margins agree within 0.1 and the df=5 flag rate must land in 20% to 36% or 28% is declared a seed artefact. Writing the templates exposed a gap: the wide mixture has no cycle-68 flag-rate reference, so rule 1 alone checks it and a mismatch sends it to a third seed unresolved, not gated. No protocol work remains; the next cycle must run seed B or it produces nothing.
 
+---
+
+## rev65-attempt35
+
+Seeds B and C at n=50 under the fixed cycle-68 gate both reproduce df=3's 2.5 margin exactly and put df=5's flag rate at 30% to 31%, so the 28% seed-artefact question is closed. But the wide mixture flags 45% to 46%, outside rule 2's 20% to 36% band, so rule 2 as written misroutes it; a 40% to 50% band fits both seeds. The held critical value false-flags only 4.0% of nulls (3.5% to 4.7%), not 5%, so the gate is slightly conservative and margins carry the slack.
+
