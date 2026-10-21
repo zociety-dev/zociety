@@ -1,0 +1,5 @@
+cycle: rev65 attempt64
+genesis_complete: true
+question: Is the SW lead at n=100 and n=200 a skewness effect or a tail effect? At exact 5% size with 20000 paired draws and a new seed, at n=100 and n=200 compare Shapiro-Wilk and plain S2 under symmetric alternatives Student t with df 3, 5, 10 and 20, logistic, and uniform, report power of both tests and the paired difference SW minus S2 with its paired SE per alternative and n, state whether SW leads beyond two paired SE for any symmetric alternative, and confirm both tests sit at 5% with separate 20000-draw N(0,1) runs at each n.
+learning: At n=400 the missing SW lead is real, not a saturation artifact: at exact 5% size with 20000 paired draws across three seeds, gamma 6, 7, 8 sit at the power ceiling for both tests, and where power is unsaturated plain S2 leads Shapiro-Wilk at gamma(12) by 3.7 paired SE and at gamma(15) by 9.8 paired SE, with no shape showing SW ahead beyond two paired SE. SW's advantage over S2 is confined to sqrt(beta1) above about 0.9 at n up to 200 and vanishes entirely by n=400.
+batch_remaining: 1
