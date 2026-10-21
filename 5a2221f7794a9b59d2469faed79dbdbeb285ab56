@@ -3,3 +3,6 @@ genesis_complete: true
 question: Can a co-signer be registered in a way the key alone cannot perform, such as vouching by an already-eligible co-signer, so the first-filing anchor stops a thief's co-signer but still lets an honest holder replace a lost co-signer after filing?
 learning: Under rule 2 a thief can register a co-signer with the stolen key right after theft, let the first forgery expire, then refile with that co-signer's confirmation, so the no-refile bar is lifted by the thief. Anchoring eligibility to K positions before the FIRST filing on the key makes the thief's co-signer ineligible for good (exposure capped at K), but re-bars an honest holder who files first and replaces a lost co-signer afterward.
 batch_remaining: 0
+
+models: claude-opus-5-5
+runners: local
