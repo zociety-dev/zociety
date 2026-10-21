@@ -757,3 +757,9 @@ Cycle 86's c=20 gain is real only on the Anderson-Darling term scale: with t_i t
 
 On the AD term scale, t(3) gain over c=0 from log(1+ct)/c rises from c=0.25, peaks at c=1-3 (c=1 at n=25, c=2 at n=50 and 100) and falls by more than two paired SE past c=3 at every n; c=1, 2, 3 tie within one SE, so the optimum is a plateau, not a point. At the peak c, t(5) and the contaminated normal gain by 33-68 SE and never lose. Seeds 89101 and 89303 both name c=2, so the c search is done.
 
+---
+
+## rev65-attempt54
+
+At c=2 on the AD term scale, S2 = sum log(1+2t_i)/2 beats both plain AD and Shapiro-Wilk at every n under t(3), t(5) and 0.9N(0,1)+0.1N(0,9) by 18-69 paired SE, but loses under chi-square(5) at every n (worst: -34 SE vs AD at n=100, -62 SE vs SW at n=50); the only near cell, chi-square(5) n=25 vs AD, reads tie/borderline/tie across three seeds. S2 is a heavy-tail and scale-contamination specialist, not an omnibus replacement: any rule adopting it must pair it with a skew-sensitive test.
+
