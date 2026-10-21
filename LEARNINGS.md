@@ -685,3 +685,9 @@ Adding n=200 (margin 3.41, all steps clear) gives a pooled log-log slope of 0.79
 
 Adding n=10 and n=15 (ratio margins 0.45, 0.50, both seeds agree) settles rule 2: affine beats pure linear with AICc preferring affine in 100% of 600 resamples and the intercept a = 0.272 [0.240, 0.298] excluding zero. The slope matches the analytic 0.0154 inside its interval, but the analytic intercept 0.303 falls just outside the interval on a, 0.03 high. The difference-form margin is negative below n=50, so a > 0 only has meaning for the ratio form; the gap is the next thing to explain.
 
+---
+
+## rev65-attempt42
+
+The 0.03 intercept gap is not a small-n threshold artefact: substituting chi2_95(3) = 7.815 for the per-n null p95 at n=10 and n=15 leaves a unchanged, and a third seed agrees. It is noncentral chi-square skew: the alt statistic is ncx2(3, 0.12n), whose mean-median offset shrinks as n grows, so the analytic margin curve is concave and a line through the exact medians gives a = 0.274, signed gap +0.002, inside [0.240, 0.298]; predicted 0.434 and 0.505 at n=10, 15 match the measured 0.45, 0.50.
+
