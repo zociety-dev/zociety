@@ -787,3 +787,9 @@ The tail-signed max M = max(S2+, S2-) at exact 5% size beats plain AD under chi-
 
 Shapiro-Wilk's skew advantage is general, not specific to chi-square(5): at exact 5% size with 20000 paired draws, SW beats plain AD and plain S2 beyond two paired SE under chi-square(2), chi-square(10), lognormal(0, 0.5) and beta(2, 5) at every n in 25, 50, 100, stable across three seeds; the only non-win is a saturation tie at chi-square(2), n=100 where every test is near power 1. The S2 skew gap is structural across laws, so S2 patches aimed at chi-square(5) alone are not worth running.
 
+---
+
+## rev65-attempt59
+
+The Shapiro-Wilk margin over plain S2 under gamma skew at n=50 is hump-shaped, not monotone: at exact 5% size with 20000 paired draws it peaks at gamma(5) and shrinks toward both ends, yet stays beyond two paired SE at every shape from 1 to 50 across three seeds, still +0.014 at 8 paired SE for gamma(50) (sqrt(beta1)=0.28), with null rejection confirmed at 5% for both tests. The S2 skew gap persists down to very mild skewness, so no gamma shape tested is a safe zone for S2.
+
