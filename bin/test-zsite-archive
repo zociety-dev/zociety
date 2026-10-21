@@ -43,6 +43,11 @@
 #      page's "Now" block carries the question the highest tag's
 #      heap-death gave its successor and links the learning to its rules
 #      card, degrading to "none" without them (case 8)
+#  10. docs/join.html (checked with case 2) carries PROMPT.md as the
+#      highest tag has it and one entry per z:1 event along that tag's
+#      first parents below the tags merged into its parent, each linked to its
+#      commit; a repo whose tags hold no event gets the page with no entry
+#      (case 7); the live fixture's page names its highest tag (case 8)
 
 set -e
 
@@ -206,6 +211,38 @@ while IFS=$'\t' read -r id commit file; do
   check "and its commit" grep -qF "commit/$commit\"" docs/asks.html
 done < <(jq -r '.[] | .id as $id | .answers[] | [$id, .commit, .file] | @tsv' <<< "$ASKS")
 
+echo "Case 10: join.html carries the highest tag's PROMPT.md and its cycle's every event"
+# The cycle's commits: the tag's first parents below the rev* tags merged
+# into it, parsed as the page parses them (whole body, else the z:1 line)
+JOIN_BELOW=$(git tag -l 'rev*' --merged "$HIGHEST_TAG^" 2>/dev/null || true)
+# shellcheck disable=SC2086  # the tag names are one per line, no spaces
+JOIN_SHAS=$(git log --first-parent --format='%H%x1f%b%x1e' "$HIGHEST_TAG" --not $JOIN_BELOW \
+  | jq -R -r -s '
+    split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
+    | select((((.[1] | fromjson?)
+               // (.[1] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first)) // {})
+             | .z == 1)
+    | .[0]')
+NJOIN=$(grep -c . <<< "$JOIN_SHAS" || true)
+check "join.html exists" test -f docs/join.html
+# The page holds the escaped file without its trailing newlines (a command
+# substitution drops them), closing the block on the file's last line
+printf '%s\n' "$(git show "$HIGHEST_TAG:PROMPT.md" | jq -R -r -s '@html')" > "$TMP/prompt.expected"
+awk '/1\. Read PROMPT\.md/ { on = 1; next }
+     on && sub(/<\/code><\/pre>.*$/, "") { print; exit }
+     on' docs/join.html | sed '1s/^ *<pre><code>//' > "$TMP/prompt.actual"
+check "it carries PROMPT.md as $HIGHEST_TAG has it" diff -q "$TMP/prompt.expected" "$TMP/prompt.actual"
+check "one entry per event of the cycle ($NJOIN)" test "$(grep -c '<li class="turn">' docs/join.html)" -eq "$NJOIN"
+JOIN_MISSING=0
+while read -r sha; do
+  [[ -n "$sha" ]] || continue
+  grep -qF "commit/$sha\"" docs/join.html || JOIN_MISSING=$((JOIN_MISSING + 1))
+done <<< "$JOIN_SHAS"
+check "each linked to its commit" test "$JOIN_MISSING" -eq 0
+check "it links the cycle's archive page and rules card" \
+  bash -c "grep -qF 'href=\"archive/$HIGHEST_TAG.html\"' docs/join.html && grep -qF 'href=\"rules.html#$HIGHEST_TAG\"' docs/join.html"
+check "front page links the join page" grep -q 'href="join.html"' docs/index.html
+
 echo "Case 3: $NEWEST page content"
 PAGE="docs/archive/$NEWEST.html"
 NFILES=$(git ls-tree --name-only "$NEWEST" stuff/ | grep -c '\.md$')
@@ -307,6 +344,8 @@ check "rules.html generated with no [pass] on any tag" test -f docs/rules.html
 check "and lists no rule" test "$(grep -c '<li value=' docs/rules.html || true)" -eq 0
 check "asks.html generated with no [ask] on any tag" test -f docs/asks.html
 check "and lists no ask" test "$(grep -c '<div class="cycle" id="ask-' docs/asks.html || true)" -eq 0
+check "join.html generated with no event on any tag" test -f docs/join.html
+check "and lists no entry" test "$(grep -c '<li class="turn">' docs/join.html || true)" -eq 0
 cd "$TMP/repo"
 
 # live_commit <ref> <mark> <cycle> <stuff-file> <title> [from]: one fast-import
@@ -351,6 +390,10 @@ check "front page names the cycle by its tag" grep -qF 'Current Genesis Progress
 check "front page counts cycles and revisions from the tags" \
   bash -c 'grep -qF "<div class=\"stat-value\">2</div>" docs/index.html && grep -qF "<div class=\"stat-value\">1</div>" docs/index.html'
 check "This Cycle holds the newest tag's stuff" grep -qF 'Live artifact' docs/stuff.html
+# No lower tag is merged into rev2-attempt10 (attempt9 is a sibling), so
+# its cycle is its whole first-parent lineage: main's [join] and its own
+check "join.html describes the highest tag's cycle, both [join]s of its lineage" \
+  bash -c 'grep -qF "<strong>rev2-attempt10</strong>" docs/join.html && test "$(grep -c "<li class=\"turn\">" docs/join.html)" -eq 2'
 check "Now block degrades without a heap-death or an ask" \
   bash -c 'grep -qF "Question in play</strong>: none recorded yet" docs/index.html && grep -qF "Open asks</strong>: none." docs/index.html'
 check "not main's, an older cycle's, a branch's or the working tree's" \
