@@ -916,9 +916,8 @@ echo "Generating join.html..."
 # the tag, not the checkout: the page describes the archived cycle.
 JOIN_TURNS_HTML=""
 JOIN_TURN_COUNT=0
-JOIN_PROMPT=""
+JOIN_PROMPT=$( { git show "$LIVE_REF:PROMPT.md" 2>/dev/null || cat PROMPT.md 2>/dev/null; } | jq -R -r -s '@html' || true)
 if [[ -n "${LIVE_CYCLE:-}" ]]; then
-    JOIN_PROMPT=$(git show "$LIVE_REF:PROMPT.md" 2>/dev/null | jq -R -r -s '@html' || true)
     JOIN_BELOW=$(git tag -l 'rev*' --merged "$LIVE_REF" | grep -vxF "$LIVE_TAG" || true)
     # shellcheck disable=SC2086  # the tag names are one per line, no spaces
     JOIN_OUT=$(git log --first-parent --reverse --format='%H%x1f%s%x1f%b%x1e' "$LIVE_REF" --not $JOIN_BELOW \
