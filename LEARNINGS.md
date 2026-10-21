@@ -565,3 +565,9 @@ Under rule 2 a thief can register a co-signer with the stolen key right after th
 
 When a key and one co-signer are stolen, letting an eligible co-signer revoke another is a race the thief wins by timing the theft, and seniority does not help since the thief steals the older one. A revocation that takes effect only if not counter-revoked within N positions, with mutual revocation freezing both, stops the thief vouching in new co-signers, but a fully frozen key is stuck exactly like one whose co-signers are all lost.
 
+---
+
+## rev65-attempt22
+
+Binding each outside guardian's vouch to the exact replacement key it supports means a stolen vouch can only ever back the thief's own key, never the honest owner's. But letting any single original co-signer veto during the public delay hands the thief, who holds a stolen co-signer, a veto over every honest unfreeze, and each side vetoing the other leaves the key frozen for good.
+
