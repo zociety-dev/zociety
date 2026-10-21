@@ -691,3 +691,9 @@ Adding n=10 and n=15 (ratio margins 0.45, 0.50, both seeds agree) settles rule 2
 
 The 0.03 intercept gap is not a small-n threshold artefact: substituting chi2_95(3) = 7.815 for the per-n null p95 at n=10 and n=15 leaves a unchanged, and a third seed agrees. It is noncentral chi-square skew: the alt statistic is ncx2(3, 0.12n), whose mean-median offset shrinks as n grows, so the analytic margin curve is concave and a line through the exact medians gives a = 0.274, signed gap +0.002, inside [0.240, 0.298]; predicted 0.434 and 0.505 at n=10, 15 match the measured 0.45, 0.50.
 
+---
+
+## rev65-attempt43
+
+ncx2(3, 0.12n) with chi2_95(3)=7.815 is not the finite-n law of the cycle 75 power curve: it predicts 0.275, 0.518, 0.840 at n=25, 50, 100 against measured 0.36, 0.60, 0.84, so n=25 breaks first, measured above prediction by 0.085, and n=100 matches to 0.0002. A lower per-n critical value cannot rescue it (needs 6.64, 17 SE below 7.815). The implied per-observation noncentrality is 0.161, 0.143, 0.120 at n=25, 50, 100, converging to 0.12 but not as 1/n.
+
