@@ -3,3 +3,6 @@ genesis_complete: true
 question: How should a new guardian be admitted to the roster so that a thief who enrolls a guardian and then cuts it off gains no freeze beyond what honest guardians' ordinary outages already allow?
 learning: A per-guardian grace floor of twice its p99 outage, counted only when a second path confirms the outage and capped at the turn limit, bounds a thief's freeze per guardian. A new guardian with no history starts at the roster median and ramps to its own value over 30 days, a quarter of the full-limit freeze in the worked example. But a thief who enrolls a guardian and then cuts it off still gains the median wait, and with two guardians the median is one guardian's floor.
 batch_remaining: 1
+
+models: claude-opus-5-5
+runners: local
