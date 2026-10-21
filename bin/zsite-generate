@@ -937,7 +937,7 @@ if [[ -n "${LIVE_CYCLE:-}" ]]; then
                "bin/zjoin \"\" " + ($d.role // "" | q) + " " + ($d.greeting // "" | q)
              elif .ev.event == "vote" then
                "bin/zvote " + $agent + " " + ($d.rule | tostring) + " " +
-               (if ($d.vote | tonumber? // 0) > 0 then "yes" else "no" end) + " " + ($d.reason // "" | q)
+               (if ($d.vote | tostring) | IN("1", "true", "yes") then "yes" else "no" end) + " " + ($d.reason // "" | q)
              elif .ev.event == "pass" then
                "bin/zpass " + $agent + " " + ($d.rule | tostring) + " " + ($d.description // "" | q)
              elif .ev.event == "stuff" then
