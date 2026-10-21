@@ -692,10 +692,20 @@ Install with: `pre-commit install --hook-type pre-commit --hook-type prepare-com
 - `stuff/` - Things made this cycle
 
 ### Git-based (permanent)
-- Tags: `rev{N}-attempt{N}-iterations{N}of{N}` - written by `bin/zheap-death`
+- Tags: `rev{N}-attempt{N}-iterations{I}ofx` - written by `bin/zheap-death`
   at the cycle's last commit; the id comes from `bin/zcycle-id current`
   (the branch name when on `cycle/*`, else the last tag with attempt+1, or
-  rev+1 if `PROMPT.md` changed)
+  rev+1 if `PROMPT.md` changed). `I` is the cycle's turns that wrote an
+  event: the distinct runner turn ids (`runtime.session`) on the events
+  between the previous tag and HEAD along the branch's first parents (a
+  lineage merged in from main is not this cycle's), plus the heap-death's
+  own turn. A turn that committed nothing (hard kill, refused commit, idle)
+  leaves no id and is not counted, so `I` is a floor on spend, not the
+  run's iteration. The `ofx` is fixed: a per-run cap beside a per-cycle
+  count would mix units. Up to cycle 56 `I` was the run's iteration, so a
+  `--cycles 3` run tagged its cycles 11, 22 and 33 (`rev65-attempt18..20`)
+  and the fallback without a state file counted every event in history;
+  the archive shows those tags as they are
 - Branches: `cycle/rev{N}-attempt{N}` - the cycle's identity, named at
   birth; heap-death checks out attempt+1 as its successor (see Branches)
 - Orphan branch: `learnings`

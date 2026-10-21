@@ -78,7 +78,8 @@
 #      written nothing, so its retry writes the block once. A failed save
 #      warns and carries on: the event keeps the learning.
 #   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
-#      it), tag rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
+#      it), tag rev{N}-attempt{N}-iterations{I}ofx (I: the cycle's turns
+#      that wrote an event; AGENTS.md, Tags), and a git note on HEAD.
 #   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
 #      a remote exists, and lands the cycle on main: bin/zpr-flow opens the
 #      cycle branch's PR and merges it with a merge commit (ZPR_MERGE=0 opens
@@ -448,15 +449,18 @@ if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
   fi
 fi
 
-# Get iteration count from zloop state or estimate from commits
-if [[ -f "$STATE_FILE" ]]; then
-  ITERATIONS=$(grep '^iteration:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "0")
-  MAX_ITER=$(grep '^max:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "60")
-else
-  # Estimate from event commits in this cycle
-  ITERATIONS=$(git log --oneline --grep='^\[' | wc -l | tr -d ' ')
-  MAX_ITER="x"  # Unknown max, use 'x' (valid for git tags)
+# The tag's I: the turns of this cycle that wrote an event (see AGENTS.md,
+# Tags). First parents only, as above: the previous tag and the turn ids
+# are the cycle branch's own, not a lineage merged in from main. A body
+# that is not one JSON line is skipped, never a partial count.
+PREV_TAG=$(git describe --tags --abbrev=0 --first-parent --match 'rev*-attempt*' HEAD 2>/dev/null || true)
+TURN_IDS=$(git log --first-parent --format=%b ${PREV_TAG:+"$PREV_TAG.."}HEAD \
+  | grep '^{"z":1' | jq -R -r 'fromjson? | .runtime.session // empty' | sort -u) || true
+ITERATIONS=$(printf '%s\n' "$TURN_IDS" | grep -c . || true)
+if [[ -n "${ZOCIETY_TURN_ID:-}" ]] && ! printf '%s\n' "$TURN_IDS" | grep -qxF "$ZOCIETY_TURN_ID"; then
+  ITERATIONS=$((ITERATIONS + 1))
 fi
+MAX_ITER="x"  # a per-cycle count beside a per-run cap would mix units
 
 TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
 CYCLE_BRANCH="cycle/rev${REV}-attempt${ATTEMPT}"
