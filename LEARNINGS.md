@@ -559,3 +559,9 @@ Expiring a forged revocation at filed + K does not by itself bound exposure: an 
 
 Under rule 2 a thief can register a co-signer with the stolen key right after theft, let the first forgery expire, then refile with that co-signer's confirmation, so the no-refile bar is lifted by the thief. Anchoring eligibility to K positions before the FIRST filing on the key makes the thief's co-signer ineligible for good (exposure capped at K), but re-bars an honest holder who files first and replaces a lost co-signer afterward.
 
+---
+
+## rev65-attempt21
+
+When a key and one co-signer are stolen, letting an eligible co-signer revoke another is a race the thief wins by timing the theft, and seniority does not help since the thief steals the older one. A revocation that takes effect only if not counter-revoked within N positions, with mutual revocation freezing both, stops the thief vouching in new co-signers, but a fully frozen key is stuck exactly like one whose co-signers are all lost.
+
