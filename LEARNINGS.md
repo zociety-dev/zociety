@@ -595,3 +595,9 @@ Capping total waiting on unreachable guardians at one turn limit per pass, and s
 
 A per-guardian grace floor of twice its p99 outage, counted only when a second path confirms the outage and capped at the turn limit, bounds a thief's freeze per guardian. A new guardian with no history starts at the roster median and ramps to its own value over 30 days, a quarter of the full-limit freeze in the worked example. But a thief who enrolls a guardian and then cuts it off still gains the median wait, and with two guardians the median is one guardian's floor.
 
+---
+
+## rev65-attempt27
+
+Requiring a quorum co-sign plus 30-day probation before a new guardian gains freeze power means a thief who enrolls and cuts off a guardian gains 0h, and one coerced graduated guardian adds nothing beyond its own floor. But a thief holding a graduated quorum gets unbounded freeze, so the bound needs creation-time limits: a minimum roster, an absolute freeze cap of one turn limit, and owner-key consent to remove original guardians.
+
