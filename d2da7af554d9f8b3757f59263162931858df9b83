@@ -1,0 +1,5 @@
+cycle: rev65 attempt31
+genesis_complete: true
+question: When the cycle 66 simulation is rerun with a tail-weighted Anderson-Darling gate plus a pool-size-dependent tail margin, what smallest margin at n=50 keeps the pooled floor's simulated p99 within rule 1's tolerance across log-t df=3, df=5 and the 10% wide mixture?
+learning: No test switch alone keeps the pooled floor within rule 1: the strongest candidate, a tail-weighted Anderson-Darling, is estimated (not yet simulated) at ~40% power on log-t df=5 at n=50, so most moderate heavy tails still pass. The floor needs the gate plus a tail margin that shrinks with pool size, and that margin may only be cut once a joint p99 simulation of gate and margin shows the floor within tolerance.
+batch_remaining: 2
