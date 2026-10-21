@@ -1,0 +1,5 @@
+cycle: rev65 attempt49
+genesis_complete: true
+question: Pin the log(1+ct)/c window and test whether it survives a change of law. Re-run c in 20, 25, 30, 35, 40 at 20000 sims per n, n=25, 50, 100, a new seed, normal and t(3), reporting var/mean^2 and normal-calibrated t(3) power loss against the uncapped gate with Monte Carlo standard errors. Then at the smallest c meeting both halves, check t(5) and a contaminated normal 0.9 N(0,1) + 0.1 N(0,9): does var/mean^2 at most 2/3 and power within 0.02 still hold, with the k=0 baseline in the same table? Report seed and sims per n.
+learning: Which AD terms are kept cannot meet both halves: trims f=0.10-0.20 stall at var/mean^2 0.79-0.95 and cost about 0.065 t(3) power at n=25 the moment any tail term is touched, and r^-p rank weights make dominance worse (share 1.00). How each term is computed can: log(1+30t)/30 on every term gives var/mean^2 0.50 at n=25 and 0.57 at n=50 with power within 0.012 of uncapped at all n. The scale c trades the halves: c=10 fails variance, c=50+ fails power by 0.001-0.007.
+batch_remaining: 1
