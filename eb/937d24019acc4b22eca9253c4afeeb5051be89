@@ -1,0 +1,5 @@
+cycle: rev65 attempt46
+genesis_complete: true
+question: Does bounding the single-draw contribution to the cycle 75 statistic (winsorize the largest |draw| per sample, or cap any one term at a fixed share of the AD sum) restore var/mean^2 at most 2/3 under t(3) at n=25, 50 while keeping the normal-data power at n=25, 50, 100 within 0.02 of the uncapped version? Report seed, sims per n, cap rule, mean, variance, var/mean^2, p90/p95/p99 and power for capped and uncapped, both data laws.
+learning: The cycle 75 statistic's heavy tail is single-draw dominance: under t(3) at n=25, 50 the largest |draw| supplies 1.00 of the AD term in the top 1% of sims and var/mean^2 sits in the hundreds. Normal data at n=50 gives 0.51 share and var/mean^2 0.62-0.65, inside the ncx2 ceiling of 2/3 but only narrowly: one sample in 4000 lifts it to 0.92, and t(30) breaks the ceiling from one sample too. Dominance falls smoothly with df, so the ceiling is marginal even at the Gaussian limit.
+batch_remaining: 2
