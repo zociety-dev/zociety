@@ -625,44 +625,67 @@ CYCLES_FOOT
 # ============================================================
 echo "Generating rules.html..."
 
-# Every [pass] event reachable from a rev* tag, grouped by cycle, newest
-# cycle first, each rule linked to its commit; the cycle's tag and question
-# come from its [heap-death] event. One git log over the whole tag set
-# (--glob walks the union of their histories once) and one jq, never a
-# call per tag. The running cycle's rules reach the page when its
-# heap-death writes the tag. A [pass] with no JSON body (before rev50) is
-# skipped. A cycle number two heap-deaths share (cycles 3-38, file-based
-# numbering) takes the later one's tag and question.
+# Every [pass] event reachable from a rev* tag, one card per tag, newest
+# tag first, each rule linked to its commit. One git log over the whole
+# tag set (--glob walks the union of their histories once) and one jq,
+# never a call per tag. A commit belongs to the tag git reached it from
+# (%S) along first parents, as bin/zheap-death counts a cycle's turns: a
+# cycle's commits lie on its branch below its heap-death, where the tag
+# is, and a lineage merged in from main (the run's sync merges) is not the
+# cycle's; without --first-parent a [direction] that only main reaches (an
+# abandoned attempt) was credited to whichever tag's merge reached it
+# first, the newest. The event's cycle number would not do either: it
+# restarts with each revision (rev63 and rev65 both count from 1) and
+# rev63 wrote several heap-deaths per number. The card's question is the
+# cycle's own [direction] (the first commit on its branch; a heap-death's
+# question is the one it gives its successor), its learning the
+# heap-death's; where a tag's lineage holds several, the newest. A body
+# that is one JSON document is read whole ([direction] is pretty-printed),
+# else its first {"z":1 line; a [pass] with no event body (the file-based
+# cycles) is skipped.
 RULES_HTML=""
 RULE_COUNT=0
 if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
-    RULES_HTML=$(git log --format='%H%x1f%ct%x1f%b%x1e' --grep='^\[pass\]' --grep='^\[heap-death\]' \
-        --glob='refs/tags/rev*' | jq -R -r -s --arg archived "${ARCHIVE_TAGS[*]-}" '
+    for tag in "${REV_TAGS[@]}"; do
+        printf '%s\t%s\n' "$tag" "${TAG_DATE_OF[$tag]}"
+    done > "$ARCHIVE_TMP/tagdates"
+    RULES_HTML=$(git log --first-parent --format='%H%x1f%S%x1f%b%x1e' --grep='^\[pass\]' \
+        --grep='^\[direction\]' --grep='^\[heap-death\]' --glob='refs/tags/rev*' \
+        | jq -R -r -s --arg archived "${ARCHIVE_TAGS[*]-}" --rawfile tagdates "$ARCHIVE_TMP/tagdates" '
         ($archived | split(" ") | map(select(length > 0))) as $pages
+        | ($tagdates | split("\n") | map(select(length > 0) | split("\t"))) as $tags
+        | ($tags | map(.[0])) as $order
+        | ($tags | map({key: .[0], value: .[1]}) | from_entries) as $date
         | [ split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
-            | {sha: .[0], ts: (.[1] | tonumber),
-               ev: (.[2] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first)}
-            | select(.ev != null) ] as $recs
-        | ($recs | map(select(.ev.event == "heap-death")) | sort_by(.ts)
-            | map({key: (.ev.cycle | tostring), value: .ev.data}) | from_entries) as $death
-        | $recs | map(select(.ev.event == "pass")) | group_by(.ev.cycle) | reverse | .[]
-        | (.[0].ev.cycle | tostring) as $cycle
-        | ($death[$cycle] // {}) as $d
-        | ($d.tag // "" | sub("-iterations.*$"; "")) as $id
-        | "<div class=\"cycle\" id=\"cycle-\($cycle)\">\n" +
-          "  <div class=\"cycle-header\"><span class=\"cycle-tag\">Cycle \($cycle)" +
-          (if $d.tag == null then ""
-           elif ($pages | any(. == $d.tag)) then " · <a href=\"archive/\($d.tag).html\">\($id)</a>"
-           else " · \($id)" end) +
-          "</span><span class=\"cycle-date\">\(.[0].ts | todate | .[:10])</span></div>\n" +
-          (if $d.question then "  <p class=\"question\">\($d.question | @html)</p>\n" else "" end) +
+            | {sha: .[0], tag: (.[1] | ltrimstr("refs/tags/")),
+               ev: ((.[2] | fromjson?)
+                    // (.[2] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first))}
+            | select((.ev | type) == "object") ] as $recs
+        | ($recs | map(select(.ev.event == "direction")) | group_by(.tag)
+            | map({key: .[0].tag, value: .[0].ev.data.question}) | from_entries) as $question
+        | ($recs | map(select(.ev.event == "heap-death")) | group_by(.tag)
+            | map({key: .[0].tag, value: {sha: .[0].sha, learning: .[0].ev.data.learning}}) | from_entries) as $death
+        | $recs | map(select(.ev.event == "pass")) | group_by(.tag)
+        | sort_by(.[0].tag as $t | $order | index($t)) | reverse | .[]
+        | .[0].tag as $tag | ($tag | sub("-iterations.*$"; "")) as $id
+        | "<div class=\"cycle\" id=\"\($tag)\">\n" +
+          "  <div class=\"cycle-header\"><span class=\"cycle-tag\">" +
+          (if ($pages | any(. == $tag)) then "<a href=\"archive/\($tag).html\">\($id)</a>" else $id end) +
+          " <span class=\"meta\">cycle \(.[0].ev.cycle)</span></span>" +
+          "<span class=\"cycle-date\">\($date[$tag] // "")</span></div>\n" +
+          (if $question[$tag] then "  <p class=\"question\">\($question[$tag] | @html)</p>\n" else "" end) +
           "  <ol>\n" +
-          ( sort_by(.ev.seq) | map(
+          ( sort_by([.ev.cycle, .ev.seq]) | map(
               "    <li value=\"\(.ev.data.rule // 0)\">\(.ev.data.description // "" | @html)" +
               " <span class=\"meta\">\(.ev.agent | @html) · \(.ev.data.votes.for // "?") for, \(.ev.data.votes.against // 0) against" +
               " · <a href=\"https://github.com/zociety-dev/zociety/commit/\(.sha)\">\(.sha[:7])</a></span></li>"
             ) | join("\n") ) +
-          "\n  </ol>\n</div>"
+          "\n  </ol>\n" +
+          (if $death[$tag].learning then
+             "  <p class=\"learning\">Found: \($death[$tag].learning | @html)" +
+             " <span class=\"meta\"><a href=\"https://github.com/zociety-dev/zociety/commit/\($death[$tag].sha)\">\($death[$tag].sha[:7])</a></span></p>\n"
+           else "" end) +
+          "</div>"
     ')
     RULE_COUNT=$(grep -c '<li value=' <<< "$RULES_HTML" || true)
 fi
@@ -709,6 +732,7 @@ cat > "$DOCS_DIR/rules.html" << EOF
     .cycle-tag { font-weight: bold; color: var(--accent); }
     .cycle-date { opacity: 0.7; font-size: 0.9rem; }
     .question { opacity: 0.85; font-style: italic; margin: 0.5rem 0; }
+    .learning { margin: 0.75rem 0 0; font-size: 0.95rem; }
     ol { padding-left: 1.5rem; margin: 0.5rem 0 0; }
     ol li { margin: 0.5rem 0; }
     .meta { opacity: 0.7; font-size: 0.85rem; white-space: nowrap; }
@@ -717,7 +741,7 @@ cat > "$DOCS_DIR/rules.html" << EOF
 <body>
   <div class="back"><a href="index.html">← Back to zociety</a></div>
   <h1>⚖️ Passed Rules</h1>
-  <p>$RULE_COUNT rules, newest cycle first. Each is a <code>[pass]</code> commit: two members voted it in, in separate turns, and the link is the commit that recorded the tally. The question above a cycle's rules is the direction it was given. Cycles before rev50 kept their state in files and left no <code>[pass]</code> event, so they are not here.</p>
+  <p>$RULE_COUNT rules, one card per archived cycle, newest first. Each rule is a <code>[pass]</code> commit: two members voted it in, in separate turns, and the link is the commit that recorded the tally. Above a cycle's rules is the question it was given; below them, what it found. A rule is listed under the tag that archived it. The earliest cycles kept their state in files, and a <code>[pass]</code> with no event body is not here.</p>
 
 $RULES_HTML
 </body>

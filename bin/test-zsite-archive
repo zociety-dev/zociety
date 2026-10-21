@@ -15,24 +15,26 @@
 # touches the real docs/ and no event is committed. Cases:
 #   1. every rev* tag whose tree holds stuff/*.md gets one page, listed on
 #      archive.html, and no other tag does
-#   2. the newest such tag's page holds one artifact per stuff/*.md in the
+#   2. docs/rules.html lists every [pass] event with a JSON body reachable
+#      from a rev* tag, each linked to its commit, on the card of the tag
+#      that archived it: the newest tag's card holds exactly the [pass]
+#      commits no older tag reaches, its question and its heap-death. A
+#      rule leaves the page with its tag (case 6) and a repo whose tags
+#      hold no [pass] gets the page with no rule (case 7)
+#   3. the newest such tag's page holds one artifact per stuff/*.md in the
 #      tag, each with the file's first h1 as its title
-#   3. deleting stuff/ from the working tree changes no archive byte
-#   4. running the generator twice changes no archive byte
-#   5. deleting the newest tag removes its page and its index entry
-#   6. a synthetic repo with 120 rev* tags (four stuff/*.md each, one of
+#   4. deleting stuff/ from the working tree changes no archive byte
+#   5. running the generator twice changes no archive byte
+#   6. deleting the newest tag removes its page and its index entry
+#   7. a synthetic repo with 120 rev* tags (four stuff/*.md each, one of
 #      them empty, one without an h1) generates within SCALE_BUDGET_SECONDS
 #      and gets every page, artifact, title and escape right: the generator
 #      gathers the archive in a fixed number of git calls, and this case
 #      catches a slide back to per-tag or per-artifact subprocesses
-#   7. the front page and "This Cycle" describe the highest
+#   8. the front page and "This Cycle" describe the highest
 #      rev{N}-attempt{M} tag, not main, a cycle branch (deleted on GitHub
 #      when its PR merges) or the working tree; bin/zstate --ref reads a
 #      given ref
-#   8. docs/rules.html lists every [pass] event with a JSON body reachable
-#      from a rev* tag, each linked to its commit, and no other: a rule
-#      leaves the page with the tag that reached it (case 5), and a repo
-#      whose tags hold no [pass] gets the page with no rule (case 6)
 
 set -e
 
@@ -108,23 +110,62 @@ check "page set equals tag set" test "$PAGES" = "$EXPECTED_TAGS"
 LISTED=$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | sed 's#.*/##; s/\.html"//' | sort -u | sort -V)
 check "index lists exactly those tags" test "$LISTED" = "$EXPECTED_TAGS"
 
-# passes_on_tags: the [pass] events with a JSON body reachable from the
-# rev* tags, as the rules page gathers them: one git log over the tag set
-passes_on_tags() {
-  git log --format=%b --grep='^\[pass\]' --glob='refs/tags/rev*' | grep -c '^{"z":1' || true
+# pass_tags: one line per [pass] event the rules page lists: the tag git
+# reached it from along first parents (its card). Gathered as the page
+# gathers them, one git log over the tag set, a body read whole as JSON or
+# else by its first {"z":1 line, so a [pass] subject with no event body
+# (the file-based cycles) is not counted
+pass_tags() {
+  git log --first-parent --format='%S%x1f%b%x1e' --grep='^\[pass\]' --glob='refs/tags/rev*' \
+    | jq -R -r -s '
+      split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
+      | select(((.[1] | fromjson?)
+                // (.[1] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first))
+               | (type == "object") and (.event == "pass"))
+      | .[0] | ltrimstr("refs/tags/")'
 }
-echo "Case 8: rules.html lists every [pass] reachable from the tags"
+passes_on_tags() {
+  pass_tags | grep -c . || true
+}
+# card <tag>: the tag's card on docs/rules.html, from its div to the next
+card() {
+  awk -v id="id=\"$1\"" 'index($0, "<div class=\"cycle\"") { on = index($0, id) > 0 } on' docs/rules.html
+}
+# own_commits <tag> <grep>: the tag's first-parent commits matching <grep>
+# that no other rev* tag reaches, i.e. the cycle it archived, not the
+# lineage below it nor one merged in from main
+own_commits() {
+  local tag="$1" pattern="$2" others
+  others=$(git tag -l 'rev*' | grep -vxF "$tag")
+  # shellcheck disable=SC2086  # the tag names are one per line, no spaces
+  git log --first-parent --format=%H --grep="$pattern" "$tag" --not $others
+}
+echo "Case 2: rules.html lists every [pass] reachable from the tags, under the tag that archived it"
 check "rules.html exists" test -f docs/rules.html
 NPASS=$(passes_on_tags)
 check "one entry per [pass] event ($NPASS)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$NPASS"
-NEWEST_PASS=$(git log -1 --format=%H --grep='^\[pass\]' "$NEWEST")
-if [[ -n "$NEWEST_PASS" ]]; then
-  check "newest tag's last [pass] ${NEWEST_PASS:0:7} is linked to its commit" grep -q "commit/$NEWEST_PASS\"" docs/rules.html
-  check "its cycle links the tag's archive page" grep -q "href=\"archive/$NEWEST.html\"" docs/rules.html
+NCARDS=$(pass_tags | sort -u | grep -c . || true)
+check "one card per tag that reached a [pass] ($NCARDS)" test "$(grep -c '<div class="cycle" id=' docs/rules.html)" -eq "$NCARDS"
+NEWEST_PASSES=$(own_commits "$NEWEST" '^\[pass\]')
+NEWEST_NPASS=$(grep -c . <<< "$NEWEST_PASSES" || true)
+CARD=$(card "$NEWEST")
+check "$NEWEST has a card" test -n "$CARD"
+check "its card holds the tag's own [pass] commits and no other ($NEWEST_NPASS)" test "$(grep -c '<li value=' <<< "$CARD")" -eq "$NEWEST_NPASS"
+while IFS= read -r sha; do
+  [[ -n "$sha" ]] || continue
+  check "rule ${sha:0:7} is linked on $NEWEST's card" grep -q "commit/$sha\"" <<< "$CARD"
+done <<< "$NEWEST_PASSES"
+check "its card links the tag's archive page" grep -q "href=\"archive/$NEWEST.html\"" <<< "$CARD"
+if [[ -n "$(own_commits "$NEWEST" '^\[direction\]')" ]]; then
+  check "its card carries the cycle's own question" grep -q 'class="question"' <<< "$CARD"
+fi
+NEWEST_DEATH=$(git log -1 --format=%H --grep='^\[heap-death\]' "$NEWEST")
+if [[ -n "$NEWEST_DEATH" ]]; then
+  check "its card links the heap-death ${NEWEST_DEATH:0:7} with the learning" grep -q "commit/$NEWEST_DEATH\"" <<< "$CARD"
 fi
 check "front page links the rules page" grep -q 'href="rules.html"' docs/index.html
 
-echo "Case 2: $NEWEST page content"
+echo "Case 3: $NEWEST page content"
 PAGE="docs/archive/$NEWEST.html"
 NFILES=$(git ls-tree --name-only "$NEWEST" stuff/ | grep -c '\.md$')
 NARTIFACTS=$(grep -c 'class="artifact"' "$PAGE" || true)
@@ -137,7 +178,7 @@ while IFS= read -r f; do
   check "artifact-$base titled '$title'" grep -qF ">$title</a>" "$PAGE"
 done < <(git ls-tree --name-only "$NEWEST" stuff/ | grep '\.md$')
 
-echo "Case 3: working tree stuff/ is not consulted"
+echo "Case 4: working tree stuff/ is not consulted"
 cp -R docs/archive "$TMP/archive.before"
 cp docs/archive.html "$TMP/archive.html.before"
 rm -rf stuff
@@ -145,23 +186,25 @@ generate
 check "archive/ unchanged without stuff/" diff -r "$TMP/archive.before" docs/archive
 check "archive.html unchanged without stuff/" diff "$TMP/archive.html.before" docs/archive.html
 
-echo "Case 4: regeneration is byte-stable"
+echo "Case 5: regeneration is byte-stable"
 generate
 check "archive/ unchanged on rerun" diff -r "$TMP/archive.before" docs/archive
 check "archive.html unchanged on rerun" diff "$TMP/archive.html.before" docs/archive.html
 
-echo "Case 5: a page exists exactly as long as its tag"
+echo "Case 6: a page exists exactly as long as its tag"
 git tag -d "$NEWEST" >/dev/null
 generate
 check "page removed with tag" test ! -e "$PAGE"
 check "index entry removed with tag" bash -c "! grep -q 'archive/$NEWEST.html' docs/archive.html"
 check "other pages intact" test "$(ls docs/archive | wc -l | tr -d ' ')" -eq $((EXPECTED_COUNT - 1))
 check "rules.html follows the tag set ($(passes_on_tags) [pass] left)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$(passes_on_tags)"
-if [[ -n "$NEWEST_PASS" && -z "$(git tag -l 'rev*' --contains "$NEWEST_PASS")" ]]; then
-  check "rule ${NEWEST_PASS:0:7} left the page with its tag" bash -c "! grep -q 'commit/$NEWEST_PASS\"' docs/rules.html"
-fi
+check "$NEWEST's card left with its tag" bash -c "! grep -q 'id=\"$NEWEST\"' docs/rules.html"
+while IFS= read -r sha; do
+  [[ -n "$sha" ]] || continue
+  check "rule ${sha:0:7} left the page with its tag" bash -c "! grep -q 'commit/$sha\"' docs/rules.html"
+done <<< "$NEWEST_PASSES"
 
-# Budget for Case 6. The batched generator takes about 10s for this repo on
+# Budget for Case 7. The batched generator takes about 10s for this repo on
 # a 2024 laptop (about 1s of git, the rest one bin/zmd2html per artifact);
 # the per-tag fan-out it replaced took about 60s. Override for slow hosts.
 SCALE_TAGS=120
@@ -194,7 +237,7 @@ synthetic_repo() {
   done | LC_ALL=C git -C "$dir" fast-import --quiet
 }
 
-echo "Case 6: $SCALE_TAGS synthetic tags generate within ${SCALE_BUDGET_SECONDS}s"
+echo "Case 7: $SCALE_TAGS synthetic tags generate within ${SCALE_BUDGET_SECONDS}s"
 synthetic_repo "$TMP/synth" "$SCALE_TAGS"
 cd "$TMP/synth"
 check "fixture holds $SCALE_TAGS rev* tags" test "$(git for-each-ref 'refs/tags/rev*' | wc -l | tr -d ' ')" -eq "$SCALE_TAGS"
@@ -229,7 +272,7 @@ live_commit() {
   printf 'M 100644 inline stuff/%s\ndata %d\n%s\n\n' "$file" "${#body}" "$body"
 }
 
-echo "Case 7: the current cycle is the highest rev* tag's, not a branch's or the checkout's"
+echo "Case 8: the current cycle is the highest rev* tag's, not a branch's or the checkout's"
 mkdir -p "$TMP/live"
 git init -q -b main "$TMP/live"
 cp -R "$TMP/repo/bin" "$TMP/live/bin"
