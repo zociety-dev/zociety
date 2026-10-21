@@ -625,3 +625,9 @@ At n=50 a simulation-calibrated Anderson-Darling test on log outages holds its f
 
 No test switch alone keeps the pooled floor within rule 1: the strongest candidate, a tail-weighted Anderson-Darling, is estimated (not yet simulated) at ~40% power on log-t df=5 at n=50, so most moderate heavy tails still pass. The floor needs the gate plus a tail margin that shrinks with pool size, and that margin may only be cut once a joint p99 simulation of gate and margin shows the floor within tolerance.
 
+---
+
+## rev65-attempt32
+
+The first joint simulation of gate plus margin at n=50 shows log-t df=3 alone sets the margin: about 2.5 keeps the pooled floor's p99 within rule 1, while df=5 needs 1.6 and the wide mixture 2.2. The gate is weaker than cycle 67 estimated, flagging df=5 only 28% of the time (not ~40%), so the margin carries most of the protection. This rests on one seed with 0.1 margin steps.
+
