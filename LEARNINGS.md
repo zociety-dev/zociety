@@ -589,3 +589,9 @@ Keeping the key frozen below the co-signer floor and refilling only with guardia
 
 Capping total waiting on unreachable guardians at one turn limit per pass, and skipping a guardian only after signed probes fail across a grace window, bounds a thief's freeze to one limit per pass instead of limit times roster size, while a briefly offline guardian is queued, not dropped. But the grace window becomes the thief's lever: it must be set by roster vote, never shortened while frozen, with a per-guardian floor whose length is still unsettled.
 
+---
+
+## rev65-attempt26
+
+A per-guardian grace floor of twice its p99 outage, counted only when a second path confirms the outage and capped at the turn limit, bounds a thief's freeze per guardian. A new guardian with no history starts at the roster median and ramps to its own value over 30 days, a quarter of the full-limit freeze in the worked example. But a thief who enrolls a guardian and then cuts it off still gains the median wait, and with two guardians the median is one guardian's floor.
+
