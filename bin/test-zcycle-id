@@ -337,8 +337,12 @@ assert_rc 1
 assert_err '^zheap-death: --learning is 501 characters; keep it to one finding of at most 500$'
 assert_eq "refused before any write" "$(git rev-parse HEAD)" "$BEFORE"
 assert_eq "no learnings branch yet" "$(git show-ref --verify --quiet refs/heads/learnings && echo yes || echo no)" no
+# The run is on its 33rd iteration; the cycle has had two turns (join, stuff)
+mkdir -p .zociety
+printf 'iteration: 33\nmax: x\nstart: %s\nmode: action\n' "$(git rev-parse HEAD)" > .zociety/zloop.state
 run bin/zheap-death --cite inherited.md --learning "  Fixture rules only bind when zstate replays them.  " tester "first question" 3
 assert_rc 0
+assert_eq "tag counts the cycle's turns, not the run's iteration" "$(git tag --list 'rev1-attempt1-*')" rev1-attempt1-iterations2ofx
 assert_out_has '^On cycle branch: cycle/rev1-attempt1$'
 assert_out_has '^Birthing successor branch: cycle/rev1-attempt2$'
 HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
@@ -363,9 +367,10 @@ echo "=== Case 6b: a second heap-death chains: attempt2 dies, attempt3 is born =
 event join
 mkdir -p stuff
 echo "second fixture artifact" > stuff/inherited.md
-run bin/zheap-death --cite stuff/inherited.md --learning "A second finding." tester "second question" 2
+run env ZOCIETY_TURN_ID=fixture-hd-turn bin/zheap-death --cite stuff/inherited.md --learning "A second finding." tester "second question" 2
 assert_rc 0
 assert_eq "a stuff/ prefix is dropped" "$(git log -1 --format=%b | jq -c '.data.inheritance.cite')" '["inherited.md"]'
+assert_eq "the heap-death's own turn counts" "$(git tag --list 'rev1-attempt2-*')" rev1-attempt2-iterations2ofx
 assert_eq "both learnings on the branch" "$(git show learnings:LEARNINGS.md | grep -c '^## rev1-attempt[12]$')" 2
 event complete
 prompt=$(bin/zprompt)

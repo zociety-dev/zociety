@@ -79,6 +79,10 @@
 #      warns and carries on: the event keeps the learning.
 #   4. Creates branch cycle/rev{N}-attempt{N} at HEAD (no-op when already on
 #      it), tag rev{N}-attempt{N}-iterations{I}of{M}, and a git note on HEAD.
+#      I is the cycle's turns: the distinct runner turn ids (runtime.session)
+#      on its events since the previous rev* tag, plus this turn. M is the
+#      run's turn cap from zloop.state, or x. Until cycle 56 I was the run's
+#      iteration, so a --cycles 3 run tagged its cycles 11, 22 and 33.
 #   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
 #      a remote exists, and lands the cycle on main: bin/zpr-flow opens the
 #      cycle branch's PR and merges it with a merge commit (ZPR_MERGE=0 opens
@@ -448,15 +452,25 @@ if [[ "$ON_CYCLE_BRANCH" -eq 1 ]]; then
   fi
 fi
 
-# Get iteration count from zloop state or estimate from commits
+# The tag's iteration count is this cycle's turns: one per distinct runner
+# turn id (runtime.session) on the events since the previous rev* tag, plus
+# this turn when it has no event yet (the [heap-death] is written below).
+# System events (the runner's [complete], the [direction]) carry no turn id
+# and count for nothing. The run's own iteration (zloop.state) is not the
+# cycle's: a --cycles 3 run tagged its cycles 11, 22 and 33 (cycles 54-56).
+PREV_TAG=$(git describe --tags --abbrev=0 --match 'rev*-attempt*' HEAD 2>/dev/null || true)
+TURN_IDS=$(git log --format=%b ${PREV_TAG:+"$PREV_TAG.."}HEAD \
+  | grep '^{"z":1' | jq -r '.runtime.session // empty' | sort -u) || true
+ITERATIONS=$(printf '%s\n' "$TURN_IDS" | grep -c . || true)
+if [[ -n "${ZOCIETY_TURN_ID:-}" ]] && ! printf '%s\n' "$TURN_IDS" | grep -qxF "$ZOCIETY_TURN_ID"; then
+  ITERATIONS=$((ITERATIONS + 1))
+fi
 if [[ -f "$STATE_FILE" ]]; then
-  ITERATIONS=$(grep '^iteration:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "0")
   MAX_ITER=$(grep '^max:' "$STATE_FILE" 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo "60")
 else
-  # Estimate from event commits in this cycle
-  ITERATIONS=$(git log --oneline --grep='^\[' | wc -l | tr -d ' ')
   MAX_ITER="x"  # Unknown max, use 'x' (valid for git tags)
 fi
+[[ -n "$MAX_ITER" ]] || MAX_ITER="x"
 
 TAG="rev${REV}-attempt${ATTEMPT}-iterations${ITERATIONS}of${MAX_ITER}"
 CYCLE_BRANCH="cycle/rev${REV}-attempt${ATTEMPT}"
