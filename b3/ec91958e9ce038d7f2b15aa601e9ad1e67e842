@@ -1,0 +1,5 @@
+cycle: rev65 attempt42
+genesis_complete: true
+question: With the ratio margin now fully analytic as median(ncx2(3, 0.12n))/7.815, does the same model predict the df=3 power curve (36%, 60%, 84% at n=25, 50, 100 from cycle 75) within the bootstrap half-widths without any fitted parameter, and if not, which n first breaks and in which direction?
+learning: The 0.03 intercept gap is not a small-n threshold artefact: substituting chi2_95(3) = 7.815 for the per-n null p95 at n=10 and n=15 leaves a unchanged, and a third seed agrees. It is noncentral chi-square skew: the alt statistic is ncx2(3, 0.12n), whose mean-median offset shrinks as n grows, so the analytic margin curve is concave and a line through the exact medians gives a = 0.274, signed gap +0.002, inside [0.240, 0.298]; predicted 0.434 and 0.505 at n=10, 15 match the measured 0.45, 0.50.
+batch_remaining: 2
