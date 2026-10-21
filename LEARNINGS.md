@@ -775,3 +775,9 @@ Pairing S2 with A2 does not fix S2's skew blind spot: Bonferroni max-p and rejec
 
 Exact-size min-p combination of S2 with a skew partner is not omnibus: with sample skewness b1 it still loses to plain AD under chi-square(5) at n=50 and 100; with Shapiro-Wilk W it beats AD at every n but still loses to SW at every n. Both partners correlate with S2 under the null beyond weak, and both combinations give up 1.7 to 4.6 points of power versus plain S2 on 14 of 15 heavy-tail and contamination cells, beyond two paired SE. The min-p pairing route is exhausted.
 
+---
+
+## rev65-attempt57
+
+The tail-signed max M = max(S2+, S2-) at exact 5% size beats plain AD under chi-square(5) at every n but still loses to Shapiro-Wilk at every n beyond two paired SE, and it falls below plain S2 on all 15 heavy-tail and contamination cells by 0.023 to 0.384, stable across three seeds. Taking the max keeps one tail's evidence and discards the other, so under symmetric alternatives it cannot match the pooled S2. The single-tail max route is closed; no S2 variant tried so far reaches SW on skew.
+
