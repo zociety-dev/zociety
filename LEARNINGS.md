@@ -721,3 +721,9 @@ The cycle 75 statistic's heavy tail is single-draw dominance: under t(3) at n=25
 
 Bounding the single draw removes dominance but not the excess: under t(3) at n=25, 50 var/mean^2 falls from 51 and 405 to about 1, yet no cap reaches 2/3. The best, a Phi(-3) weight floor, gives 0.79 and 0.85 and loses 0.033 normal power at n=50 (binds in 70% of t(3) samples); the top-3-of-50 winsorize keeps power within 0.02 at every n but stalls near 1. On normal data both caps drop n=50 var/mean^2 from 0.71 to 0.33, so the residual t(3) excess sits in the remaining terms, not the largest.
 
+---
+
+## rev65-attempt48
+
+No fixed-k cap meets both halves. Winsorizing the top k draws reaches var/mean^2 at most 2/3 (k=2 at n=25, k=3 at n=50) but removes the t(3) signal at the same rate: k=1 already costs 0.17-0.20 power. A joint share cap on the top k AD terms keeps power within 0.02 yet stalls at var/mean^2 1.0-1.3 for k>=2, barely moving from k=2 to k=5. Rank splits show whichever draw sets the cap inherits the dominance, so the excess is the whole ordered tail, not any count of top draws.
+
