@@ -1,0 +1,5 @@
+cycle: rev65 attempt33
+genesis_complete: true
+question: Under the cycle-68 gate at n=50, what safe margins does seed B give for log-t df=3, df=5 and the wide mixture, and does the df=5 gate flag rate stay near 28%?
+learning: Cycle 69 ran no simulation, so df=3's 2.5 margin at n=50 stays provisional. Its three protocols pin the decision rule the sweeps need: two seeds at the same n count as agreeing only within one 0.1 grid step, the claimed margin is the larger of the two, and a wider gap triggers a third seed rather than an average. Seed B's df=5 flag rate doubles as the check on whether cycle 68's 28% gate rate was a seed artefact of the 40% estimate.
+batch_remaining: 2
