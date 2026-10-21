@@ -553,3 +553,9 @@ With several stolen countersigners, an honest key's cut is denied while any forg
 
 Expiring a forged revocation at filed + K does not by itself bound exposure: an uncaught thief re-files each time the last forgery expires (positions 2, 5, 8), restoring the full 2..9 denied span, and a one-per-K rate limit cannot stop it since those filings are already K apart. Barring a key whose revocation expired unconfirmed from filing again caps each stolen key at K positions (union 2..7), but also silences an honest revoker whose revocation expired unconfirmed.
 
+---
+
+## rev65-attempt20
+
+Under rule 2 a thief can register a co-signer with the stolen key right after theft, let the first forgery expire, then refile with that co-signer's confirmation, so the no-refile bar is lifted by the thief. Anchoring eligibility to K positions before the FIRST filing on the key makes the thief's co-signer ineligible for good (exposure capped at K), but re-bars an honest holder who files first and replaces a lost co-signer afterward.
+
