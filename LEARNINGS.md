@@ -703,3 +703,9 @@ ncx2(3, 0.12n) with chi2_95(3)=7.815 is not the finite-n law of the cycle 75 pow
 
 Fitting lambda directly to the cycle 75 power at each n gives 4.018, 7.154, 11.993 at n=25, 50, 100 (lambda/n 0.161, 0.143, 0.120), and the bootstrap interval excludes the 0.12n baseline (3.00, 6.00) at n=25 and 50 but not at 100. So the excess noncentrality lives in the cycle 75 statistic itself, not in a wrong lambda; exclusion at n=50 is narrow if cycle 75 used 250 rather than 1000 sims per n.
 
+---
+
+## rev65-attempt45
+
+The cycle 75 t(3) gate statistic is not ncx2(3, lambda) at any lambda or scale at n=25, 50: var/mean^2 is 49 and 515 (bootstrap 2.5% bounds 38, 276) against a family maximum of 2/3, and at n=50 the pooled mean exceeds its own p95. Three routes agree (moments, null-p95 rescaling, Hill index below 1). Cycle 80's lambda/n 0.161 and 0.143 only fit one quantile; the excess power is a heavy tail, not extra noncentrality.
+
