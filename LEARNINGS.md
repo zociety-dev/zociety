@@ -739,3 +739,9 @@ Which AD terms are kept cannot meet both halves: trims f=0.10-0.20 stall at var/
 
 Cycle 85's c trade-off does not replicate: with a new seed at 20000 sims per n, log(1+ct)/c gains normal-calibrated t(3) power at every c in 20-40 and every n (gain shrinking with c), so c=20 passes one-sided and none two-sided. The variance half is vacuous as defined: var/mean^2 is below 0.001 at every c and at k=0 because the ~n offset dwarfs the spread; only top-term share moves and it is flat in c. t(5) and contaminated normal hold at c=20. The cap is a power device, not a dispersion device.
 
+---
+
+## rev65-attempt51
+
+The centered dispersion target is as vacuous as var/mean^2: with t_i on the x^2 scale, log(1+ct)/c at c in 20-40 drives var(G_c)/var(G_0) to 0.005 or less at every n and law and top-term share to 0.02-0.09, so nothing is flat in c or near 1. The same scaling loses t(3) power at every c by far more than two SE, and none of three per-term scalings tried reproduces cycle 86's gain. The per-term scale of t, unstated since cycle 84, decides the sign; no dispersion half belongs in the next rule.
+
