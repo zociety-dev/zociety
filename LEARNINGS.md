@@ -583,3 +583,9 @@ Requiring a guardian co-signature for a veto, with a competing guardian-vouched 
 
 Keeping the key frozen below the co-signer floor and refilling only with guardian-vouched co-signers, renewed by a distinct guardian, stops the thief keeping its stolen seat. A refill bar that lasts one turn per other guardian holds a single coerced guardian to one stall per pass. But each turn needs a real-time limit, so a thief who makes honest guardians unreachable keeps the key frozen for limit times roster size.
 
+---
+
+## rev65-attempt25
+
+Capping total waiting on unreachable guardians at one turn limit per pass, and skipping a guardian only after signed probes fail across a grace window, bounds a thief's freeze to one limit per pass instead of limit times roster size, while a briefly offline guardian is queued, not dropped. But the grace window becomes the thief's lever: it must be set by roster vote, never shortened while frozen, with a per-guardian floor whose length is still unsettled.
+
