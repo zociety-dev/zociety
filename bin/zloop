@@ -71,6 +71,8 @@
 #                           missing ZOCIETY_BLIND_KEY exits 0 and never counts
 #   ZLOOP_MAX_IDLE=10       Consecutive turns that commit nothing, whatever
 #                           their exit, that stop the run (exit 5; 0 = never)
+#   ZLOOP_MIN_FREE_MB=512   No turn starts with less free on the worktree's
+#                           filesystem (exit 6; 0 = never check)
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_QUIET=1           Same as --quiet
@@ -239,7 +241,8 @@
 # (--max, --for or --cost), 2 usage error or an aborting stop predicate, 3
 # too many consecutive hard kills, 4 too many consecutive bin/zblind seal
 # failures (3 and 4 leave a terminal [observation]; see --resume), 5
-# ZLOOP_MAX_IDLE turns in a row with no commit, 128+N a signal.
+# ZLOOP_MAX_IDLE turns in a row with no commit, 6 under ZLOOP_MIN_FREE_MB
+# free on the worktree's filesystem before a turn, 128+N a signal.
 # Each iteration reads PROMPT.md and follows instructions.
 # State persists in git between iterations; .claude/zloop.state carries
 # iteration/max/start/mode for zheap-death and the predicates.
@@ -278,6 +281,7 @@ TIMEOUT_SOURCE=""
 MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
 MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
 MAX_IDLE="${ZLOOP_MAX_IDLE:-10}"
+MIN_FREE_MB="${ZLOOP_MIN_FREE_MB:-512}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 # Render level handed to bin/zagent --render: compact (default), text
@@ -427,6 +431,7 @@ set_secs INTERVAL_SECS "ZLOOP_INTERVAL" "$INTERVAL_SECS"
 require_int "ZLOOP_MAX_TIMEOUTS" "$MAX_TIMEOUTS"
 require_int "ZLOOP_MAX_SEAL_FAILURES" "$MAX_SEAL_FAILURES"
 require_int "ZLOOP_MAX_IDLE" "$MAX_IDLE"
+require_int "ZLOOP_MIN_FREE_MB" "$MIN_FREE_MB"
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 [[ "$SYNC_MAIN" == "0" || "$SYNC_MAIN" == "1" ]] || die "ZLOOP_SYNC_MAIN expects 0 or 1, got '$SYNC_MAIN'"
@@ -882,6 +887,26 @@ limit_reached() {
   exit 1
 }
 
+# stop_if_disk_short <when>: a turn whose commit cannot be written is lost
+# (cycle 58's turn 15 lost its [join] to ENOSPC and the run went on paying),
+# so no turn starts with under ZLOOP_MIN_FREE_MB free on the worktree's
+# filesystem (exit 6). Not an observation: space comes back without the
+# zociety's say. 0 never checks; a df that cannot answer is not a stop.
+stop_if_disk_short() {
+  local kb mb
+  [[ $MIN_FREE_MB -gt 0 ]] || return 0
+  kb=$(df -Pk . 2>/dev/null | awk 'NR == 2 { print $4 }') || return 0
+  [[ "$kb" =~ ^[0-9]+$ ]] || return 0
+  mb=$((kb / 1024))
+  [[ $mb -lt $MIN_FREE_MB ]] || return 0
+  END_REASON="stopped: ${mb}MB free on the worktree's filesystem, under ZLOOP_MIN_FREE_MB=$MIN_FREE_MB"
+  log ""
+  log "=== Loop Stopped ==="
+  log "${mb}MB free on the worktree's filesystem $1, under ZLOOP_MIN_FREE_MB=$MIN_FREE_MB: a turn's commit would not be written"
+  print_totals
+  exit 6
+}
+
 FAILURES=0
 IDLE=0
 TIMEOUTS=0
@@ -935,12 +960,15 @@ esac
 [[ "$DEBUG" == "1" ]] && log "Debug mode: enabled"
 log ""
 
+stop_if_disk_short "before the first turn"
+
 while true; do
   ITERATION=$((ITERATION + 1))
 
   # Before the turn's commits read the store (see Object store in the header):
   # a clone made since the last turn would have linked it again.
   bin/zobjects >&2 || log "[zloop] WARNING: bin/zobjects could not fix the object store (see above)"
+  stop_if_disk_short "before iteration $ITERATION"
 
   # Asks the operator made while this run went (bin/zask queues them; see
   # Running unattended), recorded now, between turns, so no turn's seal

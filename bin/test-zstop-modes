@@ -1934,6 +1934,24 @@ assert_claude_runs 2
 assert_eq "the record names the predicate" "$(jq -r .reason .zociety/run.last.json | cut -c1-30)" "STOP: budget heap-deaths=2/2 s"
 echo ""
 
+echo "=== Case 49b: no turn starts with under ZLOOP_MIN_FREE_MB free; 0 never checks ==="
+fresh_repo disk-short
+# No disk has this much free, so the real df answers the test
+run env ZLOOP_MIN_FREE_MB=999999999999 bin/zloop --budget 30 --interval 0 2
+assert_rc 6
+assert_err '^=== Loop Stopped ===$'
+assert_err "MB free on the worktree's filesystem before the first turn, under ZLOOP_MIN_FREE_MB=999999999999: a turn's commit would not be written$"
+assert_claude_runs 0
+assert_eq "the record says why" "$(jq -r .reason .zociety/run.last.json | cut -c1-9)" "stopped: "
+assert_eq "and the exit" "$(jq -r .exit .zociety/run.last.json)" 6
+run env ZLOOP_MIN_FREE_MB=0 bin/zloop --budget 30 --interval 0 1
+assert_rc 1
+assert_claude_runs 1
+run env ZLOOP_MIN_FREE_MB=lots bin/zloop --budget 30 --interval 0 1
+assert_rc 2
+assert_err "^zloop: ZLOOP_MIN_FREE_MB expects a non-negative integer, got 'lots'$"
+echo ""
+
 echo "=== Case 50: one run per worktree; an ask made while it goes is queued and recorded before its next turn ==="
 fresh_repo run-lock
 git add -A

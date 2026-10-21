@@ -286,6 +286,7 @@ are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
 | `ZLOOP_MAX_TIMEOUTS` | 3 | Consecutive hard kills that abort the run with exit 3 (0 = never abort) |
 | `ZLOOP_MAX_SEAL_FAILURES` | 3 | Consecutive `bin/zblind seal` failures that abort the run with exit 4 (0 = never abort). A skipped seal (`ZOCIETY_BLIND_KEY` unset) exits 0 and does not count |
 | `ZLOOP_MAX_IDLE` | 10 | Consecutive turns that commit nothing, whatever their exit, that abort the run with exit 5 (0 = never). Every turn of a working cycle commits, so this is an expired login, an outage past the backoff or a stuck cycle; no observation is left |
+| `ZLOOP_MIN_FREE_MB` | 512 | No turn starts with less free on the worktree's filesystem (`df -Pk .`); the run stops with exit 6 and the reason in `run.last.json` (0 = never check). A turn whose commit cannot be written is paid for and lost: cycle 58's turn 15 lost its `[join]` to a full disk and the run went on. No observation is left |
 | `ZLOOP_STOP` | action | Stop modes, comma-separated (see Stop Modes; `--stop` overrides) |
 | `ZLOOP_DEBUG` | 0 | Enable debug output (1 = on) |
 | `ZLOOP_QUIET` | 0 | Same as `--quiet`: buffered result only, no live render (1 = on) |
