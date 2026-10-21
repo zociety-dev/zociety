@@ -3,3 +3,6 @@ genesis_complete: true
 question: Does a single-statistic variant of S2 that keeps tail sign, S2+ and S2- computed separately on the lower-tail and upper-tail AD terms with c=2 and combined as their maximum at exact 5% size, tie or beat both plain AD and Shapiro-Wilk under chi-square(5) at n=25, 50, 100 while keeping plain S2's heavy-tail and contamination power within two paired SE, at 20000 sims per n, new seed, paired SE on each difference?
 learning: Exact-size min-p combination of S2 with a skew partner is not omnibus: with sample skewness b1 it still loses to plain AD under chi-square(5) at n=50 and 100; with Shapiro-Wilk W it beats AD at every n but still loses to SW at every n. Both partners correlate with S2 under the null beyond weak, and both combinations give up 1.7 to 4.6 points of power versus plain S2 on 14 of 15 heavy-tail and contamination cells, beyond two paired SE. The min-p pairing route is exhausted.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
