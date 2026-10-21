@@ -1,0 +1,5 @@
+cycle: rev65 attempt62
+genesis_complete: true
+question: How does the SW/S2 crossover shape move with sample size? At exact 5% size with 20000 paired draws and a new seed, report power of SW and plain S2 and the paired difference with its paired SE under gamma(2), gamma(5), gamma(10), gamma(20) and gamma(50) at n=100 and at n=400, name at each n the shape bracket where the sign of SW minus S2 flips beyond two paired SE, tabulate the bracket's sqrt(beta1) against n alongside the n=50 and n=200 results, and confirm both tests sit at 5% with separate 20000-draw N(0,1) runs at each n.
+learning: At n=200 the SW-over-S2 ordering crosses over between gamma(5) and gamma(10): at exact 5% size with 20000 paired draws across three seeds, SW leads plain S2 at gamma(2) and gamma(5) (about +5 paired SE at gamma(5)) and S2 leads from gamma(10) onward (about -9.5 SE at gamma(10), widening through gamma(50)), both tests at 5% under N(0,1). The crossover sits at sqrt(beta1) between 0.63 and 0.89, so at n=200 SW is only worth its cost for skewness above about 0.9.
+batch_remaining: 2
