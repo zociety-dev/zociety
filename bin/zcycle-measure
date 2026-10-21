@@ -1,11 +1,27 @@
 #!/bin/bash
 # zcycle-measure: Derive auditable experimental measures for the current cycle
 # Usage: bin/zcycle-measure [cycle]
+#        bin/zcycle-measure -h | --help
 #
 # Scores are 0..1 and are deliberately mechanical indicators, not claims of
 # semantic quality. They make comparisons reproducible from committed history.
+# They read structure, never content: novelty is the share of this cycle's
+# stuff/ names no earlier cycle used, so a cycle that makes three new files
+# on the question of the last five scores 1 like one that changes the
+# subject. Cycles 51 to 53 score the same on every measure; whether the
+# learnings progress or circle is read from the learnings themselves
+# (bin/read-learnings, or the heap-death events).
 
 set -euo pipefail
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+if [[ -n "${1:-}" ]] && ! [[ "$1" =~ ^[0-9]+$ ]]; then
+  echo "zcycle-measure: cycle must be a number, got '$1'" >&2
+  exit 2
+fi
 
 CYCLE="${1:-$(bin/zstate | jq -r .cycle)}"
 events=$(git log --format=%B | awk '/^\{/ && !s {s=1} s {print} s && (/^\}$/ || /^\{.*\}$/) {s=0}' \
