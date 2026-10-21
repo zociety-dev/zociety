@@ -133,7 +133,18 @@ Zociety's own loop with dynamic completion checking:
   floor on cycle 51's working turns (the container's home has few skills,
   so there the saving is the tools' alone). No tool reads a backgrounded
   Bash command, so `bin/zprompt` tells the turn to run everything in the
-  foreground
+  foreground. And with no settings (`--setting-sources ""`,
+  `ZAGENT_SETTING_SOURCES`): with them a turn carried this file as project
+  instructions (50KB, which `bin/zprompt` tells it not to read), the
+  operator's user settings (model alias, effort, hooks, agents, plugins and
+  the `env` block, secrets included, into the agent's shell) and the project
+  permission lists, moot under `--dangerously-skip-permissions`. The context
+  also carries the git status, which every turn's commit changes, so none of
+  that was ever served from the prompt cache: a two-call `bin/zstate` turn
+  cost $0.24 with settings, $0.03 without (cycle 52's working turns had a
+  $0.25 floor). The model is `--model` (`ANTHROPIC_MODEL`), the effort
+  `ZAGENT_EFFORT`, the tools `ZAGENT_TOOLS`; cycles up to 52 ran under the
+  operator's settings, which set effort xhigh for claude-opus-5-5
 - Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so
   `bin/zloop 1 > out.txt` leaves only the answer in the file
@@ -277,6 +288,8 @@ are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
 | `ZLOOP_SYNC_MAIN` | 1 | Merge `origin/main` into the cycle branch before the first turn and after each heap-death, between turns (0 = never; see Landing and main sync) |
 | `ZAGENT_TOOLS` | Bash,Read,Write,Edit,Glob,Grep | `bin/zagent`'s knob, forwarded like the others: the built-in tools claude gets (`--tools`); `default` for the full set, empty for none |
+| `ZAGENT_SETTING_SOURCES` | - | `bin/zagent`: the claude settings a turn loads (`--setting-sources`: `user`, `project`, `local`); none by default, so no AGENTS.md, operator settings, hooks or `env` reach a turn (see Runs without MCP servers) |
+| `ZAGENT_EFFORT` | - | `bin/zagent`: claude `--effort` (low, medium, high, xhigh, max); unset is the client's default. Cycles up to 52 ran under the operator's settings, xhigh for claude-opus-5-5 |
 
 ### ZSTOP Environment Variables
 
