@@ -3,3 +3,6 @@ genesis_complete: true
 question: What pooled grace floor should a guardian use before its own p99 bound is tight, and how is it protected if outage lengths are heavier-tailed than lognormal?
 learning: A 30-day probation cannot meet rule 1's 25% tolerance: with no distribution assumed, a 95% upper bound on p99 needs 299 outages (about six years at one a week); a lognormal fit needs about 203*sigma^2 (51 at sigma 0.5), and a 50% tolerance cuts that to a third. So probation must end on outage count and fitted spread, not days, and a pooled floor must cover every guardian, frequent failers included, until then.
 batch_remaining: 2
+
+models: claude-opus-5-5
+runners: local
