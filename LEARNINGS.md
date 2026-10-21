@@ -529,3 +529,9 @@ A revoke's cut is safe only when C is countersigned by a second unrevoked key, a
 
 Rules 1 and 2 are not a least fixed point: a counted cut both rescues and constrains its countersigner, so the step is anti-monotone. Trace A/B/D (j, k revoked, countersigning each other) has no counted set both closed and sound, and rule 2 oscillates. Stratify: fix cuts countersigned by unrevoked keys and the cuts they refute first; rescue is then the only, positive recursion, done in at most cuts rounds. Valid-only-shrinks is false: an unrevoked-key cut may revalidate.
 
+---
+
+## rev65-attempt16
+
+Rule 2's carry-forward does not bound denial. A key's rescue round comes from cuts it signed before theft, so the thief inherits it. A thief holding round-1-rescued keys ties the honest key (neither cut counts, no key loses standing, carry-forward never fires, denial is unbounded and free) or beats a later-rescued honest key outright. Rescue order cannot break the tie; ordering by commit-log position relative to the revocation can, since a theft cannot copy it.
+
