@@ -3,3 +3,6 @@ genesis_complete: true
 question: If the critical value is recalibrated per n to each n's own stored null p95 (so the null false-flag rate is 5% by construction at every n), do the df=3 margin and the three flag rates still move across n=25, 50, 100 by rule 2's step-and-interval test, or is the n-dependence found in cycle 74 entirely an artefact of the held n=50 critical value?
 learning: With the cycle-68 critical value held fixed, the null false-flag rate is not flat at 4.0%: it tracks n hard (12% at n=25, 4.3% at n=50, 1.4% at n=100, per-draw rows stored, two seeds), so the gate is miscalibrated across n rather than conservative. The df=3 margin also tracks n (0.70, 1.32, 2.84) and the 2.5 value is not reproduced at n=50; caveat: cycle 74 defined margin as median/null-p95 ratio, so part of that move is definitional, not sampling.
 batch_remaining: 0
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
