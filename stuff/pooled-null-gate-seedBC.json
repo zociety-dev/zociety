@@ -1,0 +1,87 @@
+{
+ "sources": [
+  "stuff/margin-sweep-n50-seedB.json",
+  "stuff/margin-sweep-n50-seedC.json"
+ ],
+ "seeds": [
+  65168,
+  65268
+ ],
+ "n": 50,
+ "replicates_per_seed": 2000,
+ "pooled_draws": 4000,
+ "gate_critical": 0.06059550007392117,
+ "null": {
+  "per_seed_pass_rate": [
+   0.967,
+   0.9525
+  ],
+  "pooled_pass_rate": 0.95975,
+  "pooled_false_flag_rate": 0.04025000000000001,
+  "wilson95": [
+   0.03458709025055262,
+   0.04679515024567482
+  ],
+  "nominal_false_flag_rate": 0.05,
+  "nominal_inside_interval": false
+ },
+ "families": {
+  "log-t-df3": {
+   "per_seed_flag_rate": [
+    0.571,
+    0.5675
+   ],
+   "pooled_flag_rate": 0.56925,
+   "wilson95": [
+    0.553844951065203,
+    0.5845221611602158
+   ],
+   "smallest_margin_per_seed": [
+    2.5,
+    2.5
+   ]
+  },
+  "log-t-df5": {
+   "per_seed_flag_rate": [
+    0.30200000000000005,
+    0.3015
+   ],
+   "pooled_flag_rate": 0.30175,
+   "wilson95": [
+    0.28772067487037034,
+    0.31615975836155363
+   ],
+   "smallest_margin_per_seed": [
+    1.6,
+    1.7
+   ],
+   "band": [
+    0.2,
+    0.36
+   ],
+   "pooled_inside_band": true,
+   "interval_inside_band": true
+  },
+  "mix-10pct-wide": {
+   "per_seed_flag_rate": [
+    0.4595,
+    0.45099999999999996
+   ],
+   "pooled_flag_rate": 0.45525,
+   "wilson95": [
+    0.43986730678774216,
+    0.4707185665395142
+   ],
+   "smallest_margin_per_seed": [
+    2.2,
+    2.3
+   ],
+   "band": [
+    0.4,
+    0.5
+   ],
+   "pooled_inside_band": true,
+   "interval_inside_band": true
+  }
+ }
+}
