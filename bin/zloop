@@ -71,6 +71,8 @@
 #                           missing ZOCIETY_BLIND_KEY exits 0 and never counts
 #   ZLOOP_MAX_IDLE=10       Consecutive turns that commit nothing, whatever
 #                           their exit, that stop the run (exit 5; 0 = never)
+#   ZLOOP_MIN_FREE_MB=512   No turn starts with less free on the worktree's
+#                           filesystem (exit 6; 0 = never check)
 #   ZLOOP_STOP=action       Stop modes, comma-separated (see --stop)
 #   ZLOOP_DEBUG=1           Enable debug output
 #   ZLOOP_QUIET=1           Same as --quiet
@@ -239,7 +241,8 @@
 # (--max, --for or --cost), 2 usage error or an aborting stop predicate, 3
 # too many consecutive hard kills, 4 too many consecutive bin/zblind seal
 # failures (3 and 4 leave a terminal [observation]; see --resume), 5
-# ZLOOP_MAX_IDLE turns in a row with no commit, 128+N a signal.
+# ZLOOP_MAX_IDLE turns in a row with no commit, 6 under ZLOOP_MIN_FREE_MB
+# free on the worktree's filesystem before a turn, 128+N a signal.
 # Each iteration reads PROMPT.md and follows instructions.
 # State persists in git between iterations; .claude/zloop.state carries
 # iteration/max/start/mode for zheap-death and the predicates.
@@ -278,6 +281,7 @@ TIMEOUT_SOURCE=""
 MAX_TIMEOUTS="${ZLOOP_MAX_TIMEOUTS:-3}"
 MAX_SEAL_FAILURES="${ZLOOP_MAX_SEAL_FAILURES:-3}"
 MAX_IDLE="${ZLOOP_MAX_IDLE:-10}"
+MIN_FREE_MB="${ZLOOP_MIN_FREE_MB:-512}"
 STOP_MODES="${ZLOOP_STOP:-action}"
 DEBUG="${ZLOOP_DEBUG:-0}"
 # Render level handed to bin/zagent --render: compact (default), text
@@ -427,6 +431,8 @@ set_secs INTERVAL_SECS "ZLOOP_INTERVAL" "$INTERVAL_SECS"
 require_int "ZLOOP_MAX_TIMEOUTS" "$MAX_TIMEOUTS"
 require_int "ZLOOP_MAX_SEAL_FAILURES" "$MAX_SEAL_FAILURES"
 require_int "ZLOOP_MAX_IDLE" "$MAX_IDLE"
+require_int "ZLOOP_MIN_FREE_MB" "$MIN_FREE_MB"
+MIN_FREE_MB=$((10#$MIN_FREE_MB))   # 0512 is decimal, not octal
 require_int "ZLOOP_BACKOFF_MAX" "$BACKOFF_MAX"
 require_int "ZLOOP_KILL_GRACE" "$KILL_GRACE"
 [[ "$SYNC_MAIN" == "0" || "$SYNC_MAIN" == "1" ]] || die "ZLOOP_SYNC_MAIN expects 0 or 1, got '$SYNC_MAIN'"
@@ -640,6 +646,36 @@ on_exit() {
 take_record
 rm -f "$ZRUN_STOP"
 trap 'on_exit $?' EXIT
+
+# stop_if_disk_short <when>: a turn whose commit cannot be written is paid
+# for and lost (cycle 58's turn 15 lost its [join] to ENOSPC and the run
+# went on), so the run stops (exit 6) when under ZLOOP_MIN_FREE_MB is free
+# where git writes: the worktree and the object store (a .worktrees/ checkout
+# may sit on another volume), whichever has less. Checked here, before any
+# git write of the preflight, and again right before each turn, after the
+# predicates and the stop marker, so a finished run is not reported as a
+# disk stop. Not an observation: space comes back without the zociety's say.
+# 0 never checks; a df that cannot answer is not a stop. In the container
+# df on /repo reports the host volume (checked on the podman machine).
+stop_if_disk_short() {
+  local dir kb mb least=""
+  [[ $MIN_FREE_MB -gt 0 ]] || return 0
+  for dir in . "$(git rev-parse --git-common-dir 2>/dev/null || echo .)"; do
+    kb=$(df -Pk "$dir" 2>/dev/null | awk 'NR == 2 { print $4 }') || continue
+    [[ "$kb" =~ ^[0-9]+$ ]] || continue
+    [[ -z "$least" || $kb -lt $least ]] && least=$kb
+  done
+  [[ -n "$least" ]] || return 0
+  mb=$((least / 1024))
+  [[ $mb -lt $MIN_FREE_MB ]] || return 0
+  END_REASON="stopped: ${mb}MB free where git writes, under ZLOOP_MIN_FREE_MB=$MIN_FREE_MB"
+  log ""
+  log "=== Loop Stopped ==="
+  log "${mb}MB free where git writes $1, under ZLOOP_MIN_FREE_MB=$MIN_FREE_MB: a turn's commit would not be written"
+  [[ ${ITERATION:-0} -eq 0 ]] || print_totals
+  exit 6
+}
+stop_if_disk_short "before the preflight"
 
 # Hold off idle sleep while the run lasts (macOS; see Running unattended).
 if command -v caffeinate >/dev/null 2>&1; then
@@ -1016,6 +1052,8 @@ EOF
     print_totals
     exit 0
   fi
+
+  stop_if_disk_short "before iteration $ITERATION"
 
   # bin/zstate once per iteration: the caps' landing allowance below, the
   # HUD line and the action the memory record names (its .next, the leg the

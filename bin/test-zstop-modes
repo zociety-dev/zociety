@@ -119,6 +119,21 @@ fi
 exit "${FAKE_CLAUDE_EXIT:-0}"
 EOF
 chmod +x "$FAKEBIN/claude"
+
+# A df that answers from FAKE_DF_KB_FILE while it has lines: one line per
+# call, the free KB in column 4 (or something that is not a number), the
+# line consumed. With no file, or an empty one, it is the real df.
+cat > "$FAKEBIN/df" << 'EOF'
+#!/bin/bash
+if [[ -n "${FAKE_DF_KB_FILE:-}" && -s "$FAKE_DF_KB_FILE" ]]; then
+  kb=$(head -1 "$FAKE_DF_KB_FILE")
+  tail -n +2 "$FAKE_DF_KB_FILE" > "$FAKE_DF_KB_FILE.next" && mv "$FAKE_DF_KB_FILE.next" "$FAKE_DF_KB_FILE"
+  printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\nfake 1 1 %s 1%% /\n' "$kb"
+  exit 0
+fi
+exec /bin/df "$@"
+EOF
+chmod +x "$FAKEBIN/df"
 export PATH="$FAKEBIN:$PATH"
 
 # fresh_repo <name>: new throwaway repo with bin/ copied in, one genesis
@@ -1932,6 +1947,46 @@ assert_err '^Max iterations: none$'
 assert_err '^STOP: budget heap-deaths=2/2 since '
 assert_claude_runs 2
 assert_eq "the record names the predicate" "$(jq -r .reason .zociety/run.last.json | cut -c1-30)" "STOP: budget heap-deaths=2/2 s"
+echo ""
+
+echo "=== Case 49b: no turn starts with under ZLOOP_MIN_FREE_MB free; 0 never checks ==="
+fresh_repo disk-short
+export FAKE_DF_KB_FILE="$TMP/df-kb"
+# One answer per df call; a check makes two (the worktree, the object store)
+printf '%s\n' 409600 409600 > "$FAKE_DF_KB_FILE"
+run bin/zloop --budget 30 --interval 0 2
+assert_rc 6
+assert_err '^=== Loop Stopped ===$'
+assert_err "^400MB free where git writes before the preflight, under ZLOOP_MIN_FREE_MB=512: a turn's commit would not be written$"
+assert_no_err '^=== Loop Totals'
+assert_claude_runs 0
+assert_eq "the record says why" "$(jq -r .reason .zociety/run.last.json)" "stopped: 400MB free where git writes, under ZLOOP_MIN_FREE_MB=512"
+assert_eq "and the exit" "$(jq -r .exit .zociety/run.last.json)" 6
+# The lesser answer counts and a df that cannot answer does not stop the
+# run; the check before a turn comes after the predicates and the stop
+# marker: the first turn runs, the second never starts
+fresh_repo disk-short-later
+printf '%s\n' 9999999 9999999 x 9999999 9999999 2048 > "$FAKE_DF_KB_FILE"
+run bin/zloop --budget 30 --interval 0 3
+assert_rc 6
+assert_err "^2MB free where git writes before iteration 2, under ZLOOP_MIN_FREE_MB=512: a turn's commit would not be written$"
+assert_claude_runs 1
+assert_err '^\[zloop\] Iteration 1 finished in '
+assert_no_err '^\[zloop\] Iteration 2 finished in '
+# A leading zero is decimal; 0 never checks; a word is refused
+fresh_repo disk-short-knob
+printf '%s\n' 1024 1024 > "$FAKE_DF_KB_FILE"
+run env ZLOOP_MIN_FREE_MB=0512 bin/zloop --budget 30 --interval 0 1
+assert_rc 6
+assert_err "^1MB free where git writes before the preflight, under ZLOOP_MIN_FREE_MB=512"
+printf '%s\n' 1024 1024 > "$FAKE_DF_KB_FILE"
+run env ZLOOP_MIN_FREE_MB=0 bin/zloop --budget 30 --interval 0 1
+assert_rc 1
+assert_claude_runs 1
+run env ZLOOP_MIN_FREE_MB=lots bin/zloop --budget 30 --interval 0 1
+assert_rc 2
+assert_err "^zloop: ZLOOP_MIN_FREE_MB expects a non-negative integer, got 'lots'$"
+unset FAKE_DF_KB_FILE
 echo ""
 
 echo "=== Case 50: one run per worktree; an ask made while it goes is queued and recorded before its next turn ==="
