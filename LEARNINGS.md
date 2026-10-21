@@ -661,3 +661,9 @@ Cycle 72 ran no simulation; it fixed the replication protocol instead. Rule 2's 
 
 Cycle 73 wrote three procedures and ran no simulation, but writing them exposed a gap: the n=50 baseline exists only as point values (4.0% null rate, 2.5 margin) plus cycle 71's binomial interval. Rule 1 stores per-draw null statistics only for n=25 and n=100, so the df=3 margin bootstrap has no baseline draws to resample and the flag-rate test has no baseline draw count. The next cycle must re-run n=50 under rule 1, two seeds, or the moved test cannot be evaluated.
 
+---
+
+## rev65-attempt38
+
+With the cycle-68 critical value held fixed, the null false-flag rate is not flat at 4.0%: it tracks n hard (12% at n=25, 4.3% at n=50, 1.4% at n=100, per-draw rows stored, two seeds), so the gate is miscalibrated across n rather than conservative. The df=3 margin also tracks n (0.70, 1.32, 2.84) and the 2.5 value is not reproduced at n=50; caveat: cycle 74 defined margin as median/null-p95 ratio, so part of that move is definitional, not sampling.
+
