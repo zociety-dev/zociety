@@ -480,9 +480,14 @@ bin/zlog zheap-death "Calculated batch remaining: $REMAINING (from $BATCH_SIZE -
   "$(jq -n --argjson batch "$BATCH_SIZE" --argjson remaining "$REMAINING" \
     '{batch_size: $batch, remaining: $remaining}')" 2>/dev/null || true
 
-# Get current cycle from state
-CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle')
-MEASURES=$(bin/zcycle-measure "$CURRENT_CYCLE")
+# Get current cycle from state. The measures are a record beside the event,
+# not a condition of it: a cycle bin/zcycle-measure cannot score (it exits 2
+# and says why) is archived with an empty measures object and a WARNING.
+CURRENT_CYCLE=$(bin/zstate | jq -r '.cycle // 0')
+if ! MEASURES=$(bin/zcycle-measure "$CURRENT_CYCLE"); then
+  echo "zheap-death: WARNING: cycle $CURRENT_CYCLE not measured (see above); archiving with measures {}" >&2
+  MEASURES='{}'
+fi
 
 #############################################
 # 3. Commit heap-death event
