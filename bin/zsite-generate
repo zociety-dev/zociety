@@ -8,6 +8,8 @@
 #   - docs/index.html (main page with stats; the current cycle is the newest
 #     rev* tag's, LIVE_REF below, not the checkout's)
 #   - docs/cycles.html (cycle history timeline)
+#   - docs/rules.html (every [pass] event reachable from a rev* tag, by
+#     cycle, each rule linked to its commit; one git log over the tag set)
 #   - docs/learnings.html (accumulated insights)
 #   - docs/stuff.html (the newest rev* tag's stuff/*.md, when any)
 #   - docs/archive.html + docs/archive/<tag>.html (every rev* tag's
@@ -454,6 +456,7 @@ cat > "$DOCS_DIR/index.html" << EOF
 
   <div class="nav">
     <a href="cycles.html">📊 Cycle History</a>
+    <a href="rules.html">⚖️ Rules</a>
     $STUFF_NAV_LINK
     $ARCHIVE_NAV_LINK
     <a href="learnings.html">💡 Learnings</a>
@@ -616,6 +619,171 @@ cat >> "$DOCS_DIR/cycles.html" << 'CYCLES_FOOT'
 </body>
 </html>
 CYCLES_FOOT
+
+# ============================================================
+# Generate Rules Page
+# ============================================================
+echo "Generating rules.html..."
+
+# Every [pass] event reachable from a rev* tag, one card per tag, newest
+# tag first, each rule linked to its commit. One git log over the whole
+# tag set (--glob walks the union of their histories once) and one jq,
+# never a call per tag. A commit belongs to the tag git reached it from
+# (%S) along first parents, as bin/zheap-death counts a cycle's turns: a
+# cycle's commits lie on its branch below its heap-death, where the tag
+# is, and a lineage merged in from main (the run's sync merges) is not the
+# cycle's; without --first-parent a [direction] that only main reaches (an
+# abandoned attempt) was credited to whichever tag's merge reached it
+# first, the newest. The event's cycle number would not do either: it
+# restarts with each revision (rev63 and rev65 both count from 1) and
+# rev63 wrote several heap-deaths per number. The card's question is the
+# cycle's own [direction] (the first commit on its branch; a heap-death's
+# question is the one it gives its successor), its learning the
+# heap-death's; where a tag's lineage holds several cycles, each
+# heap-death's stretch gets its own block, question and learning. A rule
+# leaves the page only
+# when no tag reaches it: deleting a tag moves its rules to the next tag
+# whose lineage holds them. A body that is one JSON document is read whole
+# ([direction] is pretty-printed), else its first {"z":1 line, and only an
+# envelope with z == 1 counts, as bin/zstate reads them; a [pass] with no
+# event body (the file-based cycles) is skipped.
+RULES_HTML=""
+RULE_COUNT=0
+if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
+    for tag in "${REV_TAGS[@]}"; do
+        printf '%s\t%s\n' "$tag" "${TAG_DATE_OF[$tag]}"
+    done > "$ARCHIVE_TMP/tagdates"
+    # jq prints the rule count on its first line, then the cards. A tag
+    # whose lineage holds several cycles (rev63-attempt28 archived fifteen
+    # untagged ones) gets one card with a block per cycle. A cycle is the
+    # stretch of the tag's lineage under one [heap-death] (walked newest
+    # first in topological order, a commit belongs to the last heap-death
+    # seen on its tag), never the envelope's cycle number, which rev46's
+    # lineage reused for two cycles; so each block has its own question
+    # ([direction]: the oldest in the stretch, the cycle's first commit,
+    # since rev51's stretch holds two) and its own learning. A heap-death
+    # is a boundary by its subject, envelope or not: rev46's lineage has
+    # heap-deaths with no event body between cycles that have. Two tags
+    # at one commit share one %S source and so one card (rev15 and rev16
+    # do, before events).
+    RULES_OUT=$(git log --first-parent --topo-order --format='%H%x1f%S%x1f%s%x1f%b%x1e' --grep='^\[pass\]' \
+        --grep='^\[direction\]' --grep='^\[heap-death\]' --glob='refs/tags/rev*' \
+        | jq -R -r -s --arg archived "${ARCHIVE_TAGS[*]-}" --rawfile tagdates "$ARCHIVE_TMP/tagdates" '
+        ($archived | split(" ") | map(select(length > 0))) as $pages
+        | ($tagdates | split("\n") | map(select(length > 0) | split("\t"))) as $tags
+        | ($tags | map(.[0])) as $order
+        | ($tags | map({key: .[0], value: .[1]}) | from_entries) as $date
+        | [ split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
+            | {sha: .[0], tag: (.[1] | ltrimstr("refs/tags/")), subject: .[2],
+               ev: ((.[3] | fromjson?)
+                    // (.[3] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first))} ]
+        | to_entries
+        | (reduce .[] as $e ({seen: {}, recs: []};
+            ($e.value + {i: $e.key}) as $r
+            | if ($r.subject | startswith("[heap-death]")) then .seen[$r.tag] = $r.sha | .recs += [$r + {cycle: $r.sha}]
+              else .recs += [$r + {cycle: (.seen[$r.tag] // "")}] end)
+           | .recs | map(select((.ev | type) == "object" and .ev.z == 1))) as $recs
+        | ($recs | map(select(.ev.event == "direction")) | group_by([.tag, .cycle])
+            | map({key: "\(.[0].tag)\t\(.[0].cycle)", value: (max_by(.i) | .ev.data.question)}) | from_entries) as $question
+        | ($recs | map(select(.ev.event == "heap-death"))
+            | map({key: .sha, value: {sha, learning: .ev.data.learning}}) | from_entries) as $death
+        | ($recs | map(select(.ev.event == "pass"))) as $passes
+        | ($passes | length | tostring),
+          ( $passes | group_by(.tag)
+          | sort_by(.[0].tag as $t | $order | index($t)) | reverse | .[]
+          | .[0].tag as $tag | ($tag | sub("-iterations.*$"; "")) as $id
+          | (group_by(.cycle) | sort_by(map(.i) | min) | reverse) as $blocks
+          | "<div class=\"cycle\" id=\"\($tag)\">\n" +
+            "  <div class=\"cycle-header\"><span class=\"cycle-tag\">" +
+            (if ($pages | any(. == $tag)) then "<a href=\"archive/\($tag).html\">\($id)</a>" else $id end) +
+            " <span class=\"meta\">" +
+            (if ($blocks | length) == 1 then "cycle \($blocks[0][0].ev.cycle)"
+             else "cycles \($blocks[0][0].ev.cycle) to \($blocks[-1][0].ev.cycle), archived together" end) +
+            "</span></span>" +
+            "<span class=\"cycle-date\">\($date[$tag] // "")</span></div>\n" +
+            ( $blocks | map(
+                (.[0].cycle) as $cycle
+                | (if ($blocks | length) > 1 then "  <h3 class=\"sub\">cycle \(.[0].ev.cycle)</h3>\n" else "" end) +
+                  (if $question["\($tag)\t\($cycle)"] then
+                     "  <p class=\"question\">\($question["\($tag)\t\($cycle)"] | @html)</p>\n" else "" end) +
+                  "  <ol>\n" +
+                  ( sort_by(.i) | reverse | map(
+                      "    <li value=\"\(.ev.data.rule // 0)\">\(.ev.data.description // "" | @html)" +
+                      " <span class=\"meta\">\(.ev.agent // "" | @html)" +
+                      (if (.ev.data.votes | type) == "object" then " · \(.ev.data.votes.for // 0) for, \(.ev.data.votes.against // 0) against" else "" end) +
+                      " · <a href=\"https://github.com/zociety-dev/zociety/commit/\(.sha)\">\(.sha[:7])</a></span></li>"
+                    ) | join("\n") ) +
+                  "\n  </ol>\n" +
+                  (if $death[$cycle].learning then
+                     "  <p class=\"learning\">Found: \($death[$cycle].learning | @html)" +
+                     " <span class=\"meta\"><a href=\"https://github.com/zociety-dev/zociety/commit/\($cycle)\">\($cycle[:7])</a></span></p>\n"
+                   else "" end)
+              ) | join("") ) +
+            "</div>" )
+    ')
+    RULE_COUNT=${RULES_OUT%%$'\n'*}
+    RULES_HTML=${RULES_OUT#"$RULE_COUNT"}
+    RULES_HTML=${RULES_HTML#$'\n'}
+fi
+
+cat > "$DOCS_DIR/rules.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rules - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .cycle {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .cycle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cycle-tag { font-weight: bold; color: var(--accent); }
+    .cycle-date { opacity: 0.7; font-size: 0.9rem; }
+    .question { opacity: 0.85; font-style: italic; margin: 0.5rem 0; }
+    .learning { margin: 0.75rem 0 0; font-size: 0.95rem; }
+    h3.sub { margin: 1rem 0 0; font-size: 1rem; color: var(--text); opacity: 0.8; }
+    ol { padding-left: 1.5rem; margin: 0.5rem 0 0; }
+    ol li { margin: 0.5rem 0; }
+    .meta { opacity: 0.7; font-size: 0.85rem; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>⚖️ Passed Rules</h1>
+  <p>$RULE_COUNT rules, one card per archived cycle, newest first. Each rule is a <code>[pass]</code> commit: two members voted it in, in separate turns, and the link is the commit that recorded the tally. Above a cycle's rules is the question it was given; below them, what it found. A rule is listed under the tag that archived it. The earliest cycles kept their state in files, and a <code>[pass]</code> with no event body is not here.</p>
+
+$RULES_HTML
+</body>
+</html>
+EOF
 
 # ============================================================
 # Generate Learnings Page
