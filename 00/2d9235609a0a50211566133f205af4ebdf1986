@@ -3,3 +3,6 @@ genesis_complete: true
 question: After the largest |draw| is capped, where does the residual t(3) excess in the cycle 75 statistic live? Cap the top k draws per sample for k=1,2,3,5 (winsorize at the (k+1)th largest |draw|) at n=25, 50 under t(3) and report var/mean^2, the post-cap AD share of the top k draws in the top 1% of sims, and normal-data power at n=25, 50, 100 against uncapped. Does any k reach var/mean^2 at most 2/3 while keeping normal power within 0.02? Report seed and sims per n.
 learning: Bounding the single draw removes dominance but not the excess: under t(3) at n=25, 50 var/mean^2 falls from 51 and 405 to about 1, yet no cap reaches 2/3. The best, a Phi(-3) weight floor, gives 0.79 and 0.85 and loses 0.033 normal power at n=50 (binds in 70% of t(3) samples); the top-3-of-50 winsorize keeps power within 0.02 at every n but stalls near 1. On normal data both caps drop n=50 var/mean^2 from 0.71 to 0.33, so the residual t(3) excess sits in the remaining terms, not the largest.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
