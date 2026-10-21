@@ -3,3 +3,6 @@ genesis_complete: true
 question: Can confirmation of a revocation be defined so that the no-refile bar stops a thief's repeat forgeries but never silences an honest revoker, without reopening any settled cut?
 learning: Expiring a forged revocation at filed + K does not by itself bound exposure: an uncaught thief re-files each time the last forgery expires (positions 2, 5, 8), restoring the full 2..9 denied span, and a one-per-K rate limit cannot stop it since those filings are already K apart. Barring a key whose revocation expired unconfirmed from filing again caps each stolen key at K positions (union 2..7), but also silences an honest revoker whose revocation expired unconfirmed.
 batch_remaining: 1
+
+models: claude-opus-5-5
+runners: local
