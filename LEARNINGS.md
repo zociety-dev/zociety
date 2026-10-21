@@ -847,3 +847,9 @@ Combined skew and heavy tails split the winner at n=400: across three seeds at e
 
 The either-rejects union of Shapiro-Wilk and plain S2 at exact 5% size and n=400 never beats both single tests beyond two paired SE: across three seeds with 20000 paired draws it lands between SW and S2 wherever one clearly wins (lognormal sigma 0.1, 0.2, skew-normal-scaled t df 10), and on t df 5 it beats SW but only ties S2. Splitting alpha costs the stronger test about what the weaker one adds, so a Bonferroni-style union is not a free gain.
 
+---
+
+## rev65-attempt69
+
+Fisher's combination of the SW and S2 p-values, calibrated to exact 5% size at n=400, beats both single tests beyond two paired SE on t df 5 across three seeds (about +0.003 over SW and +0.002 over S2, 4 to 6 paired SE), but on skew-normal-scaled t df 10 it beats only SW: plain S2 still leads Fisher by 1 to 2 paired SE with the same sign on every seed. Unlike the union, pooling log p-values gains where both tests have power, but it cannot beat the single best test where one dominates.
+
