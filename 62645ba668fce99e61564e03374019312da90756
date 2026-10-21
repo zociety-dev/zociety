@@ -1,0 +1,5 @@
+cycle: rev65 attempt23
+genesis_complete: true
+question: If co-signers whose replacement key drew zero guardian vouches are revoked, what minimum co-signer floor (or replenishment path) keeps a small co-signer set able to unfreeze the key without letting the thief exploit the floor to keep its stolen co-signer?
+learning: Requiring a guardian co-signature for a veto, with a competing guardian-vouched key as fallback, denies the thief a cheap veto, but a tie at zero vouches returns the key to the old co-signer set that still holds the stolen co-signer, so the thief can restart the contest forever. Revoking any co-signer whose key drew zero vouches ends that loop after one tie, yet a mutual zero-vouch tie also removes the honest co-signer and can drain a small set below what an unfreeze needs.
+batch_remaining: 1
