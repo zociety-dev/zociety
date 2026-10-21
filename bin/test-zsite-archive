@@ -36,6 +36,10 @@
 #      rev{N}-attempt{M} tag, not main, a cycle branch (deleted on GitHub
 #      when its PR merges) or the working tree; bin/zstate --ref reads a
 #      given ref
+#   9. docs/asks.html (checked with case 2) lists every ask bin/zstate
+#      --asks reports at the highest tag, each answer linked to the archive
+#      page of the lowest tag holding its commit and to the commit; a repo
+#      with no ask gets the page with no card (case 7)
 
 set -e
 
@@ -176,6 +180,24 @@ if [[ -n "$NEWEST_DEATH" ]]; then
 fi
 check "front page links the rules page" grep -q 'href="rules.html"' docs/index.html
 
+echo "Case 9: asks.html lists every ask at the highest tag, each answer linked to its archive page"
+HIGHEST_TAG=$(git tag -l 'rev*' | sort -V | tail -1)
+ASKS=$(bin/zstate --asks --ref "$HIGHEST_TAG" 2>/dev/null || echo '[]')
+NASKS=$(jq 'length' <<< "$ASKS")
+check "asks.html exists" test -f docs/asks.html
+check "one card per ask ($NASKS)" test "$(grep -c '<div class="cycle" id="ask-' docs/asks.html)" -eq "$NASKS"
+check "the headline count agrees" grep -q "<p>$NASKS questions" docs/asks.html
+check "front page links the asks page" grep -q 'href="asks.html"' docs/index.html
+while IFS=$'\t' read -r id commit file; do
+  [[ -n "$commit" ]] || continue
+  # The answer's tag found the other way round: the lowest rev* tag
+  # containing its commit, not the tag git reached it from
+  tag=$(git tag -l 'rev*' --contains "$commit" | sort -V | head -1)
+  base=$(basename "$file" .md)
+  check "$id's answer ${commit:0:7} links archive/$tag#artifact-$base" grep -qF "href=\"archive/$tag.html#artifact-$base\"" docs/asks.html
+  check "and its commit" grep -qF "commit/$commit\"" docs/asks.html
+done < <(jq -r '.[] | .id as $id | .answers[] | [$id, .commit, .file] | @tsv' <<< "$ASKS")
+
 echo "Case 3: $NEWEST page content"
 PAGE="docs/archive/$NEWEST.html"
 NFILES=$(git ls-tree --name-only "$NEWEST" stuff/ | grep -c '\.md$')
@@ -275,6 +297,8 @@ check "body comes from the tag, not the tree" grep -qF "body $SCALE_TAGS" "$PAGE
 check "index lists the newest tag first" test "$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | head -1)" = "href=\"archive/$LAST.html\""
 check "rules.html generated with no [pass] on any tag" test -f docs/rules.html
 check "and lists no rule" test "$(grep -c '<li value=' docs/rules.html || true)" -eq 0
+check "asks.html generated with no [ask] on any tag" test -f docs/asks.html
+check "and lists no ask" test "$(grep -c '<div class="cycle" id="ask-' docs/asks.html || true)" -eq 0
 cd "$TMP/repo"
 
 # live_commit <ref> <mark> <cycle> <stuff-file> <title> [from]: one fast-import
