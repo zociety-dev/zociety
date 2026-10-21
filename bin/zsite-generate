@@ -8,6 +8,8 @@
 #   - docs/index.html (main page with stats; the current cycle is the newest
 #     rev* tag's, LIVE_REF below, not the checkout's)
 #   - docs/cycles.html (cycle history timeline)
+#   - docs/rules.html (every [pass] event reachable from a rev* tag, by
+#     cycle, each rule linked to its commit; one git log over the tag set)
 #   - docs/learnings.html (accumulated insights)
 #   - docs/stuff.html (the newest rev* tag's stuff/*.md, when any)
 #   - docs/archive.html + docs/archive/<tag>.html (every rev* tag's
@@ -454,6 +456,7 @@ cat > "$DOCS_DIR/index.html" << EOF
 
   <div class="nav">
     <a href="cycles.html">📊 Cycle History</a>
+    <a href="rules.html">⚖️ Rules</a>
     $STUFF_NAV_LINK
     $ARCHIVE_NAV_LINK
     <a href="learnings.html">💡 Learnings</a>
@@ -616,6 +619,110 @@ cat >> "$DOCS_DIR/cycles.html" << 'CYCLES_FOOT'
 </body>
 </html>
 CYCLES_FOOT
+
+# ============================================================
+# Generate Rules Page
+# ============================================================
+echo "Generating rules.html..."
+
+# Every [pass] event reachable from a rev* tag, grouped by cycle, newest
+# cycle first, each rule linked to its commit; the cycle's tag and question
+# come from its [heap-death] event. One git log over the whole tag set
+# (--glob walks the union of their histories once) and one jq, never a
+# call per tag. The running cycle's rules reach the page when its
+# heap-death writes the tag. A [pass] with no JSON body (before rev50) is
+# skipped. A cycle number two heap-deaths share (cycles 3-38, file-based
+# numbering) takes the later one's tag and question.
+RULES_HTML=""
+RULE_COUNT=0
+if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
+    RULES_HTML=$(git log --format='%H%x1f%ct%x1f%b%x1e' --grep='^\[pass\]' --grep='^\[heap-death\]' \
+        --glob='refs/tags/rev*' | jq -R -r -s --arg archived "${ARCHIVE_TAGS[*]-}" '
+        ($archived | split(" ") | map(select(length > 0))) as $pages
+        | [ split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
+            | {sha: .[0], ts: (.[1] | tonumber),
+               ev: (.[2] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first)}
+            | select(.ev != null) ] as $recs
+        | ($recs | map(select(.ev.event == "heap-death")) | sort_by(.ts)
+            | map({key: (.ev.cycle | tostring), value: .ev.data}) | from_entries) as $death
+        | $recs | map(select(.ev.event == "pass")) | group_by(.ev.cycle) | reverse | .[]
+        | (.[0].ev.cycle | tostring) as $cycle
+        | ($death[$cycle] // {}) as $d
+        | ($d.tag // "" | sub("-iterations.*$"; "")) as $id
+        | "<div class=\"cycle\" id=\"cycle-\($cycle)\">\n" +
+          "  <div class=\"cycle-header\"><span class=\"cycle-tag\">Cycle \($cycle)" +
+          (if $d.tag == null then ""
+           elif ($pages | any(. == $d.tag)) then " · <a href=\"archive/\($d.tag).html\">\($id)</a>"
+           else " · \($id)" end) +
+          "</span><span class=\"cycle-date\">\(.[0].ts | todate | .[:10])</span></div>\n" +
+          (if $d.question then "  <p class=\"question\">\($d.question | @html)</p>\n" else "" end) +
+          "  <ol>\n" +
+          ( sort_by(.ev.seq) | map(
+              "    <li value=\"\(.ev.data.rule // 0)\">\(.ev.data.description // "" | @html)" +
+              " <span class=\"meta\">\(.ev.agent | @html) · \(.ev.data.votes.for // "?") for, \(.ev.data.votes.against // 0) against" +
+              " · <a href=\"https://github.com/zociety-dev/zociety/commit/\(.sha)\">\(.sha[:7])</a></span></li>"
+            ) | join("\n") ) +
+          "\n  </ol>\n</div>"
+    ')
+    RULE_COUNT=$(grep -c '<li value=' <<< "$RULES_HTML" || true)
+fi
+
+cat > "$DOCS_DIR/rules.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rules - zociety</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --card-bg: #161b22;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1, h2 { color: var(--accent); }
+    a { color: var(--accent); }
+    .back { margin-bottom: 2rem; }
+    .cycle {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .cycle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cycle-tag { font-weight: bold; color: var(--accent); }
+    .cycle-date { opacity: 0.7; font-size: 0.9rem; }
+    .question { opacity: 0.85; font-style: italic; margin: 0.5rem 0; }
+    ol { padding-left: 1.5rem; margin: 0.5rem 0 0; }
+    ol li { margin: 0.5rem 0; }
+    .meta { opacity: 0.7; font-size: 0.85rem; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to zociety</a></div>
+  <h1>⚖️ Passed Rules</h1>
+  <p>$RULE_COUNT rules, newest cycle first. Each is a <code>[pass]</code> commit: two members voted it in, in separate turns, and the link is the commit that recorded the tally. The question above a cycle's rules is the direction it was given. Cycles before rev50 kept their state in files and left no <code>[pass]</code> event, so they are not here.</p>
+
+$RULES_HTML
+</body>
+</html>
+EOF
 
 # ============================================================
 # Generate Learnings Page

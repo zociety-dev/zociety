@@ -29,6 +29,10 @@
 #      rev{N}-attempt{M} tag, not main, a cycle branch (deleted on GitHub
 #      when its PR merges) or the working tree; bin/zstate --ref reads a
 #      given ref
+#   8. docs/rules.html lists every [pass] event with a JSON body reachable
+#      from a rev* tag, each linked to its commit, and no other: a rule
+#      leaves the page with the tag that reached it (case 5), and a repo
+#      whose tags hold no [pass] gets the page with no rule (case 6)
 
 set -e
 
@@ -104,6 +108,22 @@ check "page set equals tag set" test "$PAGES" = "$EXPECTED_TAGS"
 LISTED=$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | sed 's#.*/##; s/\.html"//' | sort -u | sort -V)
 check "index lists exactly those tags" test "$LISTED" = "$EXPECTED_TAGS"
 
+# passes_on_tags: the [pass] events with a JSON body reachable from the
+# rev* tags, as the rules page gathers them: one git log over the tag set
+passes_on_tags() {
+  git log --format=%b --grep='^\[pass\]' --glob='refs/tags/rev*' | grep -c '^{"z":1' || true
+}
+echo "Case 8: rules.html lists every [pass] reachable from the tags"
+check "rules.html exists" test -f docs/rules.html
+NPASS=$(passes_on_tags)
+check "one entry per [pass] event ($NPASS)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$NPASS"
+NEWEST_PASS=$(git log -1 --format=%H --grep='^\[pass\]' "$NEWEST")
+if [[ -n "$NEWEST_PASS" ]]; then
+  check "newest tag's last [pass] ${NEWEST_PASS:0:7} is linked to its commit" grep -q "commit/$NEWEST_PASS\"" docs/rules.html
+  check "its cycle links the tag's archive page" grep -q "href=\"archive/$NEWEST.html\"" docs/rules.html
+fi
+check "front page links the rules page" grep -q 'href="rules.html"' docs/index.html
+
 echo "Case 2: $NEWEST page content"
 PAGE="docs/archive/$NEWEST.html"
 NFILES=$(git ls-tree --name-only "$NEWEST" stuff/ | grep -c '\.md$')
@@ -136,6 +156,10 @@ generate
 check "page removed with tag" test ! -e "$PAGE"
 check "index entry removed with tag" bash -c "! grep -q 'archive/$NEWEST.html' docs/archive.html"
 check "other pages intact" test "$(ls docs/archive | wc -l | tr -d ' ')" -eq $((EXPECTED_COUNT - 1))
+check "rules.html follows the tag set ($(passes_on_tags) [pass] left)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$(passes_on_tags)"
+if [[ -n "$NEWEST_PASS" && -z "$(git tag -l 'rev*' --contains "$NEWEST_PASS")" ]]; then
+  check "rule ${NEWEST_PASS:0:7} left the page with its tag" bash -c "! grep -q 'commit/$NEWEST_PASS\"' docs/rules.html"
+fi
 
 # Budget for Case 6. The batched generator takes about 10s for this repo on
 # a 2024 laptop (about 1s of git, the rest one bin/zmd2html per artifact);
@@ -187,6 +211,8 @@ check "h1 title is HTML-escaped" grep -qF ">Title $SCALE_TAGS &amp; &lt;b&gt;</a
 check "artifact without h1 falls back to its filename" grep -qF '>b.md</a> <code>b.md</code>' "$PAGE"
 check "body comes from the tag, not the tree" grep -qF "body $SCALE_TAGS" "$PAGE"
 check "index lists the newest tag first" test "$(grep -o 'href="archive/[^"]*\.html"' docs/archive.html | head -1)" = "href=\"archive/$LAST.html\""
+check "rules.html generated with no [pass] on any tag" test -f docs/rules.html
+check "and lists no rule" test "$(grep -c '<li value=' docs/rules.html || true)" -eq 0
 cd "$TMP/repo"
 
 # live_commit <ref> <mark> <cycle> <stuff-file> <title> [from]: one fast-import
