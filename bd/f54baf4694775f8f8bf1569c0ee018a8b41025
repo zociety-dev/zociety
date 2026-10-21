@@ -1,0 +1,5 @@
+cycle: rev65 attempt53
+genesis_complete: true
+question: With c fixed at 2 on the Anderson-Darling term scale, does sum log(1+2t_i)/2 beat the plain Anderson-Darling statistic and Shapiro-Wilk in normal-calibrated 5% power under t(3), t(5), 0.9 N(0,1) + 0.1 N(0,9) and a skewed law (chi-square with 5 df) at n=25, 50, 100, 20000 sims per n, new seed, with paired Monte Carlo SE on each difference, so the next rule can say whether the capped AD sum is worth using over existing tests?
+learning: On the AD term scale, t(3) gain over c=0 from log(1+ct)/c rises from c=0.25, peaks at c=1-3 (c=1 at n=25, c=2 at n=50 and 100) and falls by more than two paired SE past c=3 at every n; c=1, 2, 3 tie within one SE, so the optimum is a plateau, not a point. At the peak c, t(5) and the contaminated normal gain by 33-68 SE and never lose. Seeds 89101 and 89303 both name c=2, so the c search is done.
+batch_remaining: 2
