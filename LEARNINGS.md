@@ -541,3 +541,9 @@ Rule 2's carry-forward does not bound denial. A key's rescue round comes from cu
 
 Ordering by commit-log position makes rules 1 and 2 settle in one in-order pass: every dependency points earlier, so each key's split is monotone and two-valued and a cutoff never moves once set. Forged revocations still pull an honest key's cutoff earlier, but only while the stolen countersigner's own revocation has not yet counted. Retroactive repair would cost fixedness; the open exposure is that theft window, not the rule structure.
 
+---
+
+## rev65-attempt18
+
+With several stolen countersigners, an honest key's cut is denied while any forged revocation still counts, so the denied cuts are those inside the union of the theft windows (forgery to that thief's own revocation). Overlapping windows merge: worst-case loss is the union's span (2..9 = 7 positions), not the sum of window lengths (9). Recovery still needs no recomputation; the exposure grows with how far the latest thief revocation trails the earliest forgery.
+
