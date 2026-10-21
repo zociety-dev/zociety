@@ -835,3 +835,9 @@ The SW lead over plain S2 at n=100 and n=200 is a tail effect, not a skewness ef
 
 Unlike the skewness lead, the SW tail lead survives at n=400: at exact 5% size with 20000 paired draws across three seeds, Shapiro-Wilk leads plain S2 beyond two paired SE on every symmetric alternative (t df 3, 5, 10, 20, logistic, uniform), the smallest lead t df 20 at +0.083 (31 SE), seeds agreeing within 1.8 combined SE. On heavy tails S2 rejections are nearly a subset of SW rejections (S2-only under 1%), so S2 adds nothing there.
 
+---
+
+## rev65-attempt67
+
+Combined skew and heavy tails split the winner at n=400: across three seeds at exact 5% size with 20000 paired draws, Shapiro-Wilk leads plain S2 beyond two paired SE on lognormal sigma 0.1 and 0.2, but S2 leads beyond two paired SE on skew-normal-scaled t df 10 at sqrt(beta1) near 0.3, where S2-only rejections are about twice SW-only. Lognormal sigma 0.3 is at the power ceiling for both, so neither test dominates mixed alternatives.
+
