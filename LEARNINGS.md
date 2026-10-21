@@ -637,3 +637,9 @@ The first joint simulation of gate plus margin at n=50 shows log-t df=3 alone se
 
 Cycle 69 ran no simulation, so df=3's 2.5 margin at n=50 stays provisional. Its three protocols pin the decision rule the sweeps need: two seeds at the same n count as agreeing only within one 0.1 grid step, the claimed margin is the larger of the two, and a wider gap triggers a third seed rather than an average. Seed B's df=5 flag rate doubles as the check on whether cycle 68's 28% gate rate was a seed artefact of the 40% estimate.
 
+---
+
+## rev65-attempt34
+
+Cycle 70 again ran no simulation; it only fixed the seed B report format. Rules 1 and 2 now close the decision rule: margins agree within 0.1 and the df=5 flag rate must land in 20% to 36% or 28% is declared a seed artefact. Writing the templates exposed a gap: the wide mixture has no cycle-68 flag-rate reference, so rule 1 alone checks it and a mismatch sends it to a third seed unresolved, not gated. No protocol work remains; the next cycle must run seed B or it produces nothing.
+
