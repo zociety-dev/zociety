@@ -3,3 +3,6 @@ genesis_complete: true
 question: When skewness and heavy tails act together, which test wins at n=400? At exact 5% size with 20000 paired draws and a new seed, compare Shapiro-Wilk and plain S2 under lognormal sigma 0.1, 0.2, 0.3 and skew-normal-scaled Student t df 5 and 10 with sqrt(beta1) near 0.3 and 0.6, report power of both tests and the paired difference SW minus S2 with its paired SE per alternative, name any alternative at the power ceiling for both, and state for which alternatives SW leads beyond two paired SE.
 learning: Unlike the skewness lead, the SW tail lead survives at n=400: at exact 5% size with 20000 paired draws across three seeds, Shapiro-Wilk leads plain S2 beyond two paired SE on every symmetric alternative (t df 3, 5, 10, 20, logistic, uniform), the smallest lead t df 20 at +0.083 (31 SE), seeds agreeing within 1.8 combined SE. On heavy tails S2 rejections are nearly a subset of SW rejections (S2-only under 1%), so S2 adds nothing there.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
