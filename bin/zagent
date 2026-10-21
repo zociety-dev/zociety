@@ -47,15 +47,26 @@
 #                          since the context carries the git status, which
 #                          every turn's commit changes, none of it is served
 #                          from the prompt cache: a two-call bin/zstate turn
-#                          cost $0.24 with settings on the host, $0.03
-#                          without. Nothing the turn needs comes from
+#                          cost $0.24 with settings on the host, $0.04
+#                          without. The turn's own knobs do not come from
 #                          settings: the model is --model (ANTHROPIC_MODEL),
 #                          the effort ZAGENT_EFFORT, the tools ZAGENT_TOOLS.
+#                          What does, and is dropped with them: auth routing
+#                          an operator keeps in user settings (apiKeyHelper,
+#                          an env ANTHROPIC_BASE_URL, Bedrock or Vertex
+#                          switches). A turn that fails to authenticate under
+#                          the default needs ZAGENT_SETTING_SOURCES=user. The
+#                          child also gets DISABLE_AUTOUPDATER=1, so no turn
+#                          updates the client mid-run.
 #   ZAGENT_EFFORT          claude --effort (low, medium, high, xhigh, max);
 #                          unset: the client's default. Cycles up to 52 ran
 #                          under the operator's user settings, which set
 #                          xhigh for claude-opus-5-5; set it here to keep that
 #                          regime.
+#   The three ZAGENT_* knobs are claude's; the gemini client ignores them.
+#   bin/zheap-death records every ZAGENT_* variable present under
+#   data.zagent in the heap-death and direction events, beside the stop
+#   regime, so cycles under different turn regimes are told apart in git.
 #
 # The model reaches the client as a CLI flag only. The child runs with
 # ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (the CI step variable bin/zga-loop
@@ -136,7 +147,10 @@ if [[ -z "$MODEL" ]]; then
     gemini) MODEL="${GEMINI_MODEL:-}" ;;
   esac
 fi
-SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY)
+# DISABLE_AUTOUPDATER=1: with no settings loaded (ZAGENT_SETTING_SOURCES)
+# nothing else keeps a turn's client from updating itself between the turns
+# of one cycle.
+SCRUB=(env -u ANTHROPIC_MODEL -u GEMINI_MODEL -u MODEL -u ZOCIETY_AGENT_CLIENT -u ZOCIETY_BLIND_KEY DISABLE_AUTOUPDATER=1)
 
 case "$CLIENT" in
   claude)
