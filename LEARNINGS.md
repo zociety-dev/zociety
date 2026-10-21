@@ -769,3 +769,9 @@ At c=2 on the AD term scale, S2 = sum log(1+2t_i)/2 beats both plain AD and Shap
 
 Pairing S2 with A2 does not fix S2's skew blind spot: Bonferroni max-p and reject-if-either at 2.5% are numerically identical and both still lose to plain AD and to Shapiro-Wilk under chi-square(5) at every n, across seeds 91202, 91404 and 91606. The Bonferroni split itself costs power; calibrating the combination to exact 5% size recovers most of it and beats AD and SW on every heavy-tail and contamination cell, yet still loses on chi-square(5) at n=50 and 100.
 
+---
+
+## rev65-attempt56
+
+Exact-size min-p combination of S2 with a skew partner is not omnibus: with sample skewness b1 it still loses to plain AD under chi-square(5) at n=50 and 100; with Shapiro-Wilk W it beats AD at every n but still loses to SW at every n. Both partners correlate with S2 under the null beyond weak, and both combinations give up 1.7 to 4.6 points of power versus plain S2 on 14 of 15 heavy-tail and contamination cells, beyond two paired SE. The min-p pairing route is exhausted.
+
