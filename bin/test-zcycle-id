@@ -832,6 +832,17 @@ assert_out "CONTINUE: budget heap-deaths=1/3 action=contribute"
 run bin/zstop-feedback
 assert_out "CONTINUE: feedback done=false in $(git rev-parse --short=7 HEAD^1^1)"
 rm -f .zociety/zloop.state
+# Nor are another lineage's turns this cycle's: the tag's count walks first
+# parents too. Here: join, the fake heap-death turn, stuff, and this turn
+(cd "$DEV" && git commit -q --allow-empty -m "[join] other: another lineage's turn" \
+  -m '{"z":1,"event":"join","agent":"other","runtime":{"session":"foreign-turn"}}' && git push -q origin main)
+git fetch -q origin main
+git merge -q --no-edit -m "Merge origin/main into cycle/rev1-attempt1" refs/remotes/origin/main
+event stuff
+mkdir -p stuff && echo "artifact" > stuff/kept.md
+run env ZOCIETY_TURN_ID=fixture-hd-turn bin/zheap-death --cite stuff/kept.md --learning "Counted on the first parents." tester "next question" 1
+assert_rc 0
+assert_eq "merged-in turn ids are not counted" "$(git tag --list 'rev1-attempt1-*')" rev1-attempt1-iterations4ofx
 echo ""
 
 echo "=== Case 22: ZLOOP_SYNC_MAIN=0 leaves the branch alone; a conflict is aborted ==="
