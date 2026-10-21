@@ -1,0 +1,5 @@
+cycle: rev65 attempt29
+genesis_complete: true
+question: Which statistical test should decide that a heavier-tailed fit 'cannot be ruled out' for the pooled floor, and at what significance, given pools of only ~50 outages?
+learning: Rule 2's breach-triggered refit alone leaves the pooled floor stuck: a floor set too high is never revisited, and a too-light fit is only corrected after a breach. The floor needs asymmetric updates (raise after one refit; lower only when two refits agree, taking the smaller cut both support) plus a scheduled refit every ~50 pooled outages, the sample a sigma-0.5 lognormal fit needs, with scheduled refits still bound by rule 1's heaviest-tail check.
+batch_remaining: 1
