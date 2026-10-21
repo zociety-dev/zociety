@@ -660,9 +660,12 @@ if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
     # first in topological order, a commit belongs to the last heap-death
     # seen on its tag), never the envelope's cycle number, which rev46's
     # lineage reused for two cycles; so each block has its own question
-    # ([direction], the first commit of the stretch) and its own learning.
-    # A heap-death is a boundary by its subject, envelope or not: rev46's
-    # lineage has heap-deaths with no event body between cycles that have.
+    # ([direction]: the oldest in the stretch, the cycle's first commit,
+    # since rev51's stretch holds two) and its own learning. A heap-death
+    # is a boundary by its subject, envelope or not: rev46's lineage has
+    # heap-deaths with no event body between cycles that have. Two tags
+    # at one commit share one %S source and so one card (rev15 and rev16
+    # do, before events).
     RULES_OUT=$(git log --first-parent --topo-order --format='%H%x1f%S%x1f%s%x1f%b%x1e' --grep='^\[pass\]' \
         --grep='^\[direction\]' --grep='^\[heap-death\]' --glob='refs/tags/rev*' \
         | jq -R -r -s --arg archived "${ARCHIVE_TAGS[*]-}" --rawfile tagdates "$ARCHIVE_TMP/tagdates" '
@@ -681,7 +684,7 @@ if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
               else .recs += [$r + {cycle: (.seen[$r.tag] // "")}] end)
            | .recs | map(select((.ev | type) == "object" and .ev.z == 1))) as $recs
         | ($recs | map(select(.ev.event == "direction")) | group_by([.tag, .cycle])
-            | map({key: "\(.[0].tag)\t\(.[0].cycle)", value: .[0].ev.data.question}) | from_entries) as $question
+            | map({key: "\(.[0].tag)\t\(.[0].cycle)", value: (max_by(.i) | .ev.data.question)}) | from_entries) as $question
         | ($recs | map(select(.ev.event == "heap-death"))
             | map({key: .sha, value: {sha, learning: .ev.data.learning}}) | from_entries) as $death
         | ($recs | map(select(.ev.event == "pass"))) as $passes
@@ -707,7 +710,7 @@ if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
                   ( sort_by(.i) | reverse | map(
                       "    <li value=\"\(.ev.data.rule // 0)\">\(.ev.data.description // "" | @html)" +
                       " <span class=\"meta\">\(.ev.agent // "" | @html)" +
-                      (if .ev.data.votes then " · \(.ev.data.votes.for // 0) for, \(.ev.data.votes.against // 0) against" else "" end) +
+                      (if (.ev.data.votes | type) == "object" then " · \(.ev.data.votes.for // 0) for, \(.ev.data.votes.against // 0) against" else "" end) +
                       " · <a href=\"https://github.com/zociety-dev/zociety/commit/\(.sha)\">\(.sha[:7])</a></span></li>"
                     ) | join("\n") ) +
                   "\n  </ol>\n" +

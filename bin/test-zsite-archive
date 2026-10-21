@@ -133,14 +133,15 @@ card() {
   awk -v id="id=\"$1\"" 'index($0, "<div class=\"cycle\"") { on = index($0, id) > 0 } on' docs/rules.html
 }
 # own_commits <tag> <event>: the tag's first-parent commits carrying a
-# z:1 <event> envelope that no other rev* tag reaches, i.e. the cycle it
-# archived, not the lineage below it nor one merged in from main; found
-# without %S, so it is an independent check on the page's attribution
+# z:1 <event> envelope that no rev* tag below it reaches, i.e. the cycle
+# it archived, not the lineage below it nor one merged in from main;
+# found without %S, so it is an independent check on the page's
+# attribution, and it works for a tag a newer tag descends from
 own_commits() {
-  local tag="$1" event="$2" others
-  others=$(git tag -l 'rev*' | grep -vxF "$tag")
+  local tag="$1" event="$2" below
+  below=$(git tag -l 'rev*' --merged "$tag" | grep -vxF "$tag")
   # shellcheck disable=SC2086  # the tag names are one per line, no spaces
-  git log --first-parent --format='%H%x1f%b%x1e' --grep="^\[$event\]" "$tag" --not $others \
+  git log --first-parent --format='%H%x1f%b%x1e' --grep="^\[$event\]" "$tag" --not $below \
     | jq -R -r -s --arg ev "$event" '
       split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
       | select(((.[1] | fromjson?)
@@ -169,7 +170,7 @@ check "its card links the tag's archive page" grep -q "href=\"archive/$NEWEST.ht
 if [[ -n "$(own_commits "$NEWEST" direction)" ]]; then
   check "its card carries the cycle's own question" grep -q 'class="question"' <<< "$CARD"
 fi
-NEWEST_DEATH=$(git log --first-parent -1 --format=%H --grep='^\[heap-death\]' "$NEWEST")
+NEWEST_DEATH=$(own_commits "$NEWEST" heap-death | head -1)
 if [[ -n "$NEWEST_DEATH" ]]; then
   check "its card links the heap-death ${NEWEST_DEATH:0:7} with the learning" grep -q "commit/$NEWEST_DEATH\"" <<< "$CARD"
 fi
