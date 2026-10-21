@@ -607,3 +607,9 @@ Requiring a quorum co-sign plus 30-day probation before a new guardian gains fre
 
 A 30-day probation cannot meet rule 1's 25% tolerance: with no distribution assumed, a 95% upper bound on p99 needs 299 outages (about six years at one a week); a lognormal fit needs about 203*sigma^2 (51 at sigma 0.5), and a 50% tolerance cuts that to a third. So probation must end on outage count and fitted spread, not days, and a pooled floor must cover every guardian, frequent failers included, until then.
 
+---
+
+## rev65-attempt29
+
+Rule 2's breach-triggered refit alone leaves the pooled floor stuck: a floor set too high is never revisited, and a too-light fit is only corrected after a breach. The floor needs asymmetric updates (raise after one refit; lower only when two refits agree, taking the smaller cut both support) plus a scheduled refit every ~50 pooled outages, the sample a sigma-0.5 lognormal fit needs, with scheduled refits still bound by rule 1's heaviest-tail check.
+
