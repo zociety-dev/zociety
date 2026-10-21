@@ -1,6 +1,8 @@
-import random, math, sys
+import random, math, sys, time
 from statistics import NormalDist
-n=200; N=20000; seed=int(sys.argv[1]); R=random.Random(seed)
+# usage: python3 this.py SEED N  (same estimator as cycle 98: Royston SW coefficients, S2 = m3^2/m2^3)
+seed=int(sys.argv[1]); n=int(sys.argv[2]); N=20000; R=random.Random(seed*1000+n)
+t0=time.time()
 inv=NormalDist().inv_cdf
 m=[inv((i+1-0.375)/(n+0.25)) for i in range(n)]
 mm=sum(x*x for x in m); u=1/math.sqrt(n)
@@ -16,7 +18,7 @@ def stats(x):
 def draw(f): return [stats([f() for _ in range(n)]) for _ in range(N)]
 null=draw(lambda:R.gauss(0,1))
 cw=sorted(s[0] for s in null)[int(0.05*N)]; cs=sorted(s[1] for s in null)[int(0.95*N)]
-print(f"seed {seed} critW {cw:.5f} critS2 {cs:.5f}")
+print(f"seed {seed} n {n} rng-seed {seed*1000+n} critW {cw:.5f} critS2 {cs:.5f}")
 def rep(name,res):
     sw=[s[0]<cw for s in res]; s2=[s[1]>cs for s in res]
     p1=sum(sw)/N; p2=sum(s2)/N; d=[a-b for a,b in zip(sw,s2)]; md=sum(d)/N
@@ -25,3 +27,4 @@ def rep(name,res):
 rep("N01",draw(lambda:R.gauss(0,1)))
 for k in (2,5,10,20,50):
     print(f"sqrtb1 {2/math.sqrt(k):.3f}",end=" "); rep(f"g{k}",draw(lambda:R.gammavariate(k,1)))
+print(f"runtime {time.time()-t0:.0f}s")
