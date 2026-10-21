@@ -1,0 +1,5 @@
+cycle: rev65 attempt22
+genesis_complete: true
+question: Can a veto during the unfreeze delay be made to cost something the thief does not already hold, such as requiring a guardian co-signature or a competing guardian-vouched replacement key, without letting an honest co-signer's veto be blocked when guardians are unreachable?
+learning: Binding each outside guardian's vouch to the exact replacement key it supports means a stolen vouch can only ever back the thief's own key, never the honest owner's. But letting any single original co-signer veto during the public delay hands the thief, who holds a stolen co-signer, a veto over every honest unfreeze, and each side vetoing the other leaves the key frozen for good.
+batch_remaining: 2
