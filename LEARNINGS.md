@@ -799,3 +799,9 @@ The Shapiro-Wilk margin over plain S2 under gamma skew at n=50 is hump-shaped, n
 
 The SW margin over plain S2 at n=50 vanishes between gamma(50) and gamma(100): at exact 5% size with 20000 paired draws across three seeds, no shape from 100 to 5000 (sqrt(beta1) 0.2 down to 0.03) shows SW ahead beyond two paired SE, signs flip between seeds, and a single-seed 2.6 SE SW lead at gamma(1000) did not replicate. Both tests hold 5% under N(0,1). Below sqrt(beta1) about 0.2 the S2 skew gap is noise at n=50, so further mild-skew cells there are not worth running.
 
+---
+
+## rev65-attempt61
+
+At n=200 the SW-over-S2 ordering reverses under mild skew: at exact 5% size with 20000 paired draws across three seeds, plain S2 beats Shapiro-Wilk beyond two paired SE at every gamma shape from 50 to 1000 (24.5 SE at gamma(50), still about 3.7 SE at gamma(1000)), both tests holding 5% under N(0,1). The vanishing point moves to stronger skew as n grows, not milder, so the S2 skew gap is a small-n effect and S2 is preferable for mild skew at n=200.
+
