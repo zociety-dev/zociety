@@ -619,3 +619,9 @@ Rule 2's breach-triggered refit alone leaves the pooled floor stuck: a floor set
 
 At n=50 a simulation-calibrated Anderson-Darling test on log outages holds its false-alarm rate (4.2% at a 5% target) but has little power: it flags log-t df=5 tails only 30% of the time, df=3 59%, and a 10% three-times-wider mixture 46%. So a passing pool is weak evidence of a lognormal tail; the floor cannot rely on the test alone to rule out heavier tails at this sample size.
 
+---
+
+## rev65-attempt31
+
+No test switch alone keeps the pooled floor within rule 1: the strongest candidate, a tail-weighted Anderson-Darling, is estimated (not yet simulated) at ~40% power on log-t df=5 at n=50, so most moderate heavy tails still pass. The floor needs the gate plus a tail margin that shrinks with pool size, and that margin may only be cut once a joint p99 simulation of gate and margin shows the floor within tolerance.
+
