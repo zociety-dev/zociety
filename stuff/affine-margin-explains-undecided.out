@@ -1,0 +1,23 @@
+DELTA=0.2 chi2_95(df=3)=7.8147
+
+analytic affine prediction vs observed pooled margin
+  n= 25: predicted=0.768 observed=0.659 ratio=0.859
+  n= 50: predicted=1.152 observed=1.056 ratio=0.917
+  n=100: predicted=1.919 observed=1.781 ratio=0.928
+  n=200: predicted=3.455 observed=3.405 ratio=0.986
+  (observed sits below the mean-based prediction because the median of a noncentral chi-square is below its mean; the gap shrinks with n)
+
+least-squares affine fit to observed: margin = 0.258 + 0.01566 * n
+  analytic slope 3*DELTA^2/chi2_95 = 0.01536
+  residuals: +0.010 +0.016 -0.042 +0.016
+  R^2 = 0.9995
+
+power-law fit to observed (rule 2 family): slope = 0.786
+
+local log-log slopes between adjacent n
+   25-> 50: observed=0.680 affine=0.585
+   50->100: observed=0.754 affine=0.737
+  100->200: observed=0.935 affine=0.848
+  both climb toward 1: an affine curve has no single exponent, so rule 2's sqrt(n)-vs-n question is undecided by construction.
+
+verdict: margin is affine in n (a + b*n with a>0); the fitted exponent 0.79 is the power-law shadow of that line over 25..200, not evidence of a growth rate between sqrt(n) and n.

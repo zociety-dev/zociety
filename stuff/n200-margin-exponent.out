@@ -1,0 +1,32 @@
+protocol: REPS=2000 BOOT=1000 DELTA=0.2 seeds=[1, 2]
+
+per-n results (seed: margin [boot 95% CI], null rate, power)
+  n= 25 seed=1: margin=0.666 [0.618, 0.710] null_rate=0.050 power=0.296
+  n= 25 seed=2: margin=0.653 [0.607, 0.691] null_rate=0.050 power=0.265
+  n= 50 seed=1: margin=1.042 [0.978, 1.111] null_rate=0.050 power=0.522
+  n= 50 seed=2: margin=1.071 [0.972, 1.124] null_rate=0.050 power=0.534
+  n=100 seed=1: margin=1.793 [1.706, 1.882] null_rate=0.050 power=0.835
+  n=100 seed=2: margin=1.770 [1.673, 1.878] null_rate=0.050 power=0.835
+  n=200 seed=1: margin=3.319 [3.157, 3.507] null_rate=0.050 power=0.993
+  n=200 seed=2: margin=3.491 [3.264, 3.701] null_rate=0.050 power=0.995
+
+rule 1 seed agreement (|seed1 - seed2| <= max half-width)
+  n= 25: diff=0.013 half_width=0.046 -> enters fit
+  n= 50: diff=0.028 half_width=0.076 -> enters fit
+  n=100: diff=0.023 half_width=0.103 -> enters fit
+  n=200: diff=0.172 half_width=0.218 -> enters fit
+
+rule 2 adjacent-n steps (pooled seeds)
+   25-> 50: step=0.397 half_width=0.076 -> clears
+   50->100: step=0.725 half_width=0.103 -> clears
+  100->200: step=1.624 half_width=0.218 -> clears
+
+rule 2 exponent fit of log(margin) on log(n)
+  seed=1: slope=0.773 [0.737, 0.815] -> undecided
+  seed=2: slope=0.798 [0.761, 0.845] -> undecided
+  pooled: slope=0.786 [0.742, 0.840]
+
+points admitted by rule 1: [25, 50, 100, 200]
+adjacent steps all clear: True
+verdicts by seed: ['undecided', 'undecided']
+fit trusted: True
