@@ -639,17 +639,24 @@ echo "Generating rules.html..."
 # rev63 wrote several heap-deaths per number. The card's question is the
 # cycle's own [direction] (the first commit on its branch; a heap-death's
 # question is the one it gives its successor), its learning the
-# heap-death's; where a tag's lineage holds several, the newest. A body
-# that is one JSON document is read whole ([direction] is pretty-printed),
-# else its first {"z":1 line; a [pass] with no event body (the file-based
-# cycles) is skipped.
+# heap-death's; where a tag's lineage holds several cycles, each cycle
+# number gets its own block and question. A rule leaves the page only
+# when no tag reaches it: deleting a tag moves its rules to the next tag
+# whose lineage holds them. A body that is one JSON document is read whole
+# ([direction] is pretty-printed), else its first {"z":1 line, and only an
+# envelope with z == 1 counts, as bin/zstate reads them; a [pass] with no
+# event body (the file-based cycles) is skipped.
 RULES_HTML=""
 RULE_COUNT=0
 if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
     for tag in "${REV_TAGS[@]}"; do
         printf '%s\t%s\n' "$tag" "${TAG_DATE_OF[$tag]}"
     done > "$ARCHIVE_TMP/tagdates"
-    RULES_HTML=$(git log --first-parent --format='%H%x1f%S%x1f%b%x1e' --grep='^\[pass\]' \
+    # jq prints the rule count on its first line, then the cards. A tag
+    # whose lineage holds several cycles (rev63-attempt28 archived fifteen
+    # untagged ones) gets one card with a block per cycle number, each
+    # under that cycle's own [direction].
+    RULES_OUT=$(git log --first-parent --format='%H%x1f%S%x1f%b%x1e' --grep='^\[pass\]' \
         --grep='^\[direction\]' --grep='^\[heap-death\]' --glob='refs/tags/rev*' \
         | jq -R -r -s --arg archived "${ARCHIVE_TAGS[*]-}" --rawfile tagdates "$ARCHIVE_TMP/tagdates" '
         ($archived | split(" ") | map(select(length > 0))) as $pages
@@ -660,34 +667,47 @@ if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
             | {sha: .[0], tag: (.[1] | ltrimstr("refs/tags/")),
                ev: ((.[2] | fromjson?)
                     // (.[2] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first))}
-            | select((.ev | type) == "object") ] as $recs
-        | ($recs | map(select(.ev.event == "direction")) | group_by(.tag)
-            | map({key: .[0].tag, value: .[0].ev.data.question}) | from_entries) as $question
+            | select((.ev | type) == "object" and .ev.z == 1) ] as $recs
+        | ($recs | map(select(.ev.event == "direction")) | group_by([.tag, .ev.cycle])
+            | map({key: "\(.[0].tag)\t\(.[0].ev.cycle)", value: .[0].ev.data.question}) | from_entries) as $question
         | ($recs | map(select(.ev.event == "heap-death")) | group_by(.tag)
             | map({key: .[0].tag, value: {sha: .[0].sha, learning: .[0].ev.data.learning}}) | from_entries) as $death
-        | $recs | map(select(.ev.event == "pass")) | group_by(.tag)
-        | sort_by(.[0].tag as $t | $order | index($t)) | reverse | .[]
-        | .[0].tag as $tag | ($tag | sub("-iterations.*$"; "")) as $id
-        | "<div class=\"cycle\" id=\"\($tag)\">\n" +
-          "  <div class=\"cycle-header\"><span class=\"cycle-tag\">" +
-          (if ($pages | any(. == $tag)) then "<a href=\"archive/\($tag).html\">\($id)</a>" else $id end) +
-          " <span class=\"meta\">cycle \(.[0].ev.cycle)</span></span>" +
-          "<span class=\"cycle-date\">\($date[$tag] // "")</span></div>\n" +
-          (if $question[$tag] then "  <p class=\"question\">\($question[$tag] | @html)</p>\n" else "" end) +
-          "  <ol>\n" +
-          ( sort_by([.ev.cycle, .ev.seq]) | map(
-              "    <li value=\"\(.ev.data.rule // 0)\">\(.ev.data.description // "" | @html)" +
-              " <span class=\"meta\">\(.ev.agent | @html) · \(.ev.data.votes.for // "?") for, \(.ev.data.votes.against // 0) against" +
-              " · <a href=\"https://github.com/zociety-dev/zociety/commit/\(.sha)\">\(.sha[:7])</a></span></li>"
-            ) | join("\n") ) +
-          "\n  </ol>\n" +
-          (if $death[$tag].learning then
-             "  <p class=\"learning\">Found: \($death[$tag].learning | @html)" +
-             " <span class=\"meta\"><a href=\"https://github.com/zociety-dev/zociety/commit/\($death[$tag].sha)\">\($death[$tag].sha[:7])</a></span></p>\n"
-           else "" end) +
-          "</div>"
+        | ($recs | map(select(.ev.event == "pass"))) as $passes
+        | ($passes | length | tostring),
+          ( $passes | group_by(.tag)
+          | sort_by(.[0].tag as $t | $order | index($t)) | reverse | .[]
+          | .[0].tag as $tag | ($tag | sub("-iterations.*$"; "")) as $id
+          | (group_by(.ev.cycle) | sort_by(.[0].ev.cycle)) as $blocks
+          | "<div class=\"cycle\" id=\"\($tag)\">\n" +
+            "  <div class=\"cycle-header\"><span class=\"cycle-tag\">" +
+            (if ($pages | any(. == $tag)) then "<a href=\"archive/\($tag).html\">\($id)</a>" else $id end) +
+            " <span class=\"meta\">" +
+            (if ($blocks | length) == 1 then "cycle \($blocks[0][0].ev.cycle)"
+             else "cycles \($blocks[0][0].ev.cycle) to \($blocks[-1][0].ev.cycle), archived together" end) +
+            "</span></span>" +
+            "<span class=\"cycle-date\">\($date[$tag] // "")</span></div>\n" +
+            ( $blocks | map(
+                (.[0].ev.cycle) as $cycle
+                | (if ($blocks | length) > 1 then "  <h3 class=\"sub\">cycle \($cycle)</h3>\n" else "" end) +
+                  (if $question["\($tag)\t\($cycle)"] then
+                     "  <p class=\"question\">\($question["\($tag)\t\($cycle)"] | @html)</p>\n" else "" end) +
+                  "  <ol>\n" +
+                  ( sort_by(.ev.seq) | map(
+                      "    <li value=\"\(.ev.data.rule // 0)\">\(.ev.data.description // "" | @html)" +
+                      " <span class=\"meta\">\(.ev.agent | @html) · \(.ev.data.votes.for // "?") for, \(.ev.data.votes.against // 0) against" +
+                      " · <a href=\"https://github.com/zociety-dev/zociety/commit/\(.sha)\">\(.sha[:7])</a></span></li>"
+                    ) | join("\n") ) +
+                  "\n  </ol>\n"
+              ) | join("") ) +
+            (if $death[$tag].learning then
+               "  <p class=\"learning\">Found: \($death[$tag].learning | @html)" +
+               " <span class=\"meta\"><a href=\"https://github.com/zociety-dev/zociety/commit/\($death[$tag].sha)\">\($death[$tag].sha[:7])</a></span></p>\n"
+             else "" end) +
+            "</div>" )
     ')
-    RULE_COUNT=$(grep -c '<li value=' <<< "$RULES_HTML" || true)
+    RULE_COUNT=${RULES_OUT%%$'\n'*}
+    RULES_HTML=${RULES_OUT#"$RULE_COUNT"}
+    RULES_HTML=${RULES_HTML#$'\n'}
 fi
 
 cat > "$DOCS_DIR/rules.html" << EOF
@@ -733,6 +753,7 @@ cat > "$DOCS_DIR/rules.html" << EOF
     .cycle-date { opacity: 0.7; font-size: 0.9rem; }
     .question { opacity: 0.85; font-style: italic; margin: 0.5rem 0; }
     .learning { margin: 0.75rem 0 0; font-size: 0.95rem; }
+    h3.sub { margin: 1rem 0 0; font-size: 1rem; color: var(--text); opacity: 0.8; }
     ol { padding-left: 1.5rem; margin: 0.5rem 0 0; }
     ol li { margin: 0.5rem 0; }
     .meta { opacity: 0.7; font-size: 0.85rem; white-space: nowrap; }

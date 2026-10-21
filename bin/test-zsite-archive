@@ -19,8 +19,9 @@
 #      from a rev* tag, each linked to its commit, on the card of the tag
 #      that archived it: the newest tag's card holds exactly the [pass]
 #      commits no older tag reaches, its question and its heap-death. A
-#      rule leaves the page with its tag (case 6) and a repo whose tags
-#      hold no [pass] gets the page with no rule (case 7)
+#      rule leaves the page with the highest tag (case 6; a lower tag's
+#      rules move to the next tag that reaches them) and a repo whose
+#      tags hold no [pass] gets the page with no rule (case 7)
 #   3. the newest such tag's page holds one artifact per stuff/*.md in the
 #      tag, each with the file's first h1 as its title
 #   4. deleting stuff/ from the working tree changes no archive byte
@@ -121,7 +122,7 @@ pass_tags() {
       split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
       | select(((.[1] | fromjson?)
                 // (.[1] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first))
-               | (type == "object") and (.event == "pass"))
+               | (type == "object") and (.z == 1) and (.event == "pass"))
       | .[0] | ltrimstr("refs/tags/")'
 }
 passes_on_tags() {
@@ -142,9 +143,11 @@ own_commits() {
 }
 echo "Case 2: rules.html lists every [pass] reachable from the tags, under the tag that archived it"
 check "rules.html exists" test -f docs/rules.html
-NPASS=$(passes_on_tags)
+PASS_TAGS=$(pass_tags)
+NPASS=$(grep -c . <<< "$PASS_TAGS" || true)
 check "one entry per [pass] event ($NPASS)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$NPASS"
-NCARDS=$(pass_tags | sort -u | grep -c . || true)
+check "the headline count agrees" grep -q "<p>$NPASS rules," docs/rules.html
+NCARDS=$(sort -u <<< "$PASS_TAGS" | grep -c . || true)
 check "one card per tag that reached a [pass] ($NCARDS)" test "$(grep -c '<div class="cycle" id=' docs/rules.html)" -eq "$NCARDS"
 NEWEST_PASSES=$(own_commits "$NEWEST" '^\[pass\]')
 NEWEST_NPASS=$(grep -c . <<< "$NEWEST_PASSES" || true)
@@ -156,10 +159,11 @@ while IFS= read -r sha; do
   check "rule ${sha:0:7} is linked on $NEWEST's card" grep -q "commit/$sha\"" <<< "$CARD"
 done <<< "$NEWEST_PASSES"
 check "its card links the tag's archive page" grep -q "href=\"archive/$NEWEST.html\"" <<< "$CARD"
-if [[ -n "$(own_commits "$NEWEST" '^\[direction\]')" ]]; then
+NEWEST_DIRECTION=$(own_commits "$NEWEST" '^\[direction\]' | head -1)
+if [[ -n "$NEWEST_DIRECTION" ]] && git log -1 --format=%b "$NEWEST_DIRECTION" | jq -e '.z == 1 and .event == "direction"' >/dev/null 2>&1; then
   check "its card carries the cycle's own question" grep -q 'class="question"' <<< "$CARD"
 fi
-NEWEST_DEATH=$(git log -1 --format=%H --grep='^\[heap-death\]' "$NEWEST")
+NEWEST_DEATH=$(git log --first-parent -1 --format=%H --grep='^\[heap-death\]' "$NEWEST")
 if [[ -n "$NEWEST_DEATH" ]]; then
   check "its card links the heap-death ${NEWEST_DEATH:0:7} with the learning" grep -q "commit/$NEWEST_DEATH\"" <<< "$CARD"
 fi
@@ -197,12 +201,19 @@ generate
 check "page removed with tag" test ! -e "$PAGE"
 check "index entry removed with tag" bash -c "! grep -q 'archive/$NEWEST.html' docs/archive.html"
 check "other pages intact" test "$(ls docs/archive | wc -l | tr -d ' ')" -eq $((EXPECTED_COUNT - 1))
-check "rules.html follows the tag set ($(passes_on_tags) [pass] left)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$(passes_on_tags)"
+NPASS_LEFT=$(passes_on_tags)
+check "rules.html follows the tag set ($NPASS_LEFT [pass] left)" test "$(grep -c '<li value=' docs/rules.html)" -eq "$NPASS_LEFT"
 check "$NEWEST's card left with its tag" bash -c "! grep -q 'id=\"$NEWEST\"' docs/rules.html"
-while IFS= read -r sha; do
-  [[ -n "$sha" ]] || continue
-  check "rule ${sha:0:7} left the page with its tag" bash -c "! grep -q 'commit/$sha\"' docs/rules.html"
-done <<< "$NEWEST_PASSES"
+# A rule leaves the page only when no tag reaches it; with a higher rev*
+# tag (one that archived no stuff), NEWEST's rules move to that tag's card
+if [[ "$NEWEST" == "$(git tag -l 'rev*' | sort -V | tail -1)" ]]; then
+  while IFS= read -r sha; do
+    [[ -n "$sha" ]] || continue
+    check "rule ${sha:0:7} left the page with its tag" bash -c "! grep -q 'commit/$sha\"' docs/rules.html"
+  done <<< "$NEWEST_PASSES"
+else
+  echo "  - $NEWEST is not the highest rev* tag; its rules move to the next card rather than leave"
+fi
 
 # Budget for Case 7. The batched generator takes about 10s for this repo on
 # a 2024 laptop (about 1s of git, the rest one bin/zmd2html per artifact);
