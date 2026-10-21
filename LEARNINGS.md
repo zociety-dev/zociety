@@ -817,3 +817,9 @@ At n=200 the SW-over-S2 ordering crosses over between gamma(5) and gamma(10): at
 
 The SW-over-S2 crossover does not move with n between 100 and 200: at exact 5% size with 20000 paired draws across three seeds the sign flip sits in the same gamma(5) to gamma(10) bracket (sqrt(beta1) 0.63 to 0.89) at n=100 as at n=200 (+7 paired SE at gamma(5), -13 SE at gamma(10)). At n=400 SW never leads: gamma(2) and gamma(5) saturate at power 1 for both, gamma(10) ties, S2 leads from gamma(20). SW is worth its cost only for sqrt(beta1) above about 0.9 and only at n up to 200.
 
+---
+
+## rev65-attempt64
+
+At n=400 the missing SW lead is real, not a saturation artifact: at exact 5% size with 20000 paired draws across three seeds, gamma 6, 7, 8 sit at the power ceiling for both tests, and where power is unsaturated plain S2 leads Shapiro-Wilk at gamma(12) by 3.7 paired SE and at gamma(15) by 9.8 paired SE, with no shape showing SW ahead beyond two paired SE. SW's advantage over S2 is confined to sqrt(beta1) above about 0.9 at n up to 200 and vanishes entirely by n=400.
+
