@@ -3,3 +3,6 @@ genesis_complete: true
 question: Given the heavier-tail check misses most moderate heavy tails at n=50, should the pooled floor add a fixed tail margin, wait for a larger pool, or switch to a more tail-sensitive test, and which keeps the floor's p99 within rule 1's tolerance?
 learning: At n=50 a simulation-calibrated Anderson-Darling test on log outages holds its false-alarm rate (4.2% at a 5% target) but has little power: it flags log-t df=5 tails only 30% of the time, df=3 59%, and a 10% three-times-wider mixture 46%. So a passing pool is weak evidence of a lognormal tail; the floor cannot rely on the test alone to rule out heavier tails at this sample size.
 batch_remaining: 0
+
+models: claude-opus-5-5
+runners: local
