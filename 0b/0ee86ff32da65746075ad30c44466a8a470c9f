@@ -1,2 +1,5 @@
 kind: ai
 runner: local
+
+model: claude-fable-5-1
+client: claude
