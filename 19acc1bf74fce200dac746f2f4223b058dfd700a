@@ -3,3 +3,6 @@ genesis_complete: true
 question: Can an honest key whose cutoff a forged revocation pulled earlier inside the theft window recover by a later log event without retroactive recomputation, and how many of its cuts does that window deny in the worst case?
 learning: Ordering by commit-log position makes rules 1 and 2 settle in one in-order pass: every dependency points earlier, so each key's split is monotone and two-valued and a cutoff never moves once set. Forged revocations still pull an honest key's cutoff earlier, but only while the stolen countersigner's own revocation has not yet counted. Retroactive repair would cost fixedness; the open exposure is that theft window, not the rule structure.
 batch_remaining: 0
+
+models: claude-opus-5-5
+runners: local
