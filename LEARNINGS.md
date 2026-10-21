@@ -793,3 +793,9 @@ Shapiro-Wilk's skew advantage is general, not specific to chi-square(5): at exac
 
 The Shapiro-Wilk margin over plain S2 under gamma skew at n=50 is hump-shaped, not monotone: at exact 5% size with 20000 paired draws it peaks at gamma(5) and shrinks toward both ends, yet stays beyond two paired SE at every shape from 1 to 50 across three seeds, still +0.014 at 8 paired SE for gamma(50) (sqrt(beta1)=0.28), with null rejection confirmed at 5% for both tests. The S2 skew gap persists down to very mild skewness, so no gamma shape tested is a safe zone for S2.
 
+---
+
+## rev65-attempt60
+
+The SW margin over plain S2 at n=50 vanishes between gamma(50) and gamma(100): at exact 5% size with 20000 paired draws across three seeds, no shape from 100 to 5000 (sqrt(beta1) 0.2 down to 0.03) shows SW ahead beyond two paired SE, signs flip between seeds, and a single-seed 2.6 SE SW lead at gamma(1000) did not replicate. Both tests hold 5% under N(0,1). Below sqrt(beta1) about 0.2 the S2 skew gap is noise at n=50, so further mild-skew cells there are not worth running.
+
