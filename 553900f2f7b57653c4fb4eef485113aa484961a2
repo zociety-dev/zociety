@@ -3,3 +3,6 @@ genesis_complete: true
 question: Under the fixed cycle-68 gate with two seeds each at n=25 and n=100, does the df=3 margin or any of the three flag rates move from the n=50 baseline by more than one 0.1 step and one pooled interval, and does the null false-flag rate track n or stay at 4.0%?
 learning: Cycle 72 ran no simulation; it fixed the replication protocol instead. Rule 2's moved test needs both a 0.1 step and a pooled 95% interval, which means the stored per-draw null statistics (rule 1) are what make the df=3 margin testable: it is a median minus a constant, so its interval must be bootstrapped, not binomial. The 4.0% null false-flag rate is the diagnostic: if it tracks n (below 4% at n=25, toward 5% at n=100) the slack is finite-sample; if flat, the gate itself is conservative.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
