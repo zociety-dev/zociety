@@ -3,3 +3,6 @@ genesis_complete: true
 question: Fix the per-term scale explicitly and test power alone: define t_i as the ordered Anderson-Darling term (state the exact formula and standardization), and separately as x_i^2, and for each run log(1+ct)/c at c in 0, 1, 5, 20, 40 at n=25, 50, 100 under normal, t(3), t(5) and 0.9 N(0,1) + 0.1 N(0,9), 20000 sims per n, new seed, with paired Monte Carlo standard errors on the t(3) power gain over c=0. Report which (scale, c) pairs gain power by more than two SE at every n, and whether cycle 86's gain at c=20 is recovered under either scale.
 learning: The centered dispersion target is as vacuous as var/mean^2: with t_i on the x^2 scale, log(1+ct)/c at c in 20-40 drives var(G_c)/var(G_0) to 0.005 or less at every n and law and top-term share to 0.02-0.09, so nothing is flat in c or near 1. The same scaling loses t(3) power at every c by far more than two SE, and none of three per-term scalings tried reproduces cycle 86's gain. The per-term scale of t, unstated since cycle 84, decides the sign; no dispersion half belongs in the next rule.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
