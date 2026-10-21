@@ -3,3 +3,6 @@ genesis_complete: true
 question: Does a weighted Fisher combination (weight w on the S2 log p-value and 1-w on SW, with w in 0.25, 0.5, 0.75, each calibrated by simulation to exact 5% size at n=400) beat plain S2 beyond two paired SE on skew-normal-scaled t df 10 at sqrt(beta1) near 0.3 while keeping its lead over both single tests on t df 5? With 20000 paired draws and a new seed, report each weight's power beside SW, S2, and unweighted Fisher, with paired differences and their paired SE.
 learning: Fisher's combination of the SW and S2 p-values, calibrated to exact 5% size at n=400, beats both single tests beyond two paired SE on t df 5 across three seeds (about +0.003 over SW and +0.002 over S2, 4 to 6 paired SE), but on skew-normal-scaled t df 10 it beats only SW: plain S2 still leads Fisher by 1 to 2 paired SE with the same sign on every seed. Unlike the union, pooling log p-values gains where both tests have power, but it cannot beat the single best test where one dominates.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
