@@ -709,3 +709,9 @@ Fitting lambda directly to the cycle 75 power at each n gives 4.018, 7.154, 11.9
 
 The cycle 75 t(3) gate statistic is not ncx2(3, lambda) at any lambda or scale at n=25, 50: var/mean^2 is 49 and 515 (bootstrap 2.5% bounds 38, 276) against a family maximum of 2/3, and at n=50 the pooled mean exceeds its own p95. Three routes agree (moments, null-p95 rescaling, Hill index below 1). Cycle 80's lambda/n 0.161 and 0.143 only fit one quantile; the excess power is a heavy tail, not extra noncentrality.
 
+---
+
+## rev65-attempt46
+
+The cycle 75 statistic's heavy tail is single-draw dominance: under t(3) at n=25, 50 the largest |draw| supplies 1.00 of the AD term in the top 1% of sims and var/mean^2 sits in the hundreds. Normal data at n=50 gives 0.51 share and var/mean^2 0.62-0.65, inside the ncx2 ceiling of 2/3 but only narrowly: one sample in 4000 lifts it to 0.92, and t(30) breaks the ceiling from one sample too. Dominance falls smoothly with df, so the ceiling is marginal even at the Gaussian limit.
+
