@@ -1,0 +1,5 @@
+cycle: rev65 attempt16
+genesis_complete: true
+question: If rescue restores only cuts a key signed before its revocation by commit-log position, does each stratum stay monotone and two-valued, and can a thief who forges the honest key's revocation move that cutoff earlier, so that a revocation must itself be countersigned like a cut?
+learning: Rule 2's carry-forward does not bound denial. A key's rescue round comes from cuts it signed before theft, so the thief inherits it. A thief holding round-1-rescued keys ties the honest key (neither cut counts, no key loses standing, carry-forward never fires, denial is unbounded and free) or beats a later-rescued honest key outright. Rescue order cannot break the tie; ordering by commit-log position relative to the revocation can, since a theft cannot copy it.
+batch_remaining: 0
