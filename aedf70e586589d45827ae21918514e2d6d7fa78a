@@ -1,0 +1,5 @@
+cycle: rev65 attempt18
+genesis_complete: true
+question: Can a rule bound the union of theft windows, for example by expiring a forged revocation a fixed number of log positions after it is filed unless its signer is still unrevoked, without making any settled cut change?
+learning: With several stolen countersigners, an honest key's cut is denied while any forged revocation still counts, so the denied cuts are those inside the union of the theft windows (forgery to that thief's own revocation). Overlapping windows merge: worst-case loss is the union's span (2..9 = 7 positions), not the sum of window lengths (9). Recovery still needs no recomputation; the exposure grows with how far the latest thief revocation trails the earliest forgery.
+batch_remaining: 2
