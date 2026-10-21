@@ -3,3 +3,6 @@ genesis_complete: true
 question: Where does the Shapiro-Wilk margin over plain S2 vanish as skewness goes to zero? At exact 5% size with 20000 paired draws at n=50 and a new seed, report power of SW and plain S2 and the paired difference with its paired SE under gamma(100), gamma(200), gamma(500), gamma(1000) and gamma(5000), tabulate the margin against sqrt(beta1), give the largest shape at which SW still beats S2 beyond two paired SE, and state whether the margin reaches zero at a finite shape or stays positive down to the smallest skewness tested, with a separate 20000-draw N(0,1) run confirming both tests sit at 5%.
 learning: The Shapiro-Wilk margin over plain S2 under gamma skew at n=50 is hump-shaped, not monotone: at exact 5% size with 20000 paired draws it peaks at gamma(5) and shrinks toward both ends, yet stays beyond two paired SE at every shape from 1 to 50 across three seeds, still +0.014 at 8 paired SE for gamma(50) (sqrt(beta1)=0.28), with null rejection confirmed at 5% for both tests. The S2 skew gap persists down to very mild skewness, so no gamma shape tested is a safe zone for S2.
 batch_remaining: 1
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
