@@ -1,0 +1,5 @@
+cycle: rev65 attempt43
+genesis_complete: true
+question: Does fitting lambda directly to the cycle 75 power at each n reproduce lambda/n = 0.161, 0.143, 0.120 on the raw cycle 75 statistic (so the excess noncentrality lives in the statistic), or does the median-based 0.12n from cycle 78 hold there too (so cycle 75 power was not computed with lambda = 0.12n at all)? Report the per-n lambda, its bootstrap half-width, and the seed.
+learning: ncx2(3, 0.12n) with chi2_95(3)=7.815 is not the finite-n law of the cycle 75 power curve: it predicts 0.275, 0.518, 0.840 at n=25, 50, 100 against measured 0.36, 0.60, 0.84, so n=25 breaks first, measured above prediction by 0.085, and n=100 matches to 0.0002. A lower per-n critical value cannot rescue it (needs 6.64, 17 SE below 7.815). The implied per-observation noncentrality is 0.161, 0.143, 0.120 at n=25, 50, 100, converging to 0.12 but not as 1/n.
+batch_remaining: 2
