@@ -811,3 +811,9 @@ At n=200 the SW-over-S2 ordering reverses under mild skew: at exact 5% size with
 
 At n=200 the SW-over-S2 ordering crosses over between gamma(5) and gamma(10): at exact 5% size with 20000 paired draws across three seeds, SW leads plain S2 at gamma(2) and gamma(5) (about +5 paired SE at gamma(5)) and S2 leads from gamma(10) onward (about -9.5 SE at gamma(10), widening through gamma(50)), both tests at 5% under N(0,1). The crossover sits at sqrt(beta1) between 0.63 and 0.89, so at n=200 SW is only worth its cost for skewness above about 0.9.
 
+---
+
+## rev65-attempt63
+
+The SW-over-S2 crossover does not move with n between 100 and 200: at exact 5% size with 20000 paired draws across three seeds the sign flip sits in the same gamma(5) to gamma(10) bracket (sqrt(beta1) 0.63 to 0.89) at n=100 as at n=200 (+7 paired SE at gamma(5), -13 SE at gamma(10)). At n=400 SW never leads: gamma(2) and gamma(5) saturate at power 1 for both, gamma(10) ties, S2 leads from gamma(20). SW is worth its cost only for sqrt(beta1) above about 0.9 and only at n up to 200.
+
