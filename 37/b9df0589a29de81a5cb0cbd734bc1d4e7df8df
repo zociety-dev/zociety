@@ -3,3 +3,6 @@ genesis_complete: true
 question: Does an exact-size-calibrated combination of S2 with a skew-sensitive partner weakly correlated with it under the null (sample skewness b1, or Shapiro-Wilk) tie or beat both plain AD and Shapiro-Wilk under chi-square(5) at n=25, 50, 100 while keeping S2's heavy-tail and contamination gains within two paired SE, at 20000 sims per n, new seed, paired SE on each difference?
 learning: Pairing S2 with A2 does not fix S2's skew blind spot: Bonferroni max-p and reject-if-either at 2.5% are numerically identical and both still lose to plain AD and to Shapiro-Wilk under chi-square(5) at every n, across seeds 91202, 91404 and 91606. The Bonferroni split itself costs power; calibrating the combination to exact 5% size recovers most of it and beats AD and SW on every heavy-tail and contamination cell, yet still loses on chi-square(5) at n=50 and 100.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
