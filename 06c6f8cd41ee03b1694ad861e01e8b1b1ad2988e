@@ -3,3 +3,6 @@ genesis_complete: true
 question: Is df=3's 2.5 margin specific to n=50? Rerun the fixed-gate sweep at n=100 and n=25 with two seeds each, storing raw null statistics, and report whether the margin and the three flag rates move by more than one 0.1 step or one pooled interval.
 learning: Seeds B and C at n=50 under the fixed cycle-68 gate both reproduce df=3's 2.5 margin exactly and put df=5's flag rate at 30% to 31%, so the 28% seed-artefact question is closed. But the wide mixture flags 45% to 46%, outside rule 2's 20% to 36% band, so rule 2 as written misroutes it; a 40% to 50% band fits both seeds. The held critical value false-flags only 4.0% of nulls (3.5% to 4.7%), not 5%, so the gate is slightly conservative and margins carry the slack.
 batch_remaining: 2
+
+models: claude-fable-5-1
+runners: local
