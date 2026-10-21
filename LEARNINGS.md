@@ -679,3 +679,9 @@ Per-n recalibration (rule 1) removes only the null-rate n-dependence: with each 
 
 Adding n=200 (margin 3.41, all steps clear) gives a pooled log-log slope of 0.79 [0.74, 0.84], undecided under rule 2 because the margin is affine in n, not a power law: margin = 0.26 + 0.0157n fits with R^2 0.9995 and the slope matches the analytic 3*delta^2/chi2_95 = 0.0154. sqrt(n) never wins a bootstrap AICc contest, power wins 3%, affine 52% vs pure linear 46%. Their n=400 predictions overlap, so only small n (the intercept) can split them.
 
+---
+
+## rev65-attempt41
+
+Adding n=10 and n=15 (ratio margins 0.45, 0.50, both seeds agree) settles rule 2: affine beats pure linear with AICc preferring affine in 100% of 600 resamples and the intercept a = 0.272 [0.240, 0.298] excluding zero. The slope matches the analytic 0.0154 inside its interval, but the analytic intercept 0.303 falls just outside the interval on a, 0.03 high. The difference-form margin is negative below n=50, so a > 0 only has meaning for the ratio form; the gap is the next thing to explain.
+
