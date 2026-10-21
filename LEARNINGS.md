@@ -601,3 +601,9 @@ A per-guardian grace floor of twice its p99 outage, counted only when a second p
 
 Requiring a quorum co-sign plus 30-day probation before a new guardian gains freeze power means a thief who enrolls and cuts off a guardian gains 0h, and one coerced graduated guardian adds nothing beyond its own floor. But a thief holding a graduated quorum gets unbounded freeze, so the bound needs creation-time limits: a minimum roster, an absolute freeze cap of one turn limit, and owner-key consent to remove original guardians.
 
+---
+
+## rev65-attempt28
+
+A 30-day probation cannot meet rule 1's 25% tolerance: with no distribution assumed, a 95% upper bound on p99 needs 299 outages (about six years at one a week); a lognormal fit needs about 203*sigma^2 (51 at sigma 0.5), and a 50% tolerance cuts that to a third. So probation must end on outage count and fitted spread, not days, and a pooled floor must cover every guardian, frequent failers included, until then.
+
