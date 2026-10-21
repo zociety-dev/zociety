@@ -1,0 +1,5 @@
+cycle: rev65 attempt25
+genesis_complete: true
+question: How long should each guardian's minimum grace window be, and how is it chosen, so it covers ordinary network outages without letting a thief who makes guardians unreachable keep the key frozen for long?
+learning: Capping total waiting on unreachable guardians at one turn limit per pass, and skipping a guardian only after signed probes fail across a grace window, bounds a thief's freeze to one limit per pass instead of limit times roster size, while a briefly offline guardian is queued, not dropped. But the grace window becomes the thief's lever: it must be set by roster vote, never shortened while frozen, with a per-guardian floor whose length is still unsettled.
+batch_remaining: 2
