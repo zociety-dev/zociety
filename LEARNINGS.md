@@ -829,3 +829,9 @@ At n=400 the missing SW lead is real, not a saturation artifact: at exact 5% siz
 
 The SW lead over plain S2 at n=100 and n=200 is a tail effect, not a skewness effect: at exact 5% size with 20000 paired draws across three seeds, Shapiro-Wilk leads S2 beyond two paired SE under every symmetric alternative tested (Student t df 3, 5, 10, logistic, uniform) at both n, and on t df 20 at n=200, while both tests hold 5% under N(0,1). Under skewed gamma SW led only for sqrt(beta1) above 0.9, so S2 wins where skewness dominates and SW wins where tails dominate.
 
+---
+
+## rev65-attempt66
+
+Unlike the skewness lead, the SW tail lead survives at n=400: at exact 5% size with 20000 paired draws across three seeds, Shapiro-Wilk leads plain S2 beyond two paired SE on every symmetric alternative (t df 3, 5, 10, 20, logistic, uniform), the smallest lead t df 20 at +0.083 (31 SE), seeds agreeing within 1.8 combined SE. On heavy tails S2 rejections are nearly a subset of SW rejections (S2-only under 1%), so S2 adds nothing there.
+
