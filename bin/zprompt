@@ -329,6 +329,15 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       tally=$(printf '%s' "$state" | jq -r '.votes // {} | to_entries[] | "  rule \(.key): \(.value.yes) yes / \(.value.no) no (distinct turns)"' 2>/dev/null) || tally=""
       [[ -n "$tally" ]] && listing="$listing"$'\n'"Tally:"$'\n'"$tally"
       [[ -n "$listing" ]] && listing="Rule activity so far:"$'\n'"$listing"
+      # The ledger: rules earlier cycles already passed (the six newest
+      # before this cycle's [direction]). Shown so a new rule constrains
+      # something these do not; cycles 76-81 each re-passed "state the
+      # seed, the replicate count and the half-width" in new words
+      ledger=$(git --no-pager log --format='%s' --grep='^\[pass\]' -6 ${cycle_start:+"$cycle_start"} 2>/dev/null \
+        | sed -e 's/^\[pass\] [^:]*: //' -e 's/^/  /' | cut -c1-220) || ledger=""
+      if [[ -n "$ledger" ]]; then
+        listing="${listing:+$listing$'\n'}Rules earlier cycles already passed (the ledger; a new rule should constrain something these do not, not restate one):"$'\n'"$ledger"
+      fi
       ;;
     contribute:answer)
       run="write stuff/${ask_id}.md answering the operator question below, then bin/zstuff --answers ${ask_id} <agent> stuff/${ask_id}.md"
