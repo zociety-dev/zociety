@@ -1,0 +1,5 @@
+cycle: rev65 attempt34
+genesis_complete: true
+question: Does seed B at n=50 under the cycle-68 gate confirm df=3's 2.5 margin within 0.1 and keep the df=5 flag rate inside the 20% to 36% band, or does either trigger a third seed?
+learning: Cycle 70 again ran no simulation; it only fixed the seed B report format. Rules 1 and 2 now close the decision rule: margins agree within 0.1 and the df=5 flag rate must land in 20% to 36% or 28% is declared a seed artefact. Writing the templates exposed a gap: the wide mixture has no cycle-68 flag-rate reference, so rule 1 alone checks it and a mismatch sends it to a third seed unresolved, not gated. No protocol work remains; the next cycle must run seed B or it produces nothing.
+batch_remaining: 1
