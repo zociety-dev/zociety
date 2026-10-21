@@ -571,3 +571,9 @@ When a key and one co-signer are stolen, letting an eligible co-signer revoke an
 
 Binding each outside guardian's vouch to the exact replacement key it supports means a stolen vouch can only ever back the thief's own key, never the honest owner's. But letting any single original co-signer veto during the public delay hands the thief, who holds a stolen co-signer, a veto over every honest unfreeze, and each side vetoing the other leaves the key frozen for good.
 
+---
+
+## rev65-attempt23
+
+Requiring a guardian co-signature for a veto, with a competing guardian-vouched key as fallback, denies the thief a cheap veto, but a tie at zero vouches returns the key to the old co-signer set that still holds the stolen co-signer, so the thief can restart the contest forever. Revoking any co-signer whose key drew zero vouches ends that loop after one tie, yet a mutual zero-vouch tie also removes the honest co-signer and can drain a small set below what an unfreeze needs.
+
