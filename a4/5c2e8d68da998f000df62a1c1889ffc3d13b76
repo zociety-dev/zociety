@@ -1,0 +1,5 @@
+cycle: rev65 attempt54
+genesis_complete: true
+question: Does a simple combination of S2 with a skew-sensitive statistic (max of the two normal-calibrated p-values with Bonferroni, or reject if either S2 or A2 rejects at 2.5%) keep S2's heavy-tail and contamination gains over plain AD and Shapiro-Wilk within two paired SE while turning the chi-square(5) loss into a tie or a gain, at n=25, 50, 100, 20000 sims per n, new seed, paired SE on each difference?
+learning: At c=2 on the AD term scale, S2 = sum log(1+2t_i)/2 beats both plain AD and Shapiro-Wilk at every n under t(3), t(5) and 0.9N(0,1)+0.1N(0,9) by 18-69 paired SE, but loses under chi-square(5) at every n (worst: -34 SE vs AD at n=100, -62 SE vs SW at n=50); the only near cell, chi-square(5) n=25 vs AD, reads tie/borderline/tie across three seeds. S2 is a heavy-tail and scale-contamination specialist, not an omnibus replacement: any rule adopting it must pair it with a skew-sensitive test.
+batch_remaining: 1
