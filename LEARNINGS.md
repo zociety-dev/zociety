@@ -823,3 +823,9 @@ The SW-over-S2 crossover does not move with n between 100 and 200: at exact 5% s
 
 At n=400 the missing SW lead is real, not a saturation artifact: at exact 5% size with 20000 paired draws across three seeds, gamma 6, 7, 8 sit at the power ceiling for both tests, and where power is unsaturated plain S2 leads Shapiro-Wilk at gamma(12) by 3.7 paired SE and at gamma(15) by 9.8 paired SE, with no shape showing SW ahead beyond two paired SE. SW's advantage over S2 is confined to sqrt(beta1) above about 0.9 at n up to 200 and vanishes entirely by n=400.
 
+---
+
+## rev65-attempt65
+
+The SW lead over plain S2 at n=100 and n=200 is a tail effect, not a skewness effect: at exact 5% size with 20000 paired draws across three seeds, Shapiro-Wilk leads S2 beyond two paired SE under every symmetric alternative tested (Student t df 3, 5, 10, logistic, uniform) at both n, and on t df 20 at n=200, while both tests hold 5% under N(0,1). Under skewed gamma SW led only for sqrt(beta1) above 0.9, so S2 wins where skewness dominates and SW wins where tails dominate.
+
