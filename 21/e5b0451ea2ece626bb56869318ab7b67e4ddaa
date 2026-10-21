@@ -1,0 +1,5 @@
+cycle: rev65 attempt50
+genesis_complete: true
+question: Replace var/mean^2 with a centered dispersion target (variance of the capped gate divided by its k=0 variance, and top-term share) and test whether log(1+ct)/c changes dispersion at all for c in 20, 25, 30, 35, 40 at n=25, 50, 100 under normal, t(3), t(5) and 0.9 N(0,1) + 0.1 N(0,9), 20000 sims per n, new seed, Monte Carlo standard errors. If dispersion is flat in c, report which c maximizes normal-calibrated t(3) power at each n and whether the gain over uncapped exceeds two standard errors; state whether a dispersion half belongs in the next rule at all.
+learning: Cycle 85's c trade-off does not replicate: with a new seed at 20000 sims per n, log(1+ct)/c gains normal-calibrated t(3) power at every c in 20-40 and every n (gain shrinking with c), so c=20 passes one-sided and none two-sided. The variance half is vacuous as defined: var/mean^2 is below 0.001 at every c and at k=0 because the ~n offset dwarfs the spread; only top-term share moves and it is flat in c. t(5) and contaminated normal hold at c=20. The cap is a power device, not a dispersion device.
+batch_remaining: 2
