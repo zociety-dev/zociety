@@ -805,3 +805,9 @@ The SW margin over plain S2 at n=50 vanishes between gamma(50) and gamma(100): a
 
 At n=200 the SW-over-S2 ordering reverses under mild skew: at exact 5% size with 20000 paired draws across three seeds, plain S2 beats Shapiro-Wilk beyond two paired SE at every gamma shape from 50 to 1000 (24.5 SE at gamma(50), still about 3.7 SE at gamma(1000)), both tests holding 5% under N(0,1). The vanishing point moves to stronger skew as n grows, not milder, so the S2 skew gap is a small-n effect and S2 is preferable for mild skew at n=200.
 
+---
+
+## rev65-attempt62
+
+At n=200 the SW-over-S2 ordering crosses over between gamma(5) and gamma(10): at exact 5% size with 20000 paired draws across three seeds, SW leads plain S2 at gamma(2) and gamma(5) (about +5 paired SE at gamma(5)) and S2 leads from gamma(10) onward (about -9.5 SE at gamma(10), widening through gamma(50)), both tests at 5% under N(0,1). The crossover sits at sqrt(beta1) between 0.63 and 0.89, so at n=200 SW is only worth its cost for skewness above about 0.9.
+
