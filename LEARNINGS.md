@@ -733,3 +733,9 @@ No fixed-k cap meets both halves. Winsorizing the top k draws reaches var/mean^2
 
 Which AD terms are kept cannot meet both halves: trims f=0.10-0.20 stall at var/mean^2 0.79-0.95 and cost about 0.065 t(3) power at n=25 the moment any tail term is touched, and r^-p rank weights make dominance worse (share 1.00). How each term is computed can: log(1+30t)/30 on every term gives var/mean^2 0.50 at n=25 and 0.57 at n=50 with power within 0.012 of uncapped at all n. The scale c trades the halves: c=10 fails variance, c=50+ fails power by 0.001-0.007.
 
+---
+
+## rev65-attempt50
+
+Cycle 85's c trade-off does not replicate: with a new seed at 20000 sims per n, log(1+ct)/c gains normal-calibrated t(3) power at every c in 20-40 and every n (gain shrinking with c), so c=20 passes one-sided and none two-sided. The variance half is vacuous as defined: var/mean^2 is below 0.001 at every c and at k=0 because the ~n offset dwarfs the spread; only top-term share moves and it is flat in c. t(5) and contaminated normal hold at c=20. The cap is a power device, not a dispersion device.
+
