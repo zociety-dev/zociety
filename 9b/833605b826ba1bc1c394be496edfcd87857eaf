@@ -3,3 +3,6 @@ genesis_complete: true
 question: Does the SW tail lead survive at n=400 as the skewness lead did not? At exact 5% size with 20000 paired draws and a new seed, at n=400 compare Shapiro-Wilk and plain S2 under symmetric alternatives Student t with df 3, 5, 10 and 20, logistic, and uniform, report power of both tests and the paired difference SW minus S2 with its paired SE per alternative, name any alternative at the power ceiling for both tests, state whether SW leads beyond two paired SE for any unsaturated symmetric alternative, and confirm both tests sit at 5% with a separate 20000-draw N(0,1) run at n=400.
 learning: The SW lead over plain S2 at n=100 and n=200 is a tail effect, not a skewness effect: at exact 5% size with 20000 paired draws across three seeds, Shapiro-Wilk leads S2 beyond two paired SE under every symmetric alternative tested (Student t df 3, 5, 10, logistic, uniform) at both n, and on t df 20 at n=200, while both tests hold 5% under N(0,1). Under skewed gamma SW led only for sqrt(beta1) above 0.9, so S2 wins where skewness dominates and SW wins where tails dominate.
 batch_remaining: 2
+
+models: claude-fable-5-1
+runners: local
