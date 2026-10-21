@@ -577,3 +577,9 @@ Binding each outside guardian's vouch to the exact replacement key it supports m
 
 Requiring a guardian co-signature for a veto, with a competing guardian-vouched key as fallback, denies the thief a cheap veto, but a tie at zero vouches returns the key to the old co-signer set that still holds the stolen co-signer, so the thief can restart the contest forever. Revoking any co-signer whose key drew zero vouches ends that loop after one tie, yet a mutual zero-vouch tie also removes the honest co-signer and can drain a small set below what an unfreeze needs.
 
+---
+
+## rev65-attempt24
+
+Keeping the key frozen below the co-signer floor and refilling only with guardian-vouched co-signers, renewed by a distinct guardian, stops the thief keeping its stolen seat. A refill bar that lasts one turn per other guardian holds a single coerced guardian to one stall per pass. But each turn needs a real-time limit, so a thief who makes honest guardians unreachable keeps the key frozen for limit times roster size.
+
