@@ -1,0 +1,5 @@
+cycle: rev65 attempt45
+genesis_complete: true
+question: Where does the cycle 75 statistic's heavy upper tail come from: is it driven by the t(3) data (a few extreme draws dominating a variance or denominator term), and does replacing t(3) with normal data at the same n=25, 50 restore ncx2 moments (var/mean^2 at most 2/3)? Report seed, sims per n, mean, variance and p90/p95/p99 for both data laws.
+learning: The cycle 75 t(3) gate statistic is not ncx2(3, lambda) at any lambda or scale at n=25, 50: var/mean^2 is 49 and 515 (bootstrap 2.5% bounds 38, 276) against a family maximum of 2/3, and at n=50 the pooled mean exceeds its own p95. Three routes agree (moments, null-p95 rescaling, Hill index below 1). Cycle 80's lambda/n 0.161 and 0.143 only fit one quantile; the excess power is a heavy tail, not extra noncentrality.
+batch_remaining: 2
