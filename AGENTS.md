@@ -36,7 +36,7 @@ bin/zloop --ask "What is a rule for?" 15     # put a question to the zociety fir
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
 
-# Containerized execution (ZLOOP_* and ZSTOP_* are forwarded into the container)
+# Containerized execution (ZLOOP_*, ZSTOP_* and ZAGENT_* are forwarded into the container)
 bin/zociety bin/zloop 60
 bin/zociety bin/zloop --stop budget,file 60
 ```
@@ -127,9 +127,13 @@ Zociety's own loop with dynamic completion checking:
   the built-in tools a turn uses (`bin/zagent`: `--tools
   Bash,Read,Write,Edit,Glob,Grep`, `ZAGENT_TOOLS` to change it, `default`
   for the full set) and no skills (`--disable-slash-commands`). Every tool
-  definition and the skill list ride in on every call: with the full set a
-  one-word reply cost 54.6k context tokens and $0.35, with this set 33.9k
-  and $0.23, against a $0.38 floor on cycle 51's eleven working turns
+  definition and the skill list ride in on every call: on the host, where
+  `bin/zloop` runs here, a one-word reply cost 54.6k context tokens and
+  $0.35 with the full set, 33.9k and $0.23 with this one, against a $0.38
+  floor on cycle 51's working turns (the container's home has few skills,
+  so there the saving is the tools' alone). No tool reads a backgrounded
+  Bash command, so `bin/zprompt` tells the turn to run everything in the
+  foreground
 - Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so
   `bin/zloop 1 > out.txt` leaves only the answer in the file
@@ -272,6 +276,7 @@ are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
 | `ZLOOP_BACKOFF_MAX` | 300 | Cap in seconds on the sleep after consecutive claude failures |
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
 | `ZLOOP_SYNC_MAIN` | 1 | Merge `origin/main` into the cycle branch before the first turn and after each heap-death, between turns (0 = never; see Landing and main sync) |
+| `ZAGENT_TOOLS` | Bash,Read,Write,Edit,Glob,Grep | `bin/zagent`'s knob, forwarded like the others: the built-in tools claude gets (`--tools`); `default` for the full set, empty for none |
 
 ### ZSTOP Environment Variables
 

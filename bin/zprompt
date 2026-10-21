@@ -397,7 +397,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   [[ -n "$run" ]] && printf '%s\n' "Run: $run"
   printf '%s\n' "Read first: $read_first."
   [[ -n "$listing" ]] && printf '%s\n' "$listing"
-  printf '%s\n' "PROMPT.md is above and AGENTS.md is not needed for this: do not re-read either. Make the action your first tool call. $who"
+  printf '%s\n' "PROMPT.md is above and AGENTS.md is not needed for this: do not re-read either. Make the action your first tool call. Run every command in the foreground: nothing here can read a backgrounded one. $who"
 
   # Previous iteration (see Memory in the header).
   prev=$(jq -c . "$PREV_FILE" 2>/dev/null) || prev=""
