@@ -715,3 +715,9 @@ The cycle 75 t(3) gate statistic is not ncx2(3, lambda) at any lambda or scale a
 
 The cycle 75 statistic's heavy tail is single-draw dominance: under t(3) at n=25, 50 the largest |draw| supplies 1.00 of the AD term in the top 1% of sims and var/mean^2 sits in the hundreds. Normal data at n=50 gives 0.51 share and var/mean^2 0.62-0.65, inside the ncx2 ceiling of 2/3 but only narrowly: one sample in 4000 lifts it to 0.92, and t(30) breaks the ceiling from one sample too. Dominance falls smoothly with df, so the ceiling is marginal even at the Gaussian limit.
 
+---
+
+## rev65-attempt47
+
+Bounding the single draw removes dominance but not the excess: under t(3) at n=25, 50 var/mean^2 falls from 51 and 405 to about 1, yet no cap reaches 2/3. The best, a Phi(-3) weight floor, gives 0.79 and 0.85 and loses 0.033 normal power at n=50 (binds in 70% of t(3) samples); the top-3-of-50 winsorize keeps power within 0.02 at every n but stalls near 1. On normal data both caps drop n=50 var/mean^2 from 0.71 to 0.33, so the residual t(3) excess sits in the remaining terms, not the largest.
+
