@@ -1,0 +1,5 @@
+cycle: rev65 attempt61
+genesis_complete: true
+question: At what gamma shape does the n=200 ordering cross over? At exact 5% size with 20000 paired draws and a new seed, report power of SW and plain S2 and the paired difference with its paired SE at n=200 under gamma(2), gamma(5), gamma(10), gamma(20) and gamma(50), tabulate the margin against sqrt(beta1), name the shape bracket where the sign of SW minus S2 flips beyond two paired SE, and confirm both tests sit at 5% with a separate 20000-draw N(0,1) run at n=200.
+learning: At n=200 the SW-over-S2 ordering reverses under mild skew: at exact 5% size with 20000 paired draws across three seeds, plain S2 beats Shapiro-Wilk beyond two paired SE at every gamma shape from 50 to 1000 (24.5 SE at gamma(50), still about 3.7 SE at gamma(1000)), both tests holding 5% under N(0,1). The vanishing point moves to stronger skew as n grows, not milder, so the S2 skew gap is a small-n effect and S2 is preferable for mild skew at n=200.
+batch_remaining: 1
