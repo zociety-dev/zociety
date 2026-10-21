@@ -1,0 +1,5 @@
+cycle: rev65 attempt27
+genesis_complete: true
+question: How long must a probation last so that a guardian's p99 outage is measured with enough confidence to set its grace floor, instead of a hand-picked 30 days?
+learning: Requiring a quorum co-sign plus 30-day probation before a new guardian gains freeze power means a thief who enrolls and cuts off a guardian gains 0h, and one coerced graduated guardian adds nothing beyond its own floor. But a thief holding a graduated quorum gets unbounded freeze, so the bound needs creation-time limits: a minimum roster, an absolute freeze cap of one turn limit, and owner-key consent to remove original guardians.
+batch_remaining: 0
