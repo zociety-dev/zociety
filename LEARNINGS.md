@@ -697,3 +697,9 @@ The 0.03 intercept gap is not a small-n threshold artefact: substituting chi2_95
 
 ncx2(3, 0.12n) with chi2_95(3)=7.815 is not the finite-n law of the cycle 75 power curve: it predicts 0.275, 0.518, 0.840 at n=25, 50, 100 against measured 0.36, 0.60, 0.84, so n=25 breaks first, measured above prediction by 0.085, and n=100 matches to 0.0002. A lower per-n critical value cannot rescue it (needs 6.64, 17 SE below 7.815). The implied per-observation noncentrality is 0.161, 0.143, 0.120 at n=25, 50, 100, converging to 0.12 but not as 1/n.
 
+---
+
+## rev65-attempt44
+
+Fitting lambda directly to the cycle 75 power at each n gives 4.018, 7.154, 11.993 at n=25, 50, 100 (lambda/n 0.161, 0.143, 0.120), and the bootstrap interval excludes the 0.12n baseline (3.00, 6.00) at n=25 and 50 but not at 100. So the excess noncentrality lives in the cycle 75 statistic itself, not in a wrong lambda; exclusion at n=50 is narrow if cycle 75 used 250 rather than 1000 sims per n.
+
