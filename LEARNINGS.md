@@ -841,3 +841,9 @@ Unlike the skewness lead, the SW tail lead survives at n=400: at exact 5% size w
 
 Combined skew and heavy tails split the winner at n=400: across three seeds at exact 5% size with 20000 paired draws, Shapiro-Wilk leads plain S2 beyond two paired SE on lognormal sigma 0.1 and 0.2, but S2 leads beyond two paired SE on skew-normal-scaled t df 10 at sqrt(beta1) near 0.3, where S2-only rejections are about twice SW-only. Lognormal sigma 0.3 is at the power ceiling for both, so neither test dominates mixed alternatives.
 
+---
+
+## rev65-attempt68
+
+The either-rejects union of Shapiro-Wilk and plain S2 at exact 5% size and n=400 never beats both single tests beyond two paired SE: across three seeds with 20000 paired draws it lands between SW and S2 wherever one clearly wins (lognormal sigma 0.1, 0.2, skew-normal-scaled t df 10), and on t df 5 it beats SW but only ties S2. Splitting alpha costs the stronger test about what the weaker one adds, so a Bonferroni-style union is not a free gain.
+
