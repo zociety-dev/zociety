@@ -133,7 +133,24 @@ Zociety's own loop with dynamic completion checking:
   floor on cycle 51's working turns (the container's home has few skills,
   so there the saving is the tools' alone). No tool reads a backgrounded
   Bash command, so `bin/zprompt` tells the turn to run everything in the
-  foreground
+  foreground. And with no settings (`--setting-sources ""`,
+  `ZAGENT_SETTING_SOURCES`): with them a turn carried this file as project
+  instructions (50KB, which `bin/zprompt` tells it not to read), the
+  operator's user settings (model alias, effort, hooks, agents, plugins and
+  the `env` block, secrets included, into the agent's shell) and the project
+  permission lists, moot under `--dangerously-skip-permissions`. The context
+  also carries the git status, which every turn's commit changes, so none of
+  that was ever served from the prompt cache: a two-call `bin/zstate` turn
+  cost $0.24 with settings, $0.04 without (cycle 52's working turns had a
+  $0.25 floor). The model is `--model` (`ANTHROPIC_MODEL`), the effort
+  `ZAGENT_EFFORT`, the tools `ZAGENT_TOOLS`; auth routing kept in user
+  settings (`apiKeyHelper`, an `env` `ANTHROPIC_BASE_URL`, Bedrock or
+  Vertex) is dropped too, so a turn that cannot authenticate needs
+  `ZAGENT_SETTING_SOURCES=user`. The child gets `DISABLE_AUTOUPDATER=1`.
+  Cycles up to 52 ran under the operator's settings, which set effort xhigh
+  for claude-opus-5-5; `bin/zheap-death` records every `ZAGENT_*` variable
+  present under `data.zagent` beside the stop regime, so cycles under
+  different turn regimes are told apart in git
 - Each iteration gets a 5-minute working budget (`--budget`/`ZLOOP_BUDGET`), which the agent is told, and a 10-minute hard kill (`--timeout`/`ZLOOP_TIMEOUT`, default 2x the budget), which it is not
 - Only claude's result goes to stdout; all loop chrome goes to stderr, so
   `bin/zloop 1 > out.txt` leaves only the answer in the file
@@ -197,7 +214,7 @@ Zociety's own loop with dynamic completion checking:
 | `bin/zloop status\|watch\|stop [--now]` | Run control, handed to `bin/zloop-ctl`: the run going (limits left, iteration, spend, cycles archived) or how the last one ended plus the zociety's state, every row whole (wrapped to the terminal or `COLUMNS`; piped, one line per row); follow a detached run's log; end the run before its next turn (`--now`: SIGTERM) |
 | `bin/zrun.sh` | Sourced by `bin/zloop`, `bin/zloop-ctl` and `bin/zask`: durations (`zrun_secs`, `zrun_fmt`), the run record paths under `.zociety/`, `zrun_live_pid` and `zrun_foreign` |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline) plus an instruction not to re-read PROMPT.md/AGENTS.md, the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
+| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline) plus an instruction not to read PROMPT.md again or AGENTS.md at all (a turn loads no settings, so it is not in context), the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
@@ -277,6 +294,8 @@ are seconds or a duration: `90s`, `45m`, `8h`, `3d`, `1h30m`.
 | `ZLOOP_KILL_GRACE` | 10 | Seconds to wait for the agent to exit on Ctrl-C/SIGTERM before SIGKILL |
 | `ZLOOP_SYNC_MAIN` | 1 | Merge `origin/main` into the cycle branch before the first turn and after each heap-death, between turns (0 = never; see Landing and main sync) |
 | `ZAGENT_TOOLS` | Bash,Read,Write,Edit,Glob,Grep | `bin/zagent`'s knob, forwarded like the others: the built-in tools claude gets (`--tools`); `default` for the full set, empty for none |
+| `ZAGENT_SETTING_SOURCES` | - | `bin/zagent`: the claude settings a turn loads (`--setting-sources`: `user`, `project`, `local`); none by default, so no AGENTS.md, operator settings, hooks or `env` reach a turn (see Runs without MCP servers) |
+| `ZAGENT_EFFORT` | - | `bin/zagent`: claude `--effort` (low, medium, high, xhigh, max); unset is the client's default. Cycles up to 52 ran under the operator's settings, xhigh for claude-opus-5-5 |
 
 ### ZSTOP Environment Variables
 

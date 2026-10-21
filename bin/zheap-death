@@ -55,6 +55,11 @@
 #   ZSTOP_BUDGET=3       Heap-deaths per loop run; drives the batch_size default
 #   ZSTOP_*              Every ZSTOP_* variable present is recorded under
 #                        data.zstop in the heap-death and direction events
+#   ZAGENT_*             Every ZAGENT_* variable present (bin/zagent: TOOLS,
+#                        SETTING_SOURCES, EFFORT) the same way, under
+#                        data.zagent; none present means bin/zagent's
+#                        defaults (its header), so a change of default is a
+#                        change of regime to note there
 #
 # Regime record: mode: from .claude/zloop.state is written as data.stop_mode
 # to the heap-death and direction events and appended to the tag message as
@@ -390,18 +395,26 @@ for artifact in "${CHALLENGES[@]}"; do
   INHERITANCE=$(jq -c --arg artifact "$artifact" '.challenge += [$artifact]' <<<"$INHERITANCE")
 done
 
-# Every ZSTOP_* variable present, as {"BUDGET": "3", ...}
+# Every ZSTOP_* variable present, as {"BUDGET": "3", ...}, and every
+# ZAGENT_* one (the turn's tools, settings and effort; bin/zagent) the same
+# way, so a cycle's turn regime is in git beside its stop regime.
 KNOBS_JSON='{}'
 for v in $(compgen -v ZSTOP_ || true); do
   KNOBS_JSON=$(jq -nc --argjson o "$KNOBS_JSON" --arg k "${v#ZSTOP_}" --arg val "${!v}" \
     '$o + {($k): $val}')
 done
+AGENT_KNOBS_JSON='{}'
+for v in $(compgen -v ZAGENT_ || true); do
+  AGENT_KNOBS_JSON=$(jq -nc --argjson o "$AGENT_KNOBS_JSON" --arg k "${v#ZAGENT_}" --arg val "${!v}" \
+    '$o + {($k): $val}')
+done
 
 # Regime fields merged into both event payloads. Empty object when there is
-# no zloop.state mode and no ZSTOP_* variables.
-REGIME=$(jq -nc --arg mode "$STOP_MODE" --argjson zstop "$KNOBS_JSON" \
+# no zloop.state mode and no ZSTOP_* or ZAGENT_* variables.
+REGIME=$(jq -nc --arg mode "$STOP_MODE" --argjson zstop "$KNOBS_JSON" --argjson zagent "$AGENT_KNOBS_JSON" \
   '(if $mode != "" then {stop_mode: $mode} else {} end)
-   + (if ($zstop | length) > 0 then {zstop: $zstop} else {} end)')
+   + (if ($zstop | length) > 0 then {zstop: $zstop} else {} end)
+   + (if ($zagent | length) > 0 then {zagent: $zagent} else {} end)')
 
 bin/zlog zheap-death "Starting heap-death" \
   "$(jq -n --arg agent "$AGENT" --arg q "$QUESTION" --argjson batch "$BATCH_SIZE" \

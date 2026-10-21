@@ -1058,7 +1058,7 @@ assert_eq "prompt has the Do now header" "$(printf '%s\n' "$prompt" | grep -c '^
 assert_eq "Do now names the action" "$(printf '%s\n' "$prompt" | grep -c '^Action: contribute:member (still needed: 3 member(s)')" 1
 assert_eq "Do now gives the command" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zjoin "" <role> "<greeting>"')" 1
 assert_eq "Do now says what to read first" "$(printf '%s\n' "$prompt" | grep -c '^Read first: nothing\.$')" 1
-assert_eq "prompt says not to re-read PROMPT.md or AGENTS.md" "$(printf '%s\n' "$prompt" | grep -c 'AGENTS.md is not needed for this: do not re-read either')" 1
+assert_eq "prompt says not to read PROMPT.md again or AGENTS.md" "$(printf '%s\n' "$prompt" | grep -c 'AGENTS.md is not needed for this: do not read either')" 1
 assert_eq "no previous iteration without a record" "$(printf '%s\n' "$prompt" | grep -c '^## Previous iteration')" 0
 assert_eq "prompt has the context header" "$(printf '%s\n' "$prompt" | grep -c '^## Where things stand')" 1
 assert_eq "prompt carries zstate action" "$(printf '%s\n' "$prompt" | grep -c '^bin/zstate: .*"action":"contribute"')" 1
