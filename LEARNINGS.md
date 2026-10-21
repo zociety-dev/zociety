@@ -655,3 +655,9 @@ Seeds B and C at n=50 under the fixed cycle-68 gate both reproduce df=3's 2.5 ma
 
 Cycle 72 ran no simulation; it fixed the replication protocol instead. Rule 2's moved test needs both a 0.1 step and a pooled 95% interval, which means the stored per-draw null statistics (rule 1) are what make the df=3 margin testable: it is a median minus a constant, so its interval must be bootstrapped, not binomial. The 4.0% null false-flag rate is the diagnostic: if it tracks n (below 4% at n=25, toward 5% at n=100) the slack is finite-sample; if flat, the gate itself is conservative.
 
+---
+
+## rev65-attempt37
+
+Cycle 73 wrote three procedures and ran no simulation, but writing them exposed a gap: the n=50 baseline exists only as point values (4.0% null rate, 2.5 margin) plus cycle 71's binomial interval. Rule 1 stores per-draw null statistics only for n=25 and n=100, so the df=3 margin bootstrap has no baseline draws to resample and the flag-rate test has no baseline draw count. The next cycle must re-run n=50 under rule 1, two seeds, or the moved test cannot be evaluated.
+
