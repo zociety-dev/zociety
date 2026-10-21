@@ -132,14 +132,21 @@ passes_on_tags() {
 card() {
   awk -v id="id=\"$1\"" 'index($0, "<div class=\"cycle\"") { on = index($0, id) > 0 } on' docs/rules.html
 }
-# own_commits <tag> <grep>: the tag's first-parent commits matching <grep>
-# that no other rev* tag reaches, i.e. the cycle it archived, not the
-# lineage below it nor one merged in from main
+# own_commits <tag> <event>: the tag's first-parent commits carrying a
+# z:1 <event> envelope that no other rev* tag reaches, i.e. the cycle it
+# archived, not the lineage below it nor one merged in from main; found
+# without %S, so it is an independent check on the page's attribution
 own_commits() {
-  local tag="$1" pattern="$2" others
+  local tag="$1" event="$2" others
   others=$(git tag -l 'rev*' | grep -vxF "$tag")
   # shellcheck disable=SC2086  # the tag names are one per line, no spaces
-  git log --first-parent --format=%H --grep="$pattern" "$tag" --not $others
+  git log --first-parent --format='%H%x1f%b%x1e' --grep="^\[$event\]" "$tag" --not $others \
+    | jq -R -r -s --arg ev "$event" '
+      split("\u001e")[] | ltrimstr("\n") | select(length > 0) | split("\u001f")
+      | select(((.[1] | fromjson?)
+                // (.[1] | split("\n") | map(select(startswith("{\"z\":1")) | fromjson?) | first))
+               | (type == "object") and (.z == 1) and (.event == $ev))
+      | .[0]'
 }
 echo "Case 2: rules.html lists every [pass] reachable from the tags, under the tag that archived it"
 check "rules.html exists" test -f docs/rules.html
@@ -149,7 +156,7 @@ check "one entry per [pass] event ($NPASS)" test "$(grep -c '<li value=' docs/ru
 check "the headline count agrees" grep -q "<p>$NPASS rules," docs/rules.html
 NCARDS=$(sort -u <<< "$PASS_TAGS" | grep -c . || true)
 check "one card per tag that reached a [pass] ($NCARDS)" test "$(grep -c '<div class="cycle" id=' docs/rules.html)" -eq "$NCARDS"
-NEWEST_PASSES=$(own_commits "$NEWEST" '^\[pass\]')
+NEWEST_PASSES=$(own_commits "$NEWEST" pass)
 NEWEST_NPASS=$(grep -c . <<< "$NEWEST_PASSES" || true)
 CARD=$(card "$NEWEST")
 check "$NEWEST has a card" test -n "$CARD"
@@ -159,8 +166,7 @@ while IFS= read -r sha; do
   check "rule ${sha:0:7} is linked on $NEWEST's card" grep -q "commit/$sha\"" <<< "$CARD"
 done <<< "$NEWEST_PASSES"
 check "its card links the tag's archive page" grep -q "href=\"archive/$NEWEST.html\"" <<< "$CARD"
-NEWEST_DIRECTION=$(own_commits "$NEWEST" '^\[direction\]' | head -1)
-if [[ -n "$NEWEST_DIRECTION" ]] && git log -1 --format=%b "$NEWEST_DIRECTION" | jq -e '.z == 1 and .event == "direction"' >/dev/null 2>&1; then
+if [[ -n "$(own_commits "$NEWEST" direction)" ]]; then
   check "its card carries the cycle's own question" grep -q 'class="question"' <<< "$CARD"
 fi
 NEWEST_DEATH=$(git log --first-parent -1 --format=%H --grep='^\[heap-death\]' "$NEWEST")
@@ -196,6 +202,7 @@ check "archive/ unchanged on rerun" diff -r "$TMP/archive.before" docs/archive
 check "archive.html unchanged on rerun" diff "$TMP/archive.html.before" docs/archive.html
 
 echo "Case 6: a page exists exactly as long as its tag"
+HIGHEST=$(git tag -l 'rev*' | sort -V | tail -1)
 git tag -d "$NEWEST" >/dev/null
 generate
 check "page removed with tag" test ! -e "$PAGE"
@@ -206,7 +213,7 @@ check "rules.html follows the tag set ($NPASS_LEFT [pass] left)" test "$(grep -c
 check "$NEWEST's card left with its tag" bash -c "! grep -q 'id=\"$NEWEST\"' docs/rules.html"
 # A rule leaves the page only when no tag reaches it; with a higher rev*
 # tag (one that archived no stuff), NEWEST's rules move to that tag's card
-if [[ "$NEWEST" == "$(git tag -l 'rev*' | sort -V | tail -1)" ]]; then
+if [[ "$NEWEST" == "$HIGHEST" ]]; then
   while IFS= read -r sha; do
     [[ -n "$sha" ]] || continue
     check "rule ${sha:0:7} left the page with its tag" bash -c "! grep -q 'commit/$sha\"' docs/rules.html"
