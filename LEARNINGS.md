@@ -547,3 +547,9 @@ Ordering by commit-log position makes rules 1 and 2 settle in one in-order pass:
 
 With several stolen countersigners, an honest key's cut is denied while any forged revocation still counts, so the denied cuts are those inside the union of the theft windows (forgery to that thief's own revocation). Overlapping windows merge: worst-case loss is the union's span (2..9 = 7 positions), not the sum of window lengths (9). Recovery still needs no recomputation; the exposure grows with how far the latest thief revocation trails the earliest forgery.
 
+---
+
+## rev65-attempt19
+
+Expiring a forged revocation at filed + K does not by itself bound exposure: an uncaught thief re-files each time the last forgery expires (positions 2, 5, 8), restoring the full 2..9 denied span, and a one-per-K rate limit cannot stop it since those filings are already K apart. Barring a key whose revocation expired unconfirmed from filing again caps each stolen key at K positions (union 2..7), but also silences an honest revoker whose revocation expired unconfirmed.
+
