@@ -727,3 +727,9 @@ Bounding the single draw removes dominance but not the excess: under t(3) at n=2
 
 No fixed-k cap meets both halves. Winsorizing the top k draws reaches var/mean^2 at most 2/3 (k=2 at n=25, k=3 at n=50) but removes the t(3) signal at the same rate: k=1 already costs 0.17-0.20 power. A joint share cap on the top k AD terms keeps power within 0.02 yet stalls at var/mean^2 1.0-1.3 for k>=2, barely moving from k=2 to k=5. Rank splits show whichever draw sets the cap inherits the dominance, so the excess is the whole ordered tail, not any count of top draws.
 
+---
+
+## rev65-attempt49
+
+Which AD terms are kept cannot meet both halves: trims f=0.10-0.20 stall at var/mean^2 0.79-0.95 and cost about 0.065 t(3) power at n=25 the moment any tail term is touched, and r^-p rank weights make dominance worse (share 1.00). How each term is computed can: log(1+30t)/30 on every term gives var/mean^2 0.50 at n=25 and 0.57 at n=50 with power within 0.012 of uncapped at all n. The scale c trades the halves: c=10 fails variance, c=50+ fails power by 0.001-0.007.
+
