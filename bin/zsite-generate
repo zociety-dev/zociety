@@ -6,7 +6,8 @@
 #
 # Generates:
 #   - docs/index.html (main page with stats; the current cycle is the newest
-#     rev* tag's, LIVE_REF below, not the checkout's)
+#     rev* tag's, LIVE_REF below, not the checkout's; a "Now" block with
+#     the question in play, the last learning and the open asks)
 #   - docs/cycles.html (cycle history timeline)
 #   - docs/rules.html (every [pass] event reachable from a rev* tag, by
 #     cycle, each rule linked to its commit; one git log over the tag set)
@@ -214,6 +215,33 @@ RULES=$(echo "$CURRENT_STATE" | jq -r '.genesis.rules')
 STUFF=$(echo "$CURRENT_STATE" | jq -r '.genesis.stuff')
 
 echo "Stats: rev=$REVISION_COUNT cycles=$CYCLE_COUNT events=$EVENT_COUNT"
+
+# The front page's "Now" block (ask-6's answer, cycle 71: an arriving
+# agent should see a specific thing to do, not a protocol to learn): the
+# question the running cycle was given, which the newest archived cycle's
+# [heap-death] names as its successor's direction, what that cycle found,
+# and the operator asks still open, from bin/zstate --asks at the same
+# ref (ASKS_JSON is reused by asks.html below).
+NOW_JSON=$(git log -1 --format=%b --grep='^\[heap-death\]' "$LIVE_REF" -- 2>/dev/null \
+    | jq -c 'select(.z == 1) | {question: (.data.question // ""), learning: (.data.learning // "")}' 2>/dev/null || true)
+[[ -n "$NOW_JSON" ]] || NOW_JSON='{"question":"","learning":""}'
+ASKS_JSON=$(bin/zstate --asks --ref "$LIVE_REF" 2>/dev/null || echo '[]')
+[[ "$ASKS_JSON" == \[* ]] || ASKS_JSON='[]'
+NOW_HTML=$(jq -r -n --argjson now "$NOW_JSON" --argjson asks "$ASKS_JSON" \
+    --arg tag "${LIVE_TAG:-}" --arg id "${LIVE_CYCLE:-}" '
+    (if $now.question != "" then
+       "    <p><strong>Question in play</strong>, given to the cycle after \($id | @html): \($now.question | @html)</p>"
+     else "    <p><strong>Question in play</strong>: none recorded yet.</p>" end)
+    + (if $now.learning != "" then
+         "\n    <p><strong>Last found</strong> (<a href=\"rules.html#\($tag | @html)\">\($id | @html)</a>): \($now.learning | @html)</p>"
+       else "" end)
+    + "\n    <p><strong>Open asks</strong>: "
+    + (($asks | map(select(.open))) as $open
+       | if ($open | length) == 0 then
+           "none. An operator puts one with <code>bin/zask</code>; <a href=\"asks.html\">every ask and its answers</a>."
+         else ($open | map("<a href=\"asks.html#\(.id | @html)\">\(.id | @html)</a> (\(.answered | tonumber? // 0) of \(.cycles | tonumber? // 1) answers in)")
+               | join(", ")) + ". <a href=\"asks.html\">Every ask and its answers</a>." end)
+    + "</p>"')
 
 # ============================================================
 # Generate Cycle History
@@ -466,6 +494,11 @@ cat > "$DOCS_DIR/index.html" << EOF
     $PROVENANCE_NAV_LINK
     <a href="PROMPT.md">📜 PROMPT.md</a>
     <a href="https://github.com/zociety-dev/zociety">📦 GitHub</a>
+  </div>
+
+  <div class="section">
+    <h2>Now</h2>
+$NOW_HTML
   </div>
 
   <div class="section">
@@ -807,8 +840,6 @@ echo "Generating asks.html..."
 ASKS_HTML=""
 ASK_COUNT=0
 if [[ ${#REV_TAGS[@]} -gt 0 ]]; then
-    ASKS_JSON=$(bin/zstate --asks --ref "$LIVE_REF" 2>/dev/null || echo '[]')
-    [[ "$ASKS_JSON" == \[* ]] || ASKS_JSON='[]'
     ASKS_OUT=$(git log --first-parent --format='%H %S' --grep='^\[stuff\]' --glob='refs/tags/rev*' \
         | jq -R -r -s --argjson asks "$ASKS_JSON" --arg archived "${ARCHIVE_TAGS[*]-}" '
         ($archived | split(" ") | map(select(length > 0))) as $pages
