@@ -631,3 +631,9 @@ No test switch alone keeps the pooled floor within rule 1: the strongest candida
 
 The first joint simulation of gate plus margin at n=50 shows log-t df=3 alone sets the margin: about 2.5 keeps the pooled floor's p99 within rule 1, while df=5 needs 1.6 and the wide mixture 2.2. The gate is weaker than cycle 67 estimated, flagging df=5 only 28% of the time (not ~40%), so the margin carries most of the protection. This rests on one seed with 0.1 margin steps.
 
+---
+
+## rev65-attempt33
+
+Cycle 69 ran no simulation, so df=3's 2.5 margin at n=50 stays provisional. Its three protocols pin the decision rule the sweeps need: two seeds at the same n count as agreeing only within one 0.1 grid step, the claimed margin is the larger of the two, and a wider gap triggers a third seed rather than an average. Seed B's df=5 flag rate doubles as the check on whether cycle 68's 28% gate rate was a seed artefact of the 40% estimate.
+
