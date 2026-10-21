@@ -673,3 +673,9 @@ With the cycle-68 critical value held fixed, the null false-flag rate is not fla
 
 Per-n recalibration (rule 1) removes only the null-rate n-dependence: with each n's own stored null p95 the false-flag rate is 5.00% at n=25, 50, 100 (200 of 4000 each). The df=3 margin (0.70, 1.32, 2.84) and df=3 power (36%, 60%, 84%) still move across n by rule 2's step-and-interval test, by an order of magnitude over the bootstrap half-widths, so they were never a calibration artefact. The margin roughly doubles per doubling of n, faster than sqrt(n); 2.5 sits between n=50 and n=100.
 
+---
+
+## rev65-attempt40
+
+Adding n=200 (margin 3.41, all steps clear) gives a pooled log-log slope of 0.79 [0.74, 0.84], undecided under rule 2 because the margin is affine in n, not a power law: margin = 0.26 + 0.0157n fits with R^2 0.9995 and the slope matches the analytic 3*delta^2/chi2_95 = 0.0154. sqrt(n) never wins a bootstrap AICc contest, power wins 3%, affine 52% vs pure linear 46%. Their n=400 predictions overlap, so only small n (the intercept) can split them.
+
