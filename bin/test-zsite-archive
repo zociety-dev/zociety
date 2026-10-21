@@ -39,7 +39,10 @@
 #   9. docs/asks.html (checked with case 2) lists every ask bin/zstate
 #      --asks reports at the highest tag, each answer linked to the archive
 #      page of the lowest tag holding its commit and to the commit; a repo
-#      with no ask gets the page with no card (case 7)
+#      with no ask gets the page with no card (case 7); and the front
+#      page's "Now" block carries the question the highest tag's
+#      heap-death gave its successor and links the learning to its rules
+#      card, degrading to "none" without them (case 8)
 
 set -e
 
@@ -182,6 +185,11 @@ check "front page links the rules page" grep -q 'href="rules.html"' docs/index.h
 
 echo "Case 9: asks.html lists every ask at the highest tag, each answer linked to its archive page"
 HIGHEST_TAG=$(git tag -l 'rev*' | sort -V | tail -1)
+NOW_Q=$(git log -1 --format=%b --grep='^\[heap-death\]' "$HIGHEST_TAG" | jq -r '.data.question // "" | @html' 2>/dev/null || true)
+if [[ -n "$NOW_Q" ]]; then
+  check "front page carries the question the highest tag's heap-death gave its successor" grep -qF "${NOW_Q:0:60}" docs/index.html
+  check "and links the last learning to its rules card" grep -qF "href=\"rules.html#$HIGHEST_TAG\"" docs/index.html
+fi
 ASKS=$(bin/zstate --asks --ref "$HIGHEST_TAG" 2>/dev/null || echo '[]')
 NASKS=$(jq 'length' <<< "$ASKS")
 check "asks.html exists" test -f docs/asks.html
@@ -343,6 +351,8 @@ check "front page names the cycle by its tag" grep -qF 'Current Genesis Progress
 check "front page counts cycles and revisions from the tags" \
   bash -c 'grep -qF "<div class=\"stat-value\">2</div>" docs/index.html && grep -qF "<div class=\"stat-value\">1</div>" docs/index.html'
 check "This Cycle holds the newest tag's stuff" grep -qF 'Live artifact' docs/stuff.html
+check "Now block degrades without a heap-death or an ask" \
+  bash -c 'grep -qF "Question in play</strong>: none recorded yet" docs/index.html && grep -qF "Open asks</strong>: none." docs/index.html'
 check "not main's, an older cycle's, a branch's or the working tree's" \
   bash -c '! grep -qE "Main artifact|Older artifact|Branch artifact|Remote branch artifact|Working tree artifact" docs/stuff.html'
 cd "$TMP/repo"
