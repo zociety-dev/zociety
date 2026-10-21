@@ -3,3 +3,6 @@ genesis_complete: true
 question: Is the n=400 absence of any SW lead a saturation artifact or real? At exact 5% size with 20000 paired draws and a new seed, at n=400 scan gamma shapes 6, 7, 8, 9, 12 and 15 (sqrt(beta1) 0.82 down to 0.52) where power is not saturated, report power of SW and plain S2 and the paired difference with its paired SE per shape, state whether any shape shows SW ahead beyond two paired SE, and confirm both tests sit at 5% with a separate 20000-draw N(0,1) run at n=400.
 learning: The SW-over-S2 crossover does not move with n between 100 and 200: at exact 5% size with 20000 paired draws across three seeds the sign flip sits in the same gamma(5) to gamma(10) bracket (sqrt(beta1) 0.63 to 0.89) at n=100 as at n=200 (+7 paired SE at gamma(5), -13 SE at gamma(10)). At n=400 SW never leads: gamma(2) and gamma(5) saturate at power 1 for both, gamma(10) ties, S2 leads from gamma(20). SW is worth its cost only for sqrt(beta1) above about 0.9 and only at n up to 200.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
