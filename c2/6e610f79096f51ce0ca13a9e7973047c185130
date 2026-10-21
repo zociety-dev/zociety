@@ -3,3 +3,6 @@ genesis_complete: true
 question: How does the Shapiro-Wilk margin over plain S2 scale with population skewness? At exact 5% size with 20000 paired draws at n=50 and a new seed, report power of SW and plain S2 and the paired difference with its paired SE under gamma(1), gamma(2), gamma(5), gamma(10), gamma(20) and gamma(50), tabulate the margin against sqrt(beta1) for each law, state whether it is monotone in skewness, and give the smallest skewness at which SW still beats S2 beyond two paired SE.
 learning: Shapiro-Wilk's skew advantage is general, not specific to chi-square(5): at exact 5% size with 20000 paired draws, SW beats plain AD and plain S2 beyond two paired SE under chi-square(2), chi-square(10), lognormal(0, 0.5) and beta(2, 5) at every n in 25, 50, 100, stable across three seeds; the only non-win is a saturation tie at chi-square(2), n=100 where every test is near power 1. The S2 skew gap is structural across laws, so S2 patches aimed at chi-square(5) alone are not worth running.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-opus-5-5
+runners: local
