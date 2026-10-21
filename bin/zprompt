@@ -333,8 +333,12 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       # before this cycle's [direction]). Shown so a new rule constrains
       # something these do not; cycles 76-81 each re-passed "state the
       # seed, the replicate count and the half-width" in new words
-      ledger=$(git --no-pager log --format='%s' --grep='^\[pass\]' -6 ${cycle_start:+"$cycle_start"} 2>/dev/null \
-        | sed -e 's/^\[pass\] [^:]*: //' -e 's/^/  /' | cut -c1-220) || ledger=""
+      # (no [direction] at all: no ledger, since HEAD's would be this cycle's own)
+      ledger=""
+      if [[ -n "$cycle_start" ]]; then
+        ledger=$(git --no-pager log --format='%s' --grep='^\[pass\]' -6 "$cycle_start" 2>/dev/null \
+          | sed -e 's/^\[pass\] [^:]*: //' -e 's/^/  /' | cut -c1-220) || ledger=""
+      fi
       if [[ -n "$ledger" ]]; then
         listing="${listing:+$listing$'\n'}Rules earlier cycles already passed (the ledger; a new rule should constrain something these do not, not restate one):"$'\n'"$ledger"
       fi
