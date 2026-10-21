@@ -918,7 +918,9 @@ JOIN_TURNS_HTML=""
 JOIN_TURN_COUNT=0
 JOIN_PROMPT=$( { git show "$LIVE_REF:PROMPT.md" 2>/dev/null || cat PROMPT.md 2>/dev/null; } | jq -R -r -s '@html' || true)
 if [[ -n "${LIVE_CYCLE:-}" ]]; then
-    JOIN_BELOW=$(git tag -l 'rev*' --merged "$LIVE_REF" | grep -vxF "$LIVE_TAG" || true)
+    # Tags merged into the tip's parent: a tag at the tip itself (rev15 and
+    # rev16 share a commit) would otherwise exclude the whole lineage
+    JOIN_BELOW=$(git tag -l 'rev*' --merged "$LIVE_REF^" 2>/dev/null || true)
     # shellcheck disable=SC2086  # the tag names are one per line, no spaces
     JOIN_OUT=$(git log --first-parent --reverse --format='%H%x1f%s%x1f%b%x1e' "$LIVE_REF" --not $JOIN_BELOW \
         | jq -R -r -s '

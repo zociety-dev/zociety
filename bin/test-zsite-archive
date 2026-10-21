@@ -45,7 +45,7 @@
 #      card, degrading to "none" without them (case 8)
 #  10. docs/join.html (checked with case 2) carries PROMPT.md as the
 #      highest tag has it and one entry per z:1 event along that tag's
-#      first parents below the tags merged into it, each linked to its
+#      first parents below the tags merged into its parent, each linked to its
 #      commit; a repo whose tags hold no event gets the page with no entry
 #      (case 7); the live fixture's page names its highest tag (case 8)
 
@@ -214,7 +214,7 @@ done < <(jq -r '.[] | .id as $id | .answers[] | [$id, .commit, .file] | @tsv' <<
 echo "Case 10: join.html carries the highest tag's PROMPT.md and its cycle's every event"
 # The cycle's commits: the tag's first parents below the rev* tags merged
 # into it, parsed as the page parses them (whole body, else the z:1 line)
-JOIN_BELOW=$(git tag -l 'rev*' --merged "$HIGHEST_TAG" | grep -vxF "$HIGHEST_TAG" || true)
+JOIN_BELOW=$(git tag -l 'rev*' --merged "$HIGHEST_TAG^" 2>/dev/null || true)
 # shellcheck disable=SC2086  # the tag names are one per line, no spaces
 JOIN_SHAS=$(git log --first-parent --format='%H%x1f%b%x1e' "$HIGHEST_TAG" --not $JOIN_BELOW \
   | jq -R -r -s '
