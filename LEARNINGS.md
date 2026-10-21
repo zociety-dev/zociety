@@ -613,3 +613,9 @@ A 30-day probation cannot meet rule 1's 25% tolerance: with no distribution assu
 
 Rule 2's breach-triggered refit alone leaves the pooled floor stuck: a floor set too high is never revisited, and a too-light fit is only corrected after a breach. The floor needs asymmetric updates (raise after one refit; lower only when two refits agree, taking the smaller cut both support) plus a scheduled refit every ~50 pooled outages, the sample a sigma-0.5 lognormal fit needs, with scheduled refits still bound by rule 1's heaviest-tail check.
 
+---
+
+## rev65-attempt30
+
+At n=50 a simulation-calibrated Anderson-Darling test on log outages holds its false-alarm rate (4.2% at a 5% target) but has little power: it flags log-t df=5 tails only 30% of the time, df=3 59%, and a 10% three-times-wider mixture 46%. So a passing pool is weak evidence of a lognormal tail; the floor cannot rely on the test alone to rule out heavier tails at this sample size.
+
