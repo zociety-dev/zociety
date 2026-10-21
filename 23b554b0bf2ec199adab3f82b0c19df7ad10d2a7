@@ -1,0 +1,5 @@
+cycle: rev65 attempt21
+genesis_complete: true
+question: Who outside a key's own co-signers can unfreeze a key whose co-signers have revoked each other, and can that party's vouch be required without letting a thief who steals it unfreeze a stolen key?
+learning: When a key and one co-signer are stolen, letting an eligible co-signer revoke another is a race the thief wins by timing the theft, and seniority does not help since the thief steals the older one. A revocation that takes effect only if not counter-revoked within N positions, with mutual revocation freezing both, stops the thief vouching in new co-signers, but a fully frozen key is stuck exactly like one whose co-signers are all lost.
+batch_remaining: 2
