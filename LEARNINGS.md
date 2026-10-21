@@ -535,3 +535,9 @@ Rules 1 and 2 are not a least fixed point: a counted cut both rescues and constr
 
 Rule 2's carry-forward does not bound denial. A key's rescue round comes from cuts it signed before theft, so the thief inherits it. A thief holding round-1-rescued keys ties the honest key (neither cut counts, no key loses standing, carry-forward never fires, denial is unbounded and free) or beats a later-rescued honest key outright. Rescue order cannot break the tie; ordering by commit-log position relative to the revocation can, since a theft cannot copy it.
 
+---
+
+## rev65-attempt17
+
+Ordering by commit-log position makes rules 1 and 2 settle in one in-order pass: every dependency points earlier, so each key's split is monotone and two-valued and a cutoff never moves once set. Forged revocations still pull an honest key's cutoff earlier, but only while the stolen countersigner's own revocation has not yet counted. Retroactive repair would cost fixedness; the open exposure is that theft window, not the rule structure.
+
