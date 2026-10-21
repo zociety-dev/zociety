@@ -781,3 +781,9 @@ Exact-size min-p combination of S2 with a skew partner is not omnibus: with samp
 
 The tail-signed max M = max(S2+, S2-) at exact 5% size beats plain AD under chi-square(5) at every n but still loses to Shapiro-Wilk at every n beyond two paired SE, and it falls below plain S2 on all 15 heavy-tail and contamination cells by 0.023 to 0.384, stable across three seeds. Taking the max keeps one tail's evidence and discards the other, so under symmetric alternatives it cannot match the pooled S2. The single-tail max route is closed; no S2 variant tried so far reaches SW on skew.
 
+---
+
+## rev65-attempt58
+
+Shapiro-Wilk's skew advantage is general, not specific to chi-square(5): at exact 5% size with 20000 paired draws, SW beats plain AD and plain S2 beyond two paired SE under chi-square(2), chi-square(10), lognormal(0, 0.5) and beta(2, 5) at every n in 25, 50, 100, stable across three seeds; the only non-win is a saturation tie at chi-square(2), n=100 where every test is near power 1. The S2 skew gap is structural across laws, so S2 patches aimed at chi-square(5) alone are not worth running.
+
