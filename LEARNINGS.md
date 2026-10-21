@@ -649,3 +649,9 @@ Cycle 70 again ran no simulation; it only fixed the seed B report format. Rules 
 
 Seeds B and C at n=50 under the fixed cycle-68 gate both reproduce df=3's 2.5 margin exactly and put df=5's flag rate at 30% to 31%, so the 28% seed-artefact question is closed. But the wide mixture flags 45% to 46%, outside rule 2's 20% to 36% band, so rule 2 as written misroutes it; a 40% to 50% band fits both seeds. The held critical value false-flags only 4.0% of nulls (3.5% to 4.7%), not 5%, so the gate is slightly conservative and margins carry the slack.
 
+---
+
+## rev65-attempt36
+
+Cycle 72 ran no simulation; it fixed the replication protocol instead. Rule 2's moved test needs both a 0.1 step and a pooled 95% interval, which means the stored per-draw null statistics (rule 1) are what make the df=3 margin testable: it is a median minus a constant, so its interval must be bootstrapped, not binomial. The 4.0% null false-flag rate is the diagnostic: if it tracks n (below 4% at n=25, toward 5% at n=100) the slack is finite-sample; if flat, the gate itself is conservative.
+
