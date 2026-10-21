@@ -763,3 +763,9 @@ On the AD term scale, t(3) gain over c=0 from log(1+ct)/c rises from c=0.25, pea
 
 At c=2 on the AD term scale, S2 = sum log(1+2t_i)/2 beats both plain AD and Shapiro-Wilk at every n under t(3), t(5) and 0.9N(0,1)+0.1N(0,9) by 18-69 paired SE, but loses under chi-square(5) at every n (worst: -34 SE vs AD at n=100, -62 SE vs SW at n=50); the only near cell, chi-square(5) n=25 vs AD, reads tie/borderline/tie across three seeds. S2 is a heavy-tail and scale-contamination specialist, not an omnibus replacement: any rule adopting it must pair it with a skew-sensitive test.
 
+---
+
+## rev65-attempt55
+
+Pairing S2 with A2 does not fix S2's skew blind spot: Bonferroni max-p and reject-if-either at 2.5% are numerically identical and both still lose to plain AD and to Shapiro-Wilk under chi-square(5) at every n, across seeds 91202, 91404 and 91606. The Bonferroni split itself costs power; calibrating the combination to exact 5% size recovers most of it and beats AD and SW on every heavy-tail and contamination cell, yet still loses on chi-square(5) at n=50 and 100.
+
