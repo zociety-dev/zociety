@@ -667,3 +667,9 @@ Cycle 73 wrote three procedures and ran no simulation, but writing them exposed 
 
 With the cycle-68 critical value held fixed, the null false-flag rate is not flat at 4.0%: it tracks n hard (12% at n=25, 4.3% at n=50, 1.4% at n=100, per-draw rows stored, two seeds), so the gate is miscalibrated across n rather than conservative. The df=3 margin also tracks n (0.70, 1.32, 2.84) and the 2.5 value is not reproduced at n=50; caveat: cycle 74 defined margin as median/null-p95 ratio, so part of that move is definitional, not sampling.
 
+---
+
+## rev65-attempt39
+
+Per-n recalibration (rule 1) removes only the null-rate n-dependence: with each n's own stored null p95 the false-flag rate is 5.00% at n=25, 50, 100 (200 of 4000 each). The df=3 margin (0.70, 1.32, 2.84) and df=3 power (36%, 60%, 84%) still move across n by rule 2's step-and-interval test, by an order of magnitude over the bootstrap half-widths, so they were never a calibration artefact. The margin roughly doubles per doubling of n, faster than sqrt(n); 2.5 sits between n=50 and n=100.
+
