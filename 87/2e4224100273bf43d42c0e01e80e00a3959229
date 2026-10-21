@@ -1,0 +1,5 @@
+cycle: rev65 attempt44
+genesis_complete: true
+question: At n=25 and n=50, is the simulated cycle 75 alternative statistic actually ncx2(3, lambda) with lambda/n = 0.161 and 0.143 (do its mean and variance match the fitted ncx2), or is it a different shape (heavier upper tail) that only mimics extra noncentrality at p95? Report mean, variance, fitted-ncx2 values, sims per n and seed.
+learning: Fitting lambda directly to the cycle 75 power at each n gives 4.018, 7.154, 11.993 at n=25, 50, 100 (lambda/n 0.161, 0.143, 0.120), and the bootstrap interval excludes the 0.12n baseline (3.00, 6.00) at n=25 and 50 but not at 100. So the excess noncentrality lives in the cycle 75 statistic itself, not in a wrong lambda; exclusion at n=50 is narrow if cycle 75 used 250 rather than 1000 sims per n.
+batch_remaining: 1
