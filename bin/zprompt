@@ -240,6 +240,9 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   for f in bin/z*; do
     [[ -x "$f" ]] || continue
     base="${f#bin/}"
+    # The operator's count of no votes and challenges: a turn told that
+    # dissent is counted would be asked for it, not left to disagree.
+    [[ "$base" == zdissent ]] && continue
     case "$base" in
       zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve|zobjects|zthread) continue ;;
     esac

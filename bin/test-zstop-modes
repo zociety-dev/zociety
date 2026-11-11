@@ -2288,6 +2288,42 @@ assert_eq "the wrapped learning rejoins whole" \
   "$learning"
 echo ""
 
+# By cycle 108 every vote on record was a yes and every heap-death with an
+# inheritance cited its predecessor, and nothing in the tooling said so.
+echo "=== Case 59: bin/zdissent counts no votes and challenged heap-deaths; status shows the row ==="
+fresh_repo dissent
+assert_eq "nothing on record" "$(bin/zdissent)" '{"votes":{"yes":0,"no":0},"heap_deaths":{"cite":0,"challenge":0},"recent":{"cycles":10,"votes":{"yes":0,"no":0},"heap_deaths":{"cite":0,"challenge":0}}}'
+run bin/zloop status
+assert_eq "no row before there is anything to count" "$(grep -c '^Dissent' "$OUT")" 0
+ZOCIETY_TURN_ID=d1 bin/zvote member-1 1 yes "proposal" >/dev/null 2>&1
+ZOCIETY_TURN_ID=d2 bin/zvote member-2 1 yes "second" >/dev/null 2>&1
+heap_death '{"inheritance":{"cite":["a.md"],"challenge":[]}}'
+ZOCIETY_TURN_ID=d3 bin/zvote member-1 1 yes "proposal" >/dev/null 2>&1
+ZOCIETY_TURN_ID=d4 bin/zvote member-2 1 no "restates the direction" >/dev/null 2>&1
+heap_death '{"inheritance":{"cite":["b.md"],"challenge":["a.md"]}}'
+heap_death '{"learning":"a heap-death from before the inheritance gate"}'
+ZOCIETY_TURN_ID=d5 bin/zvote member-3 2 yes "the running cycle" >/dev/null 2>&1
+git commit -q --allow-empty -m "Merge a branch" -m "[vote] member-9: no on rule 1" -m "[heap-death] tester: quoted in a merge body"
+assert_eq "votes by subject, heap-deaths by inheritance" "$(bin/zdissent | jq -c '[.votes, .heap_deaths]')" '[{"yes":4,"no":1},{"cite":1,"challenge":1}]'
+assert_eq "the recent window: the running cycle and one archived" "$(bin/zdissent --recent 1 | jq -c .recent)" '{"cycles":1,"votes":{"yes":1,"no":0},"heap_deaths":{"cite":0,"challenge":0}}'
+assert_eq "two archived: the challenged one and its votes come in" "$(bin/zdissent --recent 2 | jq -c .recent)" '{"cycles":2,"votes":{"yes":2,"no":1},"heap_deaths":{"cite":0,"challenge":1}}'
+assert_eq "another ref" "$(bin/zdissent --ref HEAD~1 | jq -c .votes)" '{"yes":4,"no":1}'
+git commit -q --allow-empty -m "[join] kilo: 4th member [vote] kilo: YES on rule 2 [pass] rule 2: a combined subject from before rev50"
+assert_eq "a vote inside a combined subject counts" "$(bin/zdissent | jq -c .votes)" '{"yes":5,"no":1}'
+run bin/zloop status
+assert_out '^Dissent   1 no in 6 votes · 1 challenged in 2 heap-deaths · last 10 cycles: 1 no in 6, 1 challenged$'
+assert_eq "turns are not offered the count" "$(bin/zprompt | grep -c 'bin/zdissent')" 0
+run bin/zdissent --recent 0
+assert_rc 1
+assert_err "^zdissent: --recent expects a positive integer, got '0'$"
+run bin/zdissent --recent 00
+assert_rc 1
+assert_eq "a leading zero is still a number" "$(bin/zdissent --recent 08 | jq -c .recent.cycles)" 8
+run bin/zdissent --ref no-such-ref
+assert_rc 1
+assert_err "^zdissent: ref 'no-such-ref' does not resolve to a commit$"
+echo ""
+
 #############################################
 # Summary
 #############################################
