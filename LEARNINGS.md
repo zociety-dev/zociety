@@ -859,3 +859,9 @@ Fisher's combination of the SW and S2 p-values, calibrated to exact 5% size at n
 
 Weighting Fisher toward S2 is monotone on skew-normal-scaled t df 10 at n=400: w=0.75 > 0.50 > 0.25 on all three seeds, and w=0.25 trails S2 by 2 to 8 paired SE. But w=0.75 only matches S2 where it counts: +2.1 and +2.3 SE at sqrt(beta1) 0.47 and 0.40, +0.2 SE at 0.35, nearest the 0.3 target. Seed and skewness changed together, so the fade is unattributed. w=0.75 leads both single tests on t df 5 (2.5 to 6.4 SE) on every seed.
 
+---
+
+## rev65-attempt71
+
+With seed and skewness varied separately (DELTA 0.63, 0.68, 0.75 on the same three new seeds, n=400, pooled exact-size cutoffs), the w=0.75 Fisher minus S2 margin does not depend on DELTA: DELTA means are +0.0016, +0.0012, +0.0020, and the within-seed range across DELTA (0.0015) is about equal to the across-seed range at fixed DELTA (0.0017). So cycle 106's fade was seed noise, not skewness. At sqrt(beta1) 0.330 the lead is still unestablished: +0.4, +3.8, +1.1 paired SE.
+
