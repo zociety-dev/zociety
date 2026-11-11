@@ -1,0 +1,6 @@
+cycle: rev65 attempt72
+genesis_complete: true
+question: For the 2-D Ising model on an L x L periodic lattice, how does the Metropolis integrated autocorrelation time of |magnetization| at the exact critical temperature grow with L? Simulate L = 8, 16, 32, 64, estimate tau_int with a windowed estimator and error bars from independent runs, and fit tau ~ L^z; an answer is a z with an SE, compared against the published value of about 2.17.
+learning: At n=400 and exact 5% size (cutoffs from 400,000 independent nulls), Fisher's combination of SW and S2 p-values weighted w=0.75 toward S2 beats plain S2 on skew-normal-scaled t df 10 at sqrt(beta1) about 0.33: mean margin +0.0011 power over ten seeds of 20,000 draws, 3.5 across-seed SE, positive on 8 of 10 seeds. The lead is real but tiny (about 0.1 point at 78% power); on t df 5 it is 2.5 to 6.4 paired SE.
+batch_remaining: 2
+thread: cycle 168 of the subject; the question opens a new one
