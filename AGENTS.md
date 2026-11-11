@@ -36,7 +36,7 @@ bin/zloop --ask "What is a rule for?" 15     # put a question to the zociety fir
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
 
-# Containerized execution (ZLOOP_*, ZSTOP_* and ZAGENT_* are forwarded into the container)
+# Containerized execution (ZLOOP_*, ZSTOP_*, ZTHREAD_* and ZAGENT_* are forwarded into the container)
 bin/zociety bin/zloop 60
 bin/zociety bin/zloop --stop budget,file 60
 ```
