@@ -175,6 +175,22 @@ forward_env() {
     return 0
 }
 
+# container_workdir: where in the container a command runs. The project is
+# mounted at /repo, so a command started in a subdirectory of it, or in a
+# checkout under .worktrees/, runs in the same place there. It used to run in
+# /repo whatever the caller's directory: a `git add` or `git commit` routed
+# from .worktrees/<name> acted on the main checkout, on whatever branch a run
+# had it on. Anywhere outside the project it is /repo, as before.
+container_workdir() {
+    local here root
+    here="$(pwd -P)"
+    root="$(cd "$PROJECT_DIR" && pwd -P)"
+    case "$here" in
+        "$root"/*) printf '/repo/%s\n' "${here#"$root"/}" ;;
+        *) printf '/repo\n' ;;
+    esac
+}
+
 run_container() {
     ensure_image
     check_prereqs
@@ -215,6 +231,18 @@ run_container() {
         interactive_args=(-it)
     else
         interactive_args=()  # no TTY: see note above; set GH_FORCE_TTY=1 for colour
+    fi
+
+    # The caller's directory (container_workdir). cd, not --workdir: through
+    # the podman machine's file sharing the directory a container starts in
+    # comes back owned by root, and git then refuses a worktree there
+    # ("detected dubious ownership"; only /repo is a safe.directory). From
+    # the project root the command line is what it always was.
+    local workdir
+    workdir="$(container_workdir)"
+    if [[ "$workdir" != /repo ]]; then
+        # shellcheck disable=SC2016  # expanded by the container's bash
+        cmd=(bash -c 'cd "$1" && shift && exec "$@"' zociety-run "$workdir" "${cmd[@]}")
     fi
 
     podman run --rm "${interactive_args[@]}" \
@@ -347,10 +375,14 @@ case "${1:-}" in
         # in step). Without them gh in an exec'd command is logged out
         # ("populate the GH_TOKEN environment variable"), so bin/zgh, and with
         # it bin/zheap-death's landing of a cycle, failed whenever a session
-        # already held the container. The host env is forwarded as for a run.
+        # already held the container. The host env is forwarded as for a run,
+        # and the command runs in the caller's directory (container_workdir;
+        # cd for the reason run_container gives).
         forward_env
         # shellcheck disable=SC2016  # expanded by the container's bash
         podman exec "${exec_tty[@]}" "${ENV_ARGS[@]}" "$CONTAINER_NAME" bash -c '
+            cd "$1" || exit 1
+            shift
             if [[ -f /run/secrets/anthropic_api_key ]]; then
                 ANTHROPIC_API_KEY="$(cat /run/secrets/anthropic_api_key)"; export ANTHROPIC_API_KEY
             fi
@@ -360,7 +392,7 @@ case "${1:-}" in
             if [[ -f /run/secrets/github_token ]]; then
                 GITHUB_TOKEN="$(cat /run/secrets/github_token)"; export GITHUB_TOKEN GH_TOKEN="$GITHUB_TOKEN"
             fi
-            exec "$@"' zociety-exec "${cmd[@]}"
+            exec "$@"' zociety-exec "$(container_workdir)" "${cmd[@]}"
         ;;
     setup-token)
         setup_token

@@ -622,6 +622,7 @@ To maintain a clean, stable, and traceable commit history, use a standard
 
 ### 1. Feature & Fix Branching
 - **Target Branch:** All development branches must branch off of the up-to-date `main` branch.
+- **Worktrees:** A development branch gets its own checkout under `.worktrees/<name>` (`git worktree add .worktrees/<name> -b <branch> origin/main`), so a run can keep the main checkout. A routed git or gh command runs in the container at the directory it was started from (`bin/zociety` maps it to its place under `/repo`), so `git add` and `git commit` in a worktree act on that worktree. Before this they ran in `/repo`, the main checkout, on the cycle branch a run had there.
 - **Naming Convention:** Use descriptive kebab-case names, optionally prefixed with the category of change:
   - `fix/zloop-interrupt`
   - `feature/new-stop-mode`
