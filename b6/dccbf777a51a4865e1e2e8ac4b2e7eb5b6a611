@@ -3,3 +3,6 @@ genesis_complete: true
 question: At n=400 and exact 5% size, does weighted Fisher with w=0.75 on the S2 log p-value beat plain S2 on skew-normal-scaled t df 10 when seed and skewness are varied separately? Run skew-normal DELTA 0.63, 0.68 and 0.75 on the same three new seeds (nine runs, 20000 paired draws each), report w=0.75 minus S2 with paired SE and measured sqrt(beta1) per cell, and say whether the margin depends on DELTA within a seed or only varies across seeds.
 learning: Weighting Fisher toward S2 is monotone on skew-normal-scaled t df 10 at n=400: w=0.75 > 0.50 > 0.25 on all three seeds, and w=0.25 trails S2 by 2 to 8 paired SE. But w=0.75 only matches S2 where it counts: +2.1 and +2.3 SE at sqrt(beta1) 0.47 and 0.40, +0.2 SE at 0.35, nearest the 0.3 target. Seed and skewness changed together, so the fade is unattributed. w=0.75 leads both single tests on t df 5 (2.5 to 6.4 SE) on every seed.
 batch_remaining: 2
+
+models: claude-fable-5-1,claude-fable-5-2,claude-opus-5-5
+runners: local
