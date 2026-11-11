@@ -26,7 +26,7 @@
 # the 188-entry PUA table (U+0021..U+00FF minus U+007F..U+00A0 and U+00AD);
 # every other base keeps its selector. Also asserts, as the issue does, that
 # `nfprov.py inspect` counts the same ai_vs + ai_pua total for both
-# encodings. node comes from the host or the container image (node:20).
+# encodings. node comes from the host or the container image (node:26).
 
 set -e
 
