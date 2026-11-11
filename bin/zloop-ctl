@@ -88,9 +88,16 @@ cycles_in() {
 }
 
 zociety_rows() {
-  local state learning queued
+  local state learning queued subject
   state=$(bin/zstate 2>/dev/null) || state="{}"
   row "Zociety" "$(printf '%s' "$state" | jq -r '"cycle \(.cycle // "?") · next \(.next // .action // "?") · needs \(.needs // {} | to_entries | map("\(.key) \(.value)") | join(" "))"')"
+  # How far along the running subject is (bin/zthread); no row with no limit.
+  subject=$(bin/zthread 2>/dev/null | jq -r '
+    if .max == 0 then empty
+    elif .spent and (.opened | not) then "none opened on record; the next heap-death opens one (\(.max) cycles each)"
+    elif .spent then "cycle \(.length) of \(.max); the next heap-death opens a new one"
+    else "cycle \(.length) of at most \(.max)" end' 2>/dev/null) || subject=""
+  [[ -z "$subject" ]] || row "Subject" "$subject"
   # cat fails on whichever file is missing; the count stands.
   queued=$(cat "$ZRUN_INBOX" "$ZRUN_INBOX.draining" 2>/dev/null | grep -c . || true)
   if [[ "$(printf '%s' "$state" | jq -r '.ask.id // empty')" != "" ]]; then
@@ -103,6 +110,15 @@ zociety_rows() {
               | select((.data.learning? // "") | length > 0))
         | .[0] // empty | "cycle \(.cycle): \(.data.learning | gsub("\\s+"; " "))"' 2>/dev/null) || learning=""
   [[ -z "$learning" ]] || row "Learning" "$learning"
+  # The disagreement on record (bin/zdissent); no row before the first vote
+  # or heap-death with an inheritance.
+  local dissent
+  dissent=$(bin/zdissent 2>/dev/null | jq -r '
+    (.votes.yes + .votes.no) as $v | (.heap_deaths.cite + .heap_deaths.challenge) as $h
+    | if ($v + $h) == 0 then empty
+      else "\(.votes.no) no in \($v) votes · \(.heap_deaths.challenge) challenged in \($h) heap-deaths · last \(.recent.cycles) cycles: \(.recent.votes.no) no in \(.recent.votes.yes + .recent.votes.no), \(.recent.heap_deaths.challenge) challenged"
+      end' 2>/dev/null) || dissent=""
+  [[ -z "$dissent" ]] || row "Dissent" "$dissent"
 }
 
 # limits_row <record>: what bounds the run, and how much of each is used

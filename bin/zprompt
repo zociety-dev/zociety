@@ -240,8 +240,11 @@ if [[ "$CONTEXT" -eq 1 ]]; then
   for f in bin/z*; do
     [[ -x "$f" ]] || continue
     base="${f#bin/}"
+    # The operator's count of no votes and challenges: a turn told that
+    # dissent is counted would be asked for it, not left to disagree.
+    [[ "$base" == zdissent ]] && continue
     case "$base" in
-      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve|zobjects) continue ;;
+      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve|zobjects|zthread) continue ;;
     esac
     # Usage: the "# Usage: bin/z..." one-liner, or the first "#   bin/z..."
     # under a "# Usage:" heading. The "-h | --help" form is not news.
@@ -319,7 +322,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       run='bin/zjoin "" <role> "<greeting>"  (the harness assigns your member name)'
       ;;
     contribute:rule)
-      run='bin/zvote <agent> <rule_number> yes|no "<reason>" ONCE: a yes on an unused number proposes that rule (its text goes in the reason); a rule passes on yes votes from 2 distinct turns, and all votes one turn casts count as one, so second an open proposal below rather than opening another. Then bin/zpass <agent> <rule_number> "<description>" only when the tally below already shows 1 yes before yours (zpass refuses otherwise; your vote is still recorded, end the turn)'
+      run='bin/zvote <agent> <rule_number> yes|no "<reason>" once per rule: a yes on an unused number proposes that rule (its text goes in the reason); a rule passes on yes votes from 2 distinct turns with more yes than no, and all votes one turn casts on a rule count as one, so vote on an open proposal below, yes or no on its merits, rather than opening another beside it. Then bin/zpass <agent> <rule_number> "<description>" only when the tally below already shows 1 yes before yours (zpass refuses otherwise; your vote is still recorded, end the turn)'
       read_first="nothing; rule activity so far is listed below"
       # This cycle's votes and passes only (since its [direction]); earlier
       # cycles' rules read as open proposals to a turn that cannot tell them
@@ -341,6 +344,22 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       fi
       if [[ -n "$ledger" ]]; then
         listing="${listing:+$listing$'\n'}Rules earlier cycles already passed (the ledger; a new rule should constrain something these do not, not restate one):"$'\n'"$ledger"
+      fi
+      # A second is a review. Every vote the zociety had cast by cycle 108
+      # was a yes (448 of 448): the turn was told to second the open
+      # proposal, and a no bought nothing. Shown only while a proposal is
+      # open (more yes than no this cycle, not passed), with what a no is for
+      # and what follows it, so a no costs the cycle no turn. A rule voted
+      # down (no at least equal to yes) is not open: listed here, the next
+      # turn was steered back to it and one more yes passed it 2 to 1 over
+      # the replacement the no had proposed. It stays in the tally above.
+      open_rules=$(printf '%s' "$state" | jq -r '.votes // {} | to_entries[] | select(.value.yes > .value.no) | .key' 2>/dev/null \
+        | while read -r n; do
+            git --no-pager log -1 --format=%H --grep="^\[pass\] [^:]*: rule $n:" ${cycle_start:+"${cycle_start}.."} 2>/dev/null | grep -q . || printf '%s ' "$n"
+          done) || open_rules=""
+      open_rules="${open_rules% }"
+      if [[ -n "$open_rules" ]]; then
+        listing="${listing:+$listing$'\n'}Review before you second (open: rule ${open_rules// /, rule }): a yes says the rule will change what a stuff item does. Vote no, with the reason, if it restates the direction or a ledger rule, or if every stuff item would do what it says without being told. A no is not the end of your turn: follow it with a yes on the next unused number that proposes the rule you would have passed."
       fi
       ;;
     contribute:answer)
@@ -380,8 +399,32 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the learning or the question"
       listing=$(stuff_listing)
       [[ -n "$listing" ]] && listing="This cycle's stuff/:"$'\n'"$listing"
-      listing="$listing"$'\n'"--learning is what this cycle found, not what it made and not where to go next: one claim its stuff/ supports that should change what the next cycle does, at most 500 characters. A learning that repeats one below is not a finding."
+      # The subject's length (bin/zthread). The question this turn writes
+      # comes from the learnings it is shown, so it refines them unless told
+      # the subject has an end; bin/zheap-death refuses a spent one without
+      # --new-thread, and the turn should not find that out by being refused.
+      learning_is="--learning is what this cycle found, not what it made and not where to go next: one claim its stuff/ supports that should change what the next cycle does, at most 500 characters. A learning that repeats one below is not a finding."
+      subject=""
+      thread=$(bin/zthread 2>/dev/null) || thread=""
+      if [[ -n "$thread" ]]; then
+        t_len=$(printf '%s' "$thread" | jq -r '.length')
+        t_max=$(printf '%s' "$thread" | jq -r '.max')
+        if [[ "$(printf '%s' "$thread" | jq -r '.spent')" == true ]]; then
+          run='bin/zheap-death --new-thread --cite <stuff-file> --learning "<what this subject established>" <agent> "<a question on a different subject>"  (or --challenge <stuff-file>; archives, measures the cycle, and births the successor)'
+          if [[ "$(printf '%s' "$thread" | jq -r '.opened')" == true ]]; then
+            t_why="This subject has had its $t_max cycles"
+          else
+            t_why="No heap-death on record has opened a new subject, and one subject gets $t_max cycles"
+          fi
+          learning_is="--learning is what the subject established over all its cycles, not what this cycle made: one claim someone outside the zociety could check, at most 500 characters. --cite names the file that carries it."
+          subject="$t_why, so this heap-death ends it: --new-thread is required. The question opens a different subject: not a refinement, replication or extension of any learning above, and not answerable by rerunning this cycle's work with other inputs. The subject is the zociety's to choose; pick one a cycle can make something for and check with the tools a turn has, and say in the question what would count as an answer."
+        elif [[ "$t_max" -gt 0 ]]; then
+          subject="This is cycle $t_len of at most $t_max on this subject. Add --new-thread when the question you write opens a different subject; at cycle $t_max it is required."
+        fi
+      fi
+      listing="$listing"$'\n'"$learning_is"
       [[ -n "$learnings" ]] && listing="$listing"$'\n'"Learnings from recent cycles (newest first):"$'\n'"$learnings"
+      [[ -n "$subject" ]] && listing="$listing"$'\n'"$subject"
       if [[ -n "$ask_id" && "$(printf '%s' "$state" | jq -r '.ask.status' 2>/dev/null)" == "answered" ]]; then
         listing="$listing"$'\n'"This cycle answered operator question $ask_id. The next cycle's question is still the society's to choose; cite the answer only if it bears on it."
       fi
