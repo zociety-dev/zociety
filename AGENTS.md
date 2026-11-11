@@ -595,7 +595,14 @@ bin/zstate → action field tells you what to do:
                   [vote] events and needs 2 yes, more yes than no; the
                   for/against arguments are not trusted). A rule therefore
                   takes two turns: propose (vote yes), then another turn
-                  seconds and passes. A cycle is about 11 turns (3 joins,
+                  reviews it and, on a yes, passes it: `bin/zprompt` tells a
+                  turn facing an open proposal to vote no if the rule
+                  restates the direction or a ledger rule, or constrains
+                  nothing, and to follow the no in the same turn with a yes
+                  that proposes the replacement, so a no costs the cycle no
+                  turn. Until then the turn was told to second the open
+                  proposal, and all 448 votes cast by cycle 108 were yes. A
+                  cycle is about 11 turns (3 joins,
                   2x2 rule turns, 3 stuff, heap-death; 12 with an operator
                   question to answer), so `--max 5` cannot finish one. A
                   turn that is not joining acts for the member who has gone
