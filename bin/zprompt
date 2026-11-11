@@ -345,9 +345,12 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       # A second is a review. Every vote the zociety had cast by cycle 108
       # was a yes (448 of 448): the turn was told to second the open
       # proposal, and a no bought nothing. Shown only while a proposal is
-      # open (voted on this cycle, not passed), with what a no is for and
-      # what follows it, so a no costs the cycle no turn.
-      open_rules=$(printf '%s' "$state" | jq -r '.votes // {} | keys[]' 2>/dev/null \
+      # open (more yes than no this cycle, not passed), with what a no is for
+      # and what follows it, so a no costs the cycle no turn. A rule voted
+      # down (no at least equal to yes) is not open: listed here, the next
+      # turn was steered back to it and one more yes passed it 2 to 1 over
+      # the replacement the no had proposed. It stays in the tally above.
+      open_rules=$(printf '%s' "$state" | jq -r '.votes // {} | to_entries[] | select(.value.yes > .value.no) | .key' 2>/dev/null \
         | while read -r n; do
             git --no-pager log -1 --format=%H --grep="^\[pass\] [^:]*: rule $n:" ${cycle_start:+"${cycle_start}.."} 2>/dev/null | grep -q . || printf '%s ' "$n"
           done) || open_rules=""

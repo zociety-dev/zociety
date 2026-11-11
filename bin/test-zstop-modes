@@ -1679,11 +1679,13 @@ assert_eq "the command no longer says to second" "$(printf '%s\n' "$prompt" | gr
 ZOCIETY_TURN_ID=v2 bin/zvote member-2 1 no "restates the direction" >/dev/null 2>&1
 ZOCIETY_TURN_ID=v2 bin/zvote member-2 2 yes "proposal: the replacement" >/dev/null 2>&1
 assert_eq "a no and a replacement in one turn both count" "$(bin/zstate | jq -c .votes)" '{"1":{"yes":1,"no":1},"2":{"yes":1,"no":0}}'
-assert_eq "both are open to the next turn" "$(bin/zprompt --budget 60 | grep -c '^Review before you second (open: rule 1, rule 2):')" 1
+prompt=$(bin/zprompt --budget 60)
+assert_eq "the replacement is open; the rule voted down is not" "$(printf '%s\n' "$prompt" | grep -c '^Review before you second (open: rule 2):')" 1
+assert_eq "the rule voted down stays in the tally" "$(printf '%s\n' "$prompt" | grep -c '^  rule 1: 1 yes / 1 no (distinct turns)$')" 1
 ZOCIETY_TURN_ID=v3 bin/zvote member-3 2 yes "it constrains the stuff" >/dev/null 2>&1
 ZOCIETY_TURN_ID=v3 bin/zpass member-3 2 "the replacement" >/dev/null 2>&1
 assert_eq "the replacement passed" "$(bin/zstate | jq -r .genesis.rules)" 1
-assert_eq "a passed rule is no longer open" "$(bin/zprompt --budget 60 | grep -c '^Review before you second (open: rule 1):')" 1
+assert_eq "nothing is open once the replacement passed" "$(bin/zprompt --budget 60 | grep -c '^Review before you second')" 0
 echo ""
 
 # A run with no model variable sealed "unknown" on every turn, so the
