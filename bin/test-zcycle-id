@@ -554,6 +554,84 @@ assert_eq "tags" "$(git tag | wc -l | tr -d ' ')" 0
 assert_eq "staged changes" "$(git diff --cached --name-only | wc -l | tr -d ' ')" 0
 echo ""
 
+# Each heap-death turn writes the next question from the learnings before it,
+# so cycles 66 to 108 asked 43 questions in a row about one subject and no
+# heap-death challenged its predecessor. A subject now has a length.
+echo "=== Case 11b: a subject gets ZTHREAD_MAX cycles; the heap-death that ends it needs --new-thread ==="
+fresh_repo hd-thread
+git checkout -q -b cycle/rev1-attempt1
+export ZTHREAD_MAX=2
+assert_eq "no heap-death yet: the subject's first cycle" "$(bin/zthread)" '{"length":1,"max":2,"spent":false,"opened":false}'
+event join
+run bin/zheap-death --cite inherited.md --learning "First finding." tester "first question" 3
+assert_rc 0
+HD=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "the event records the subject's length" "$(git log -1 --format=%b "$HD" | jq -c '.data.thread')" '{"length":1,"max":2,"new":false}'
+assert_eq "the note too" "$(git notes show "$HD" | grep -c '^thread: cycle 1 of the subject$')" 1
+assert_eq "the second cycle is the subject's last" "$(bin/zthread)" '{"length":2,"max":2,"spent":true,"opened":false}'
+event join
+mkdir -p stuff
+echo "second fixture artifact" > stuff/second.md
+event complete
+prompt=$(bin/zprompt)
+assert_eq "the heap-death turn is handed --new-thread" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zheap-death --new-thread --cite <stuff-file> --learning "<what this subject established>" tester "<a question on a different subject>"')" 1
+assert_eq "and told why, in a history that never opened one" "$(printf '%s\n' "$prompt" | grep -c '^No heap-death on record has opened a new subject, and one subject gets 2 cycles, so this heap-death ends it: --new-thread is required\.')" 1
+BEFORE=$(git rev-parse HEAD)
+run bin/zheap-death --cite second.md --learning "Second finding." tester "a refinement of the first question" 2
+assert_rc 1
+assert_err '^zheap-death: no heap-death on record has opened a new subject, and one subject gets 2 cycles \(bin/zthread\)\. Nothing written\.$'
+assert_err '^zheap-death: rerun with --new-thread, a question on a different subject'
+assert_eq "nothing written by the refusal" "$(git rev-parse HEAD)" "$BEFORE"
+assert_eq "no second tag" "$(git tag | wc -l | tr -d ' ')" 1
+assert_eq "still on the cycle's branch" "$(git branch --show-current)" cycle/rev1-attempt2
+run bin/zheap-death --new-thread --cite second.md --learning "What the subject established." tester "a question on a different subject" 2
+assert_rc 0
+HD2=$(git log --format=%H --grep='^\[heap-death\]' -n 1)
+assert_eq "recorded as the subject's end" "$(git log -1 --format=%b "$HD2" | jq -c '.data.thread')" '{"length":2,"max":2,"new":true}'
+assert_eq "the note says a new one opens" "$(git notes show "$HD2" | grep -c '^thread: cycle 2 of the subject; the question opens a new one$')" 1
+assert_eq "the successor is a subject's first cycle" "$(bin/zthread)" '{"length":1,"max":2,"spent":false,"opened":true}'
+assert_eq "the archived branch still reads as spent" "$(bin/zthread --ref "$HD2^" | jq -c '[.length, .spent]')" '[2,true]'
+event join
+mkdir -p stuff
+echo "third fixture artifact" > stuff/third.md
+event complete
+prompt=$(bin/zprompt)
+assert_eq "an unspent subject keeps the plain command" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zheap-death --cite <stuff-file> --learning "<what this cycle found>"')" 1
+assert_eq "and is told how far along it is" "$(printf '%s\n' "$prompt" | grep -c '^This is cycle 1 of at most 2 on this subject\. Add --new-thread when the question you write opens a different subject; at cycle 2 it is required\.$')" 1
+run bin/zheap-death --cite third.md --learning "Third finding." tester "third question" 2
+assert_rc 0
+event join
+mkdir -p stuff
+echo "fourth fixture artifact" > stuff/fourth.md
+event complete
+assert_eq "told why, once a subject has been opened" "$(bin/zprompt | grep -c '^This subject has had its 2 cycles, so this heap-death ends it: --new-thread is required\.')" 1
+run bin/zheap-death --cite fourth.md --learning "Fourth finding." tester "fourth question" 2
+assert_rc 1
+assert_err '^zheap-death: this subject has had its 2 cycles \(bin/zthread\)\. Nothing written\.$'
+assert_eq "ZTHREAD_MAX=0: no limit" "$(ZTHREAD_MAX=0 bin/zthread)" '{"length":2,"max":0,"spent":false,"opened":true}'
+assert_eq "a leading zero is still a number" "$(ZTHREAD_MAX=05 bin/zthread)" '{"length":2,"max":5,"spent":false,"opened":true}'
+git commit -q --allow-empty -m "Merge a branch" -m "[heap-death] tester: a heap-death subject quoted in a merge body"
+assert_eq "a commit that quotes a heap-death subject is not one" "$(ZTHREAD_MAX=0 bin/zthread | jq -c .length)" 2
+assert_eq "and no line about it in the prompt" "$(ZTHREAD_MAX=0 bin/zprompt | grep -c 'on this subject\|--new-thread is required')" 0
+run env ZTHREAD_MAX=0 bin/zheap-death --cite fourth.md --learning "Fourth finding." tester "fourth question" 2
+assert_rc 0
+assert_eq "recorded with no limit" "$(git log -1 --format=%b --grep='^\[heap-death\]' | jq -c '.data.thread')" '{"length":2,"max":0,"new":false}'
+run env ZTHREAD_MAX=x bin/zthread
+assert_rc 1
+assert_err "^zthread: ZTHREAD_MAX must be a non-negative integer, got 'x'$"
+BEFORE=$(git rev-parse HEAD)
+run env ZTHREAD_MAX=x bin/zheap-death --cite fourth.md --learning "Unreached." tester "unreached question" 2
+assert_rc 1
+assert_eq "a bad limit writes nothing" "$(git rev-parse HEAD)" "$BEFORE"
+run bin/zthread --ref no-such-ref
+assert_rc 1
+assert_err "^zthread: ref 'no-such-ref' does not resolve to a commit$"
+run bin/zheap-death --finish --new-thread
+assert_rc 1
+assert_err '^zheap-death: --finish takes no other argument'
+unset ZTHREAD_MAX
+echo ""
+
 #############################################
 # Cases: bin/zloop preflight
 #############################################
