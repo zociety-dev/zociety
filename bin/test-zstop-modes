@@ -1665,11 +1665,25 @@ for m in member-1 member-2 member-3; do
   ZOCIETY_TURN_ID="join-$m" bin/zevent join "$m" "fixture join" '{}' >/dev/null 2>&1
 done
 assert_eq "join order while nobody has acted since" "$(bin/zstate | jq -c .roster)" '["member-1","member-2","member-3"]'
+assert_eq "nothing proposed: no review to do" "$(bin/zprompt --budget 60 | grep -c '^Review before you second')" 0
 ZOCIETY_TURN_ID=v1 bin/zvote member-1 1 yes "proposal" >/dev/null 2>&1
 assert_eq "the member who just acted goes last" "$(bin/zstate | jq -c .roster)" '["member-2","member-3","member-1"]'
 prompt=$(bin/zprompt --budget 60)
 assert_eq "the command carries the name" "$(printf '%s\n' "$prompt" | grep -c '^Run: bin/zvote member-2 <rule_number>')" 1
 assert_eq "the prompt says whose turn it is" "$(printf '%s\n' "$prompt" | grep -c 'This turn acts for member-2, the member who has gone longest without acting')" 1
+# Every vote the zociety had cast by cycle 108 was a yes: the turn was told
+# to second the open proposal. A second is now a review, and a no is followed
+# by a proposal in the same turn, so it costs the cycle nothing.
+assert_eq "an open proposal is reviewed, not just seconded" "$(printf '%s\n' "$prompt" | grep -c '^Review before you second (open: rule 1): a yes says the rule will change what a stuff item does\. Vote no, with the reason, if it restates the direction or a ledger rule')" 1
+assert_eq "the command no longer says to second" "$(printf '%s\n' "$prompt" | grep -c 'so second an open proposal')" 0
+ZOCIETY_TURN_ID=v2 bin/zvote member-2 1 no "restates the direction" >/dev/null 2>&1
+ZOCIETY_TURN_ID=v2 bin/zvote member-2 2 yes "proposal: the replacement" >/dev/null 2>&1
+assert_eq "a no and a replacement in one turn both count" "$(bin/zstate | jq -c .votes)" '{"1":{"yes":1,"no":1},"2":{"yes":1,"no":0}}'
+assert_eq "both are open to the next turn" "$(bin/zprompt --budget 60 | grep -c '^Review before you second (open: rule 1, rule 2):')" 1
+ZOCIETY_TURN_ID=v3 bin/zvote member-3 2 yes "it constrains the stuff" >/dev/null 2>&1
+ZOCIETY_TURN_ID=v3 bin/zpass member-3 2 "the replacement" >/dev/null 2>&1
+assert_eq "the replacement passed" "$(bin/zstate | jq -r .genesis.rules)" 1
+assert_eq "a passed rule is no longer open" "$(bin/zprompt --budget 60 | grep -c '^Review before you second (open: rule 1):')" 1
 echo ""
 
 # A run with no model variable sealed "unknown" on every turn, so the

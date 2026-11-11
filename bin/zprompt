@@ -319,7 +319,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       run='bin/zjoin "" <role> "<greeting>"  (the harness assigns your member name)'
       ;;
     contribute:rule)
-      run='bin/zvote <agent> <rule_number> yes|no "<reason>" ONCE: a yes on an unused number proposes that rule (its text goes in the reason); a rule passes on yes votes from 2 distinct turns, and all votes one turn casts count as one, so second an open proposal below rather than opening another. Then bin/zpass <agent> <rule_number> "<description>" only when the tally below already shows 1 yes before yours (zpass refuses otherwise; your vote is still recorded, end the turn)'
+      run='bin/zvote <agent> <rule_number> yes|no "<reason>" once per rule: a yes on an unused number proposes that rule (its text goes in the reason); a rule passes on yes votes from 2 distinct turns with more yes than no, and all votes one turn casts on a rule count as one, so vote on an open proposal below, yes or no on its merits, rather than opening another beside it. Then bin/zpass <agent> <rule_number> "<description>" only when the tally below already shows 1 yes before yours (zpass refuses otherwise; your vote is still recorded, end the turn)'
       read_first="nothing; rule activity so far is listed below"
       # This cycle's votes and passes only (since its [direction]); earlier
       # cycles' rules read as open proposals to a turn that cannot tell them
@@ -341,6 +341,19 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       fi
       if [[ -n "$ledger" ]]; then
         listing="${listing:+$listing$'\n'}Rules earlier cycles already passed (the ledger; a new rule should constrain something these do not, not restate one):"$'\n'"$ledger"
+      fi
+      # A second is a review. Every vote the zociety had cast by cycle 108
+      # was a yes (448 of 448): the turn was told to second the open
+      # proposal, and a no bought nothing. Shown only while a proposal is
+      # open (voted on this cycle, not passed), with what a no is for and
+      # what follows it, so a no costs the cycle no turn.
+      open_rules=$(printf '%s' "$state" | jq -r '.votes // {} | keys[]' 2>/dev/null \
+        | while read -r n; do
+            git --no-pager log -1 --format=%H --grep="^\[pass\] [^:]*: rule $n:" ${cycle_start:+"${cycle_start}.."} 2>/dev/null | grep -q . || printf '%s ' "$n"
+          done) || open_rules=""
+      open_rules="${open_rules% }"
+      if [[ -n "$open_rules" ]]; then
+        listing="${listing:+$listing$'\n'}Review before you second (open: rule ${open_rules// /, rule }): a yes says the rule will change what a stuff item does. Vote no, with the reason, if it restates the direction or a ledger rule, or if every stuff item would do what it says without being told. A no is not the end of your turn: follow it with a yes on the next unused number that proposes the rule you would have passed."
       fi
       ;;
     contribute:answer)
