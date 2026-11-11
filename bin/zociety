@@ -165,12 +165,15 @@ setup_token() {
 ENV_ARGS=()
 forward_env() {
     ENV_ARGS=()
+    # compgen -e: the exported names, one per line. Parsing `env` instead
+    # read each further line of a multi-line value as a name of its own, so
+    # a value holding "ZLOOP_GHOST=1" on a line forwarded --env ZLOOP_GHOST.
     local _name
-    while IFS='=' read -r _name _; do
+    while read -r _name; do
         case "$_name" in
             ZLOOP_*|ZSTOP_*|ZTHREAD_*|ZHEAP_DEATH_*|ZAGENT_*|ANTHROPIC_MODEL|ZOCIETY_AGENT_CLIENT|GEMINI_*|ZOCIETY_BLIND_KEY|ZOCIETY_TURN_ID|CLAUDECODE) ENV_ARGS+=(--env "$_name") ;;
         esac
-    done < <(env)
+    done < <(compgen -e)
     [[ -n "${NO_COLOR:-}" ]] && ENV_ARGS+=(--env NO_COLOR)
     return 0
 }
@@ -192,8 +195,8 @@ container_workdir() {
 }
 
 run_container() {
-    ensure_image
     check_prereqs
+    ensure_image
 
     local cmd=("$@")
     if [[ ${#cmd[@]} -eq 0 ]]; then
@@ -358,6 +361,7 @@ case "${1:-}" in
     exec)
         shift
         cmd=("${@:-bash}")
+        check_prereqs
         if ! podman container exists "$CONTAINER_NAME" 2>/dev/null; then
             log_error "Container '$CONTAINER_NAME' is not running."
             log_error "Start it first with: bin/zociety"

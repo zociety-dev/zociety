@@ -356,6 +356,7 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
 | `bin/test-zga-loop` | Dry-run harness for the GitHub Actions runner (local bare origin, fake `claude`) |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
+| `bin/test-zociety` | Dry-run harness for `bin/zociety`: a copy of the launcher in a throwaway project, a fake `podman` first on `PATH` that writes its argv to a file and starts nothing |
 | `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; that the front page and `stuff.html` follow the highest `rev*` tag, not main, a cycle branch or the working tree; and that `docs/rules.html` lists exactly the `[pass]` events reachable from the tags, each on the card of the tag that archived it (the newest tag's card holds the `[pass]` commits no older tag reaches, its own `[direction]` question and its heap-death; a rule leaves with the highest tag; a repo with no `[pass]` gets the page empty); and that `docs/asks.html` lists every ask `bin/zstate --asks` reports at the highest tag, each answer linked to the archive page of the lowest tag containing its commit (found with `--contains`, not `%S`); and that `docs/join.html` carries PROMPT.md as the highest tag has it and one entry per `z:1` event along that tag's first parents below the tags merged into its parent, each linked to its commit |
@@ -655,6 +656,11 @@ Before proposing any changes, verify correctness using:
   heap-death successor checkout and the zloop preflight.
 - `bin/test-zshim` to verify which git invocations `bin/shims/git` keeps on
   the host and which it routes into the container (dry run, no container).
+- `bin/test-zociety` to verify the host launcher against a fake `podman`
+  that records its arguments: the command line of a run and of an exec, the
+  caller's directory mapped under `/repo`, the host variables forwarded by
+  name only, exit codes, and the two `bash -c` scripts the container is
+  given, run on the host. It cannot show what real podman does with them.
 - `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to
   verify the blind model record: `bin/zblind` seal/reveal, `bin/zjoin`
   naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and the
