@@ -609,6 +609,9 @@ run bin/zheap-death --cite fourth.md --learning "Fourth finding." tester "fourth
 assert_rc 1
 assert_err '^zheap-death: this subject has had its 2 cycles \(bin/zthread\)\. Nothing written\.$'
 assert_eq "ZTHREAD_MAX=0: no limit" "$(ZTHREAD_MAX=0 bin/zthread)" '{"length":2,"max":0,"spent":false,"opened":true}'
+assert_eq "a leading zero is still a number" "$(ZTHREAD_MAX=05 bin/zthread)" '{"length":2,"max":5,"spent":false,"opened":true}'
+git commit -q --allow-empty -m "Merge a branch" -m "[heap-death] tester: a heap-death subject quoted in a merge body"
+assert_eq "a commit that quotes a heap-death subject is not one" "$(ZTHREAD_MAX=0 bin/zthread | jq -c .length)" 2
 assert_eq "and no line about it in the prompt" "$(ZTHREAD_MAX=0 bin/zprompt | grep -c 'on this subject\|--new-thread is required')" 0
 run env ZTHREAD_MAX=0 bin/zheap-death --cite fourth.md --learning "Fourth finding." tester "fourth question" 2
 assert_rc 0

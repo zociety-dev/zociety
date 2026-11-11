@@ -65,11 +65,12 @@ done
 
 MAX="${ZTHREAD_MAX:-5}"
 [[ "$MAX" =~ ^[0-9]+$ ]] || die "ZTHREAD_MAX must be a non-negative integer, got '$MAX'"
+MAX=$((10#$MAX))  # 05 is five here and not JSON to jq
 
 # Newest first. A repo with no commits has no heap-deaths: the running cycle
 # is the subject's first. A named ref that does not resolve is a mistake.
 if git rev-parse --verify -q "${REF}^{commit}" >/dev/null 2>&1; then
-  bodies=$(git --no-pager log -n 500 --format='%x1e%b' --grep='^\[heap-death\]' "$REF" --)
+  bodies=$(git --no-pager log -n 500 --format='%x1e%s%x1f%b' --grep='^\[heap-death\]' "$REF" --)
 elif [[ "$REF" == HEAD ]]; then
   bodies=""
 else
@@ -78,7 +79,11 @@ fi
 
 printf '%s' "$bodies" | jq -R -s -c --argjson max "$MAX" '
   (split("\u001e")[1:]
-   | map(split("\n") | map(select(startswith("{"))) | (first // "{}")
+   | map(split("\u001f"))
+   # --grep matches any line of a message: a merge whose body quotes a
+   # heap-death subject is not a heap-death.
+   | map(select(.[0] | startswith("[heap-death]")))
+   | map((.[1] // "") | split("\n") | map(select(startswith("{"))) | (first // "{}")
          | (fromjson? // {})
          | (try (.data.thread.new == true) catch false))) as $new
   | ($new | index(true)) as $i
