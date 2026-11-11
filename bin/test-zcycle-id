@@ -676,7 +676,10 @@ origin_repo() {
   printf '.claude/\n.zociety/\n' > .gitignore
   git add -A
   git commit -q -m "fixture bin"
-  git init -q --bare "$ORIGIN"
+  # -b main: a bare repo's HEAD follows init.defaultBranch, and where that is
+  # unset (a GitHub runner) it names master, so the DEV clone below checked
+  # out nothing and dev_commit's push of main had no such branch.
+  git init -q --bare -b main "$ORIGIN"
   git remote add origin "$ORIGIN"
   git push -q origin main
   git clone -q "$ORIGIN" "$DEV" 2>/dev/null
