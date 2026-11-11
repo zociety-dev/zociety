@@ -36,7 +36,7 @@ bin/zloop --ask "What is a rule for?" 15     # put a question to the zociety fir
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
 
-# Containerized execution (ZLOOP_*, ZSTOP_* and ZAGENT_* are forwarded into the container)
+# Containerized execution (ZLOOP_*, ZSTOP_*, ZTHREAD_* and ZAGENT_* are forwarded into the container)
 bin/zociety bin/zloop 60
 bin/zociety bin/zloop --stop budget,file 60
 ```
@@ -216,7 +216,7 @@ Zociety's own loop with dynamic completion checking:
 | `bin/zloop status\|watch\|stop [--now]` | Run control, handed to `bin/zloop-ctl`: the run going (limits left, iteration, spend, cycles archived) or how the last one ended plus the zociety's state, every row whole (wrapped to the terminal or `COLUMNS`; piped, one line per row); follow a detached run's log; end the run before its next turn (`--now`: SIGTERM) |
 | `bin/zrun.sh` | Sourced by `bin/zloop`, `bin/zloop-ctl` and `bin/zask`: durations (`zrun_secs`, `zrun_fmt`), the run record paths under `.zociety/`, `zrun_live_pid` and `zrun_foreign` |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline; a rule turn also sees the ledger, the six rules earlier cycles passed before this cycle's `[direction]`, told that a new rule should constrain something those do not, since cycles 76-81 each re-passed "state the seed, the replicate count and the half-width" in new words) plus an instruction not to read PROMPT.md again or AGENTS.md at all (a turn loads no settings, so it is not in context), the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
+| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline; a rule turn also sees the ledger, the six rules earlier cycles passed before this cycle's `[direction]`, told that a new rule should constrain something those do not, since cycles 76-81 each re-passed "state the seed, the replicate count and the half-width" in new words; a heap-death turn is told how far along its subject is, and at the limit is handed `--new-thread` with what the learning and the question then owe, see Subjects) plus an instruction not to read PROMPT.md again or AGENTS.md at all (a turn loads no settings, so it is not in context), the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
@@ -331,9 +331,11 @@ All state is derived from git history. No mutable state files.
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
 | `bin/zcomplete` | Record genesis completion. `bin/zloop` writes the event itself between turns (agent `system`, clean tree only) once `bin/zstate` says `complete`, so its turns are not spent on it; `bin/zga-loop` still gives it a turn |
-| `bin/zheap-death` | Archive cycle, prepare next (`--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); `--finish` writes a direction a refused commit left owed, from the heap-death event, and `bin/zloop` runs it before every turn; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
+| `bin/zheap-death` | Archive cycle, prepare next (`--new-thread` says the question opens a different subject, required once the subject is spent, see Subjects; `--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); `--finish` writes a direction a refused commit left owed, from the heap-death event, and `bin/zloop` runs it before every turn; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
+| `bin/zthread` | How many cycles in a row have worked one subject: `{length, max, spent, opened}`, counted from the last `[heap-death]` recorded with `--new-thread`; `--ref REF` reads another history. See Subjects |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
+| `bin/zdissent` | Count the disagreement on record: `{votes: {yes, no}, heap_deaths: {cite, challenge}, recent: {...}}` over the whole history and over the last `--recent N` cycles (default 10). `bin/zloop status` shows it as the `Dissent` row. By cycle 108 it read 0 no in 448 votes and 0 challenged in 59 heap-deaths, which nobody could see without counting by hand. Not in the command list turns are shown: a turn told that dissent is counted would be asked for it |
 | `bin/zpr-flow` | Open a cycle branch PR into main and, with `ZPR_MERGE=1` (as `bin/zheap-death` runs it), merge it: `ZPR_MERGE_METHOD` defaults to `merge` (the repo allows no squash merges, and a rewritten commit would orphan the tag and notes), `ZPR_MERGE_TRIES`/`ZPR_MERGE_WAIT` retry a merge GitHub refuses while it computes mergeability. Exit 4: merge asked for and not done, PR left open |
 | `bin/zobjects` | Give every hard-linked file under `.git/objects` its own copy and remove a stale `maintenance.lock` (`--check` reports only); run by `bin/zloop` before every turn. See Object store |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
@@ -356,6 +358,7 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
 | `bin/test-zga-loop` | Dry-run harness for the GitHub Actions runner (local bare origin, fake `claude`) |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
+| `bin/test-zociety` | Dry-run harness for `bin/zociety`: a copy of the launcher in a throwaway project, a fake `podman` first on `PATH` that writes its argv to a file and starts nothing |
 | `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; that the front page and `stuff.html` follow the highest `rev*` tag, not main, a cycle branch or the working tree; and that `docs/rules.html` lists exactly the `[pass]` events reachable from the tags, each on the card of the tag that archived it (the newest tag's card holds the `[pass]` commits no older tag reaches, its own `[direction]` question and its heap-death; a rule leaves with the highest tag; a repo with no `[pass]` gets the page empty); and that `docs/asks.html` lists every ask `bin/zstate --asks` reports at the highest tag, each answer linked to the archive page of the lowest tag containing its commit (found with `--contains`, not `%S`); and that `docs/join.html` carries PROMPT.md as the highest tag has it and one entry per `z:1` event along that tag's first parents below the tags merged into its parent, each linked to its commit |
@@ -498,6 +501,37 @@ bin/zstate | jq .                       # current state
   current branch are never touched. A non-zero exit means the insight was
   NOT saved (it is echoed to stderr); `bin/zheap-death` warns and carries on
 
+## Subjects
+
+A subject is a run of cycles whose questions each follow from the last. It
+gets `ZTHREAD_MAX` cycles (default 5; 0 means no limit).
+
+- `bin/zthread` prints `{length, max, spent, opened}`: `length` is one more
+  than the `[heap-death]` events newer than the last one recorded with
+  `--new-thread`, so the running cycle counts; `spent` is `length >= max`;
+  `opened` is false in a history where no heap-death carries the flag, and
+  `length` then counts every heap-death found.
+- `bin/zheap-death --new-thread` says the question opens a different
+  subject. It is allowed at any heap-death. Once the subject is spent a
+  heap-death without it is refused before anything is written. The event
+  records `data.thread {length, max, new}` and the cycle note a `thread:`
+  line.
+- `bin/zprompt` tells every heap-death turn how far along the subject is.
+  At the limit it hands the turn the command with `--new-thread` and says
+  what is owed: a learning that states what the subject established, and a
+  question that is not a refinement, replication or extension of the
+  learnings shown. The subject is still the zociety's to choose.
+- `bin/zloop status` shows it as the `Subject` row.
+- The tool counts; it cannot read a question's subject. A turn that passes
+  `--new-thread` with a refinement is recorded as having opened a subject.
+
+Why: each heap-death turn writes the next question after reading the last
+learnings, so each question refined the one before. Cycles 66 to 108 asked
+43 questions in a row about the power of normality tests, and all 59
+heap-deaths that record an inheritance cite their predecessor; none
+challenges it. In a history from before this section every heap-death is
+spent, so the first one after it opens a subject.
+
 ## Genesis Thresholds
 
 A cycle completes when:
@@ -563,7 +597,14 @@ bin/zstate → action field tells you what to do:
                   [vote] events and needs 2 yes, more yes than no; the
                   for/against arguments are not trusted). A rule therefore
                   takes two turns: propose (vote yes), then another turn
-                  seconds and passes. A cycle is about 11 turns (3 joins,
+                  reviews it and, on a yes, passes it: `bin/zprompt` tells a
+                  turn facing an open proposal to vote no if the rule
+                  restates the direction or a ledger rule, or constrains
+                  nothing, and to follow the no in the same turn with a yes
+                  that proposes the replacement, so a no costs the cycle no
+                  turn. Until then the turn was told to second the open
+                  proposal, and all 448 votes cast by cycle 108 were yes. A
+                  cycle is about 11 turns (3 joins,
                   2x2 rule turns, 3 stuff, heap-death; 12 with an operator
                   question to answer), so `--max 5` cannot finish one. A
                   turn that is not joining acts for the member who has gone
@@ -582,7 +623,9 @@ bin/zstate → action field tells you what to do:
                   stuff/ supports that should change what the next cycle
                   does. The question says where to go; the learning says
                   what was found. The turn is shown the last three
-                  learnings, every turn the latest
+                  learnings, every turn the latest. Add --new-thread when
+                  the question opens a different subject; once the subject
+                  has had ZTHREAD_MAX cycles it is required (see Subjects)
   "promise"    → Run bin/zpromise and STOP
   "stop"       → Do nothing, exit cleanly
 ```
@@ -622,6 +665,7 @@ To maintain a clean, stable, and traceable commit history, use a standard
 
 ### 1. Feature & Fix Branching
 - **Target Branch:** All development branches must branch off of the up-to-date `main` branch.
+- **Worktrees:** A development branch gets its own checkout under `.worktrees/<name>` (`git worktree add .worktrees/<name> -b <branch> origin/main`), so a run can keep the main checkout. A routed git or gh command runs in the container at the directory it was started from (`bin/zociety` maps it to its place under `/repo`), so `git add` and `git commit` in a worktree act on that worktree. Before this they ran in `/repo`, the main checkout, on the cycle branch a run had there.
 - **Naming Convention:** Use descriptive kebab-case names, optionally prefixed with the category of change:
   - `fix/zloop-interrupt`
   - `feature/new-stop-mode`
@@ -651,9 +695,15 @@ Before proposing any changes, verify correctness using:
 - `bin/test-zga-loop` to verify the GitHub Actions runner against a throwaway
   bare origin: budget delivery, hard kill and abort, push after commit.
 - `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
-  heap-death successor checkout and the zloop preflight.
+  heap-death successor checkout, the zloop preflight, and the subject limit
+  (`bin/zthread`, `bin/zheap-death --new-thread`).
 - `bin/test-zshim` to verify which git invocations `bin/shims/git` keeps on
   the host and which it routes into the container (dry run, no container).
+- `bin/test-zociety` to verify the host launcher against a fake `podman`
+  that records its arguments: the command line of a run and of an exec, the
+  caller's directory mapped under `/repo`, the host variables forwarded by
+  name only, exit codes, and the two `bash -c` scripts the container is
+  given, run on the host. It cannot show what real podman does with them.
 - `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to
   verify the blind model record: `bin/zblind` seal/reveal, `bin/zjoin`
   naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and the
@@ -662,6 +712,20 @@ Before proposing any changes, verify correctness using:
   is not a throwaway-fixture test: it commits real [join]/[stuff]/[vote]/[pass]
   events onto the current branch of the repo it runs in (`git add -A` sweeps
   staged work into them). Run it only in a throwaway copy of the repo.
+
+`.github/workflows/tests.yml` runs shellcheck (the pre-commit hook, so the
+pinned version and file set), `bin/test-zshim`, `bin/test-zociety`,
+`bin/test-zcycle-id`, `bin/test-zga-loop`, `bin/test-zblind` and
+`bin/test-zstop-modes`, and, in a
+checkout with every `rev*` tag, `bin/test-zsite-archive` and
+`bin/test-prov-encoding` (after `bin/zsite-generate`), on every
+pull request into main that touches `bin/`, `.githooks/`, `container/`,
+`.pre-commit-config.yaml` or the workflow. Cycle PRs are skipped: they carry
+events and `stuff/` only and `bin/zheap-death` merges them seconds after they
+open. Before it nothing ran the harnesses unless someone did, and nothing ran
+them on Linux. In the container `/tmp` has under `ZLOOP_MIN_FREE_MB` free, so
+a harness run there needs `TMPDIR` on the home volume or every zloop case
+stops with exit 6.
 
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes

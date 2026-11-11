@@ -947,6 +947,7 @@ if [[ -n "${LIVE_CYCLE:-}" ]]; then
              elif .ev.event == "complete" then "bin/zcomplete  (the runner records this between turns)"
              elif .ev.event == "heap-death" then
                "bin/zheap-death" +
+               (if (try ($d.thread.new == true) catch false) then " --new-thread" else "" end) +
                (($d.inheritance // {}) as $inh
                 | ((($inh.cite // []) | map(" --cite stuff/" + tostring)) + (($inh.challenge // []) | map(" --challenge stuff/" + tostring))) | join("")) +
                " --learning " + ($d.learning // "" | q)
@@ -2131,7 +2132,7 @@ cat > "$DOCS_DIR/.well-known/zevent.schema.json" << 'SCHEMA_EOF'
     },
     "data": {
       "type": "object",
-      "description": "Event-specific payload. heap-death: tag, branch, question, batch_remaining, done (bool, set by zheap-death --done). heap-death and direction also carry stop_mode (string, the zloop --stop list) and zstop (object of ZSTOP_* knobs) when recorded under bin/zloop.",
+      "description": "Event-specific payload. heap-death: tag, branch, question, batch_remaining, done (bool, set by zheap-death --done), thread (object: length, the cycles on the subject counting this one; max, ZTHREAD_MAX; new, true when zheap-death --new-thread said the question opens a different subject). heap-death and direction also carry stop_mode (string, the zloop --stop list) and zstop (object of ZSTOP_* knobs) when recorded under bin/zloop.",
       "additionalProperties": true
     }
   }
