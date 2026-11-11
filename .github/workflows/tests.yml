@@ -1,0 +1,77 @@
+name: Tests
+
+# shellcheck and the dry-run harnesses on every pull request that touches the
+# tooling. Until this workflow the five harnesses ran only when someone
+# remembered to run them, and nothing ran them on Linux, where the loop's CI
+# runner (bin/zga-loop) lives.
+#
+# Cycle PRs are not tested: bin/zheap-death opens cycle/* -> main and merges
+# it seconds later, several times an hour while a run goes, and such a PR
+# carries events and stuff/ only. The paths filter leaves them out, and the
+# job condition does again for one that merged main's tooling in late.
+#
+# Not here: bin/test-zevent-system commits real events onto the branch it
+# runs on (AGENTS.md, Quality Controls), and bin/test-zsite-archive and
+# bin/test-prov-encoding need every rev* tag and a generated site.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bin/**'
+      - '.githooks/**'
+      - 'container/**'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    if: ${{ !startsWith(github.head_ref, 'cycle/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The hook, not a bare shellcheck: the version and the file set are the
+      # ones .pre-commit-config.yaml pins for local commits.
+      - name: shellcheck (the pre-commit hook, every file)
+        run: pipx run pre-commit run shellcheck --all-files
+
+  harnesses:
+    if: ${{ !startsWith(github.head_ref, 'cycle/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - test-zshim
+          - test-zcycle-id
+          - test-zga-loop
+          - test-zblind
+          - test-zstop-modes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The host and the container both have a global git identity and a
+      # runner has none; a fixture that commits in a second clone would fail
+      # here for that reason alone.
+      - name: git identity
+        run: |
+          git config --global user.name "zociety tests"
+          git config --global user.email "tests@zociety.invalid"
+
+      # Each harness builds throwaway repos under mktemp with a copy of bin/
+      # and a fake claude on PATH; none needs a secret, origin or a model.
+      - name: bin/${{ matrix.harness }}
+        run: bin/${{ matrix.harness }}
