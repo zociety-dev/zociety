@@ -714,8 +714,9 @@ Before proposing any changes, verify correctness using:
   staged work into them). Run it only in a throwaway copy of the repo.
 
 `.github/workflows/tests.yml` runs shellcheck (the pre-commit hook, so the
-pinned version and file set), `bin/test-zshim`, `bin/test-zcycle-id`,
-`bin/test-zga-loop`, `bin/test-zblind` and `bin/test-zstop-modes`, and, in a
+pinned version and file set), `bin/test-zshim`, `bin/test-zociety`,
+`bin/test-zcycle-id`, `bin/test-zga-loop`, `bin/test-zblind` and
+`bin/test-zstop-modes`, and, in a
 checkout with every `rev*` tag, `bin/test-zsite-archive` and
 `bin/test-prov-encoding` (after `bin/zsite-generate`), on every
 pull request into main that touches `bin/`, `.githooks/`, `container/`,
