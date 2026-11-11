@@ -74,7 +74,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ "$RECENT" =~ ^[0-9]+$ && "$RECENT" != 0 ]] || die "--recent expects a positive integer, got '$RECENT'"
+# Base 10 before the test: 00 is zero, and 08 is eight and not JSON to jq.
+[[ "$RECENT" =~ ^[0-9]+$ && $((10#$RECENT)) -gt 0 ]] || die "--recent expects a positive integer, got '$RECENT'"
 RECENT=$((10#$RECENT))
 
 # Newest first. A repo with no commits has nothing to count; a named ref

@@ -2300,6 +2300,9 @@ assert_eq "turns are not offered the count" "$(bin/zprompt | grep -c 'bin/zdisse
 run bin/zdissent --recent 0
 assert_rc 1
 assert_err "^zdissent: --recent expects a positive integer, got '0'$"
+run bin/zdissent --recent 00
+assert_rc 1
+assert_eq "a leading zero is still a number" "$(bin/zdissent --recent 08 | jq -c .recent.cycles)" 8
 run bin/zdissent --ref no-such-ref
 assert_rc 1
 assert_err "^zdissent: ref 'no-such-ref' does not resolve to a commit$"
