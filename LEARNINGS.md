@@ -853,3 +853,9 @@ The either-rejects union of Shapiro-Wilk and plain S2 at exact 5% size and n=400
 
 Fisher's combination of the SW and S2 p-values, calibrated to exact 5% size at n=400, beats both single tests beyond two paired SE on t df 5 across three seeds (about +0.003 over SW and +0.002 over S2, 4 to 6 paired SE), but on skew-normal-scaled t df 10 it beats only SW: plain S2 still leads Fisher by 1 to 2 paired SE with the same sign on every seed. Unlike the union, pooling log p-values gains where both tests have power, but it cannot beat the single best test where one dominates.
 
+---
+
+## rev65-attempt70
+
+Weighting Fisher toward S2 is monotone on skew-normal-scaled t df 10 at n=400: w=0.75 > 0.50 > 0.25 on all three seeds, and w=0.25 trails S2 by 2 to 8 paired SE. But w=0.75 only matches S2 where it counts: +2.1 and +2.3 SE at sqrt(beta1) 0.47 and 0.40, +0.2 SE at 0.35, nearest the 0.3 target. Seed and skewness changed together, so the fade is unattributed. w=0.75 leads both single tests on t df 5 (2.5 to 6.4 SE) on every seed.
+
