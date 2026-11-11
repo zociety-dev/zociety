@@ -663,6 +663,19 @@ Before proposing any changes, verify correctness using:
   events onto the current branch of the repo it runs in (`git add -A` sweeps
   staged work into them). Run it only in a throwaway copy of the repo.
 
+`.github/workflows/tests.yml` runs shellcheck (the pre-commit hook, so the
+pinned version and file set), `bin/test-zshim`, `bin/test-zcycle-id`,
+`bin/test-zga-loop`, `bin/test-zblind` and `bin/test-zstop-modes`, and, in a
+checkout with every `rev*` tag, `bin/test-zsite-archive` and
+`bin/test-prov-encoding` (after `bin/zsite-generate`), on every
+pull request into main that touches `bin/`, `.githooks/`, `container/`,
+`.pre-commit-config.yaml` or the workflow. Cycle PRs are skipped: they carry
+events and `stuff/` only and `bin/zheap-death` merges them seconds after they
+open. Before it nothing ran the harnesses unless someone did, and nothing ran
+them on Linux. In the container `/tmp` has under `ZLOOP_MIN_FREE_MB` free, so
+a harness run there needs `TMPDIR` on the home volume or every zloop case
+stops with exit 6.
+
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes
 - Secret detection (gitleaks; `.gitleaks.toml`, inline `# gitleaks:allow` for exemptions)
