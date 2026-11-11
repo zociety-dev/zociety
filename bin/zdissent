@@ -1,0 +1,119 @@
+#!/bin/bash
+# zdissent: Count the disagreement on record: no votes and challenged heap-deaths
+#
+# Usage:
+#   bin/zdissent [--ref REF] [--recent N]
+#   bin/zdissent -h | --help
+#
+# Prints one JSON object:
+#   {"votes": {"yes": 448, "no": 0},
+#    "heap_deaths": {"cite": 59, "challenge": 0},
+#    "recent": {"cycles": 10,
+#               "votes": {"yes": 40, "no": 0},
+#               "heap_deaths": {"cite": 10, "challenge": 0}}}
+#
+#   votes        Every vote in the history, by commit subject ("[vote] name:
+#                yes on rule N", "no on rule N"; older events wrote YES, and
+#                before rev50 a subject could carry a vote beside a join and
+#                a pass). Events are counted, not tallied: a turn that
+#                changed its vote counts twice. bin/zstate .votes is the
+#                tally a rule passes on.
+#   heap_deaths  Every [heap-death] that records an inheritance: challenge
+#                when it disputes at least one artifact (bin/zheap-death
+#                --challenge), cite when it only inherits. One that records
+#                neither (before the gate) is not counted.
+#   recent       The same two counts over the N newest heap-deaths and the
+#                votes cast since the one before them, the running cycle's
+#                included.
+#
+# Options:
+#   --ref REF    Read REF's history instead of HEAD's.
+#   --recent N   Cycles in the recent window (default 10).
+#
+# Why: by cycle 108 the zociety had cast 448 votes, all yes, and written 59
+# heap-deaths with an inheritance, all citing their predecessor. Nobody could
+# see that without counting by hand. The number says whether a vote or a
+# citation still carries information; it does not say the work is bad.
+# bin/zloop status shows it as the Dissent row.
+#
+# One git log and one jq, like bin/zstate.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zdissent: $*" >&2
+  exit 1
+}
+
+REF=HEAD
+RECENT=10
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --ref)
+      [[ $# -ge 2 ]] || die "--ref requires a ref"
+      REF="$2"
+      shift
+      ;;
+    --recent)
+      [[ $# -ge 2 ]] || die "--recent requires a number of cycles"
+      RECENT="$2"
+      shift
+      ;;
+    *)
+      die "unknown argument '$1'"
+      ;;
+  esac
+  shift
+done
+
+[[ "$RECENT" =~ ^[0-9]+$ && "$RECENT" != 0 ]] || die "--recent expects a positive integer, got '$RECENT'"
+RECENT=$((10#$RECENT))
+
+# Newest first. A repo with no commits has nothing to count; a named ref
+# that does not resolve is a mistake.
+if git rev-parse --verify -q "${REF}^{commit}" >/dev/null 2>&1; then
+  log=$(git --no-pager log --format='%x1e%s%x1f%b' \
+    --grep='\[vote\]' --grep='^\[heap-death\]' "$REF" --)
+elif [[ "$REF" == HEAD ]]; then
+  log=""
+else
+  die "ref '$REF' does not resolve to a commit"
+fi
+
+printf '%s' "$log" | jq -R -s -c --argjson recent "$RECENT" '
+  def tally:
+    { votes: { yes: (map(select(.kind == "yes")) | length),
+               no: (map(select(.kind == "no")) | length) },
+      heap_deaths: { cite: (map(select(.kind == "cite")) | length),
+                     challenge: (map(select(.kind == "challenge")) | length) } };
+  [ split("\u001e")[1:][]
+    | split("\u001f")
+    | .[0] as $subject
+    # --grep matches any line of a message; the subject decides what a
+    # commit is. Votes are counted by occurrence: before rev50 one commit
+    # could carry a join, a vote and a pass in its subject.
+    | ( ([$subject | match("\\[vote\\] [^:]*: yes on "; "gi")] | length) as $yes
+        | ([$subject | match("\\[vote\\] [^:]*: no on "; "gi")] | length) as $no
+        | (range(0; $yes) | {kind: "yes"}), (range(0; $no) | {kind: "no"}) ),
+      ( select($subject | startswith("[heap-death]"))
+        | ((.[1] // "") | split("\n") | map(select(startswith("{"))) | (first // "{}")
+           | (fromjson? // {})
+           | (try .data.inheritance catch null)) as $inh
+        | (if ($inh | type) != "object" then {kind: "heap-death"}
+           elif (($inh.challenge // []) | length) > 0 then {kind: "challenge"}
+           elif (($inh.cite // []) | length) > 0 then {kind: "cite"}
+           else {kind: "heap-death"} end)
+        | .hd = true ) ] as $all
+  # The recent window ends before heap-death number recent+1, newest first:
+  # the running cycle, then N archived cycles with the votes that led to each.
+  | ([ $all | to_entries[] | select(.value.hd == true) | .key ]) as $hd_at
+  | (if ($hd_at | length) > $recent then $all[:$hd_at[$recent]] else $all end) as $window
+  | ($all | tally) + { recent: ({cycles: $recent} + ($window | tally)) }'

@@ -103,6 +103,15 @@ zociety_rows() {
               | select((.data.learning? // "") | length > 0))
         | .[0] // empty | "cycle \(.cycle): \(.data.learning | gsub("\\s+"; " "))"' 2>/dev/null) || learning=""
   [[ -z "$learning" ]] || row "Learning" "$learning"
+  # The disagreement on record (bin/zdissent); no row before the first vote
+  # or heap-death with an inheritance.
+  local dissent
+  dissent=$(bin/zdissent 2>/dev/null | jq -r '
+    (.votes.yes + .votes.no) as $v | (.heap_deaths.cite + .heap_deaths.challenge) as $h
+    | if ($v + $h) == 0 then empty
+      else "\(.votes.no) no in \($v) votes · \(.heap_deaths.challenge) challenged in \($h) heap-deaths · last \(.recent.cycles) cycles: \(.recent.votes.no) no in \(.recent.votes.yes + .recent.votes.no), \(.recent.heap_deaths.challenge) challenged"
+      end' 2>/dev/null) || dissent=""
+  [[ -z "$dissent" ]] || row "Dissent" "$dissent"
 }
 
 # limits_row <record>: what bounds the run, and how much of each is used
