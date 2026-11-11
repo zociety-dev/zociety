@@ -10,9 +10,12 @@ name: Tests
 # carries events and stuff/ only. The paths filter leaves them out, and the
 # job condition does again for one that merged main's tooling in late.
 #
+# The site job checks out every rev* tag, since the archive is a function of
+# them, and generates the site before the provenance test, which reads the
+# generated page.
+#
 # Not here: bin/test-zevent-system commits real events onto the branch it
-# runs on (AGENTS.md, Quality Controls), and bin/test-zsite-archive and
-# bin/test-prov-encoding need every rev* tag and a generated site.
+# runs on (AGENTS.md, Quality Controls).
 
 on:
   pull_request:
@@ -75,3 +78,31 @@ jobs:
       # and a fake claude on PATH; none needs a secret, origin or a model.
       - name: bin/${{ matrix.harness }}
         run: bin/${{ matrix.harness }}
+
+  site:
+    if: ${{ !startsWith(github.head_ref, 'cycle/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (all history and tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: git identity
+        run: |
+          git config --global user.name "zociety tests"
+          git config --global user.email "tests@zociety.invalid"
+
+      # The 30s default for the 120-tag case is a laptop's. A shared runner
+      # gets 120s, so here the case is a looser guard than it is locally.
+      - name: bin/test-zsite-archive
+        env:
+          SCALE_BUDGET_SECONDS: 120
+        run: bin/test-zsite-archive
+
+      - name: bin/test-prov-encoding (against a generated site)
+        run: |
+          bin/zsite-generate
+          bin/test-prov-encoding
