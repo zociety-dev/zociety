@@ -2,11 +2,21 @@
 # zheap-death: Archive the current cycle and prepare the next one
 #
 # Usage:
-#   bin/zheap-death [--done] (--cite FILE | --challenge FILE)... --learning TEXT <agent> <question> [batch_size]
+#   bin/zheap-death [--done] [--new-thread] (--cite FILE | --challenge FILE)... --learning TEXT <agent> <question> [batch_size]
 #   bin/zheap-death --finish
 #   bin/zheap-death -h | --help
 #
 # Options:
+#   --new-thread The question opens a different subject: not a refinement,
+#                replication or extension of what this cycle and the ones
+#                before it worked on. Allowed at any heap-death and required
+#                once the subject has had its cycles (bin/zthread: spent,
+#                ZTHREAD_MAX cycles, default 5): a heap-death without it is
+#                then refused before anything is written. The learning of
+#                such a heap-death says what the subject established, and
+#                --cite names the artifact that carries it. Recorded as
+#                data.thread {length, max, new} in the heap-death event;
+#                bin/zthread counts from the last one with new true.
 #   --cite FILE, --challenge FILE
 #                Required, at least one: a file under stuff/ (a stuff/
 #                prefix is dropped) the next cycle explicitly inherits or
@@ -52,6 +62,8 @@
 #                event agrees with bin/zstop-budget. Otherwise 3.
 #
 # Environment:
+#   ZTHREAD_MAX=5        Cycles one subject gets before --new-thread is
+#                        required (bin/zthread); 0 means no limit
 #   ZSTOP_BUDGET=3       Heap-deaths per loop run; drives the batch_size default
 #   ZSTOP_*              Every ZSTOP_* variable present is recorded under
 #                        data.zstop in the heap-death and direction events
@@ -206,6 +218,7 @@ $direction_event"
 
 DONE=false
 FINISH=false
+NEW_THREAD=false
 LEARNING=""
 POSITIONAL=()
 CITES=()
@@ -221,6 +234,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --finish)
       FINISH=true
+      ;;
+    --new-thread)
+      NEW_THREAD=true
       ;;
     --learning)
       [[ $# -ge 2 ]] || { echo "zheap-death: --learning requires the finding" >&2; exit 1; }
@@ -258,7 +274,7 @@ QUESTION="${2:-}"
 BATCH_SIZE="${3:-}"
 
 if [[ "$FINISH" == true ]]; then
-  if [[ $# -gt 0 || "$DONE" == true || -n "$LEARNING" || ${#CITES[@]} -gt 0 || ${#CHALLENGES[@]} -gt 0 ]]; then
+  if [[ $# -gt 0 || "$DONE" == true || "$NEW_THREAD" == true || -n "$LEARNING" || ${#CITES[@]} -gt 0 || ${#CHALLENGES[@]} -gt 0 ]]; then
     echo "zheap-death: --finish takes no other argument; the direction comes from the heap-death event" >&2
     exit 1
   fi
@@ -388,6 +404,28 @@ if [[ ${#LEARNING} -gt 500 ]]; then
   exit 1
 fi
 
+# A subject gets ZTHREAD_MAX cycles. The question each heap-death writes
+# comes from the learnings before it, so each one refined the last: cycles 66
+# to 108 asked 43 questions in a row about the power of normality tests, and
+# no heap-death ever challenged its predecessor. Once the subject is spent
+# the question must open another, and saying so is the turn's to do
+# (--new-thread): the tool cannot read a question's subject, it can count.
+# Gated here, before any lifecycle write, like the two checks above.
+THREAD=$(bin/zthread) || {
+  echo "zheap-death: bin/zthread failed (above); nothing written" >&2
+  exit 1
+}
+if [[ "$(jq -r '.spent' <<<"$THREAD")" == true && "$NEW_THREAD" != true ]]; then
+  if [[ "$(jq -r '.opened' <<<"$THREAD")" == true ]]; then
+    echo "zheap-death: this subject has had its $(jq -r '.max' <<<"$THREAD") cycles (bin/zthread). Nothing written." >&2
+  else
+    echo "zheap-death: no heap-death on record has opened a new subject, and one subject gets $(jq -r '.max' <<<"$THREAD") cycles (bin/zthread). Nothing written." >&2
+  fi
+  echo "zheap-death: rerun with --new-thread, a question on a different subject (not a refinement, replication or extension of this one), and a --learning that says what the subject established" >&2
+  exit 1
+fi
+THREAD_DATA=$(jq -c --argjson new "$NEW_THREAD" '{length, max, new: $new}' <<<"$THREAD")
+
 INHERITANCE='{"cite":[],"challenge":[]}'
 for artifact in "${CITES[@]}"; do
   INHERITANCE=$(jq -c --arg artifact "$artifact" '.cite += [$artifact]' <<<"$INHERITANCE")
@@ -506,6 +544,7 @@ DATA=$(jq -nc \
   --argjson is_done "$DONE" \
   --argjson measures "$MEASURES" \
   --argjson inheritance "$INHERITANCE" \
+  --argjson thread "$THREAD_DATA" \
   --argjson regime "$REGIME" \
   '{
     tag: $tag,
@@ -515,7 +554,8 @@ DATA=$(jq -nc \
     batch_remaining: $remaining,
     done: $is_done,
     measures: $measures,
-    inheritance: $inheritance
+    inheritance: $inheritance,
+    thread: $thread
   } + $regime')
 
 echo "Recording heap-death event..."
@@ -574,7 +614,8 @@ git notes add -f -m "cycle: rev$REV attempt$ATTEMPT
 genesis_complete: true
 question: $QUESTION
 learning: $LEARNING
-batch_remaining: $REMAINING" HEAD 2>/dev/null || true
+batch_remaining: $REMAINING
+thread: cycle $(jq -r '.length' <<<"$THREAD_DATA") of the subject$([[ "$NEW_THREAD" == true ]] && echo "; the question opens a new one")" HEAD 2>/dev/null || true
 
 #############################################
 # 6. Push to GitHub

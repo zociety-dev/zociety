@@ -241,7 +241,7 @@ if [[ "$CONTEXT" -eq 1 ]]; then
     [[ -x "$f" ]] || continue
     base="${f#bin/}"
     case "$base" in
-      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve|zobjects) continue ;;
+      zloop*|zga-*|zstop-*|zprompt|zrender|zagent|zblind|zcheck|zvalidate|zdump|zlog|zstate|zsite-*|zmd2html|zgit|zgh|zociety|zcycle-id|zworkflow*|zask|zresume|zobserve|zobjects|zthread) continue ;;
     esac
     # Usage: the "# Usage: bin/z..." one-liner, or the first "#   bin/z..."
     # under a "# Usage:" heading. The "-h | --help" form is not news.
@@ -380,8 +380,32 @@ if [[ "$CONTEXT" -eq 1 ]]; then
       read_first="nothing; the cycle's stuff/ files are listed below, read one only if you need it to phrase the learning or the question"
       listing=$(stuff_listing)
       [[ -n "$listing" ]] && listing="This cycle's stuff/:"$'\n'"$listing"
-      listing="$listing"$'\n'"--learning is what this cycle found, not what it made and not where to go next: one claim its stuff/ supports that should change what the next cycle does, at most 500 characters. A learning that repeats one below is not a finding."
+      # The subject's length (bin/zthread). The question this turn writes
+      # comes from the learnings it is shown, so it refines them unless told
+      # the subject has an end; bin/zheap-death refuses a spent one without
+      # --new-thread, and the turn should not find that out by being refused.
+      learning_is="--learning is what this cycle found, not what it made and not where to go next: one claim its stuff/ supports that should change what the next cycle does, at most 500 characters. A learning that repeats one below is not a finding."
+      subject=""
+      thread=$(bin/zthread 2>/dev/null) || thread=""
+      if [[ -n "$thread" ]]; then
+        t_len=$(printf '%s' "$thread" | jq -r '.length')
+        t_max=$(printf '%s' "$thread" | jq -r '.max')
+        if [[ "$(printf '%s' "$thread" | jq -r '.spent')" == true ]]; then
+          run='bin/zheap-death --new-thread --cite <stuff-file> --learning "<what this subject established>" <agent> "<a question on a different subject>"  (or --challenge <stuff-file>; archives, measures the cycle, and births the successor)'
+          if [[ "$(printf '%s' "$thread" | jq -r '.opened')" == true ]]; then
+            t_why="This subject has had its $t_max cycles"
+          else
+            t_why="No heap-death on record has opened a new subject, and one subject gets $t_max cycles"
+          fi
+          learning_is="--learning is what the subject established over all its cycles, not what this cycle made: one claim someone outside the zociety could check, at most 500 characters. --cite names the file that carries it."
+          subject="$t_why, so this heap-death ends it: --new-thread is required. The question opens a different subject: not a refinement, replication or extension of any learning above, and not answerable by rerunning this cycle's work with other inputs. The subject is the zociety's to choose; pick one a cycle can make something for and check with the tools a turn has, and say in the question what would count as an answer."
+        elif [[ "$t_max" -gt 0 ]]; then
+          subject="This is cycle $t_len of at most $t_max on this subject. Add --new-thread when the question you write opens a different subject; at cycle $t_max it is required."
+        fi
+      fi
+      listing="$listing"$'\n'"$learning_is"
       [[ -n "$learnings" ]] && listing="$listing"$'\n'"Learnings from recent cycles (newest first):"$'\n'"$learnings"
+      [[ -n "$subject" ]] && listing="$listing"$'\n'"$subject"
       if [[ -n "$ask_id" && "$(printf '%s' "$state" | jq -r '.ask.status' 2>/dev/null)" == "answered" ]]; then
         listing="$listing"$'\n'"This cycle answered operator question $ask_id. The next cycle's question is still the society's to choose; cite the answer only if it bears on it."
       fi

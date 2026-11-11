@@ -1,0 +1,86 @@
+#!/bin/bash
+# zthread: How many cycles in a row have worked one subject
+#
+# Usage:
+#   bin/zthread [--ref REF]
+#   bin/zthread -h | --help
+#
+# Prints one JSON object:
+#   {"length": 3, "max": 5, "spent": false, "opened": true}
+#
+#   length   Cycles on the running subject, the running cycle included: one
+#            more than the [heap-death] events newer than the last one
+#            recorded with --new-thread (data.thread.new true).
+#   max      ZTHREAD_MAX: the cycles one subject gets.
+#   spent    max > 0 and length >= max. The running cycle is the subject's
+#            last: bin/zheap-death refuses without --new-thread, and
+#            bin/zprompt tells the heap-death turn so.
+#   opened   Whether a --new-thread heap-death is on record at all. False in
+#            a history from before this tool: length then counts every
+#            heap-death found (up to 500), which is spent under any limit.
+#
+# Options:
+#   --ref REF   Read REF's history instead of HEAD's.
+#
+# Environment:
+#   ZTHREAD_MAX=5   Cycles per subject; 0 means no limit (never spent).
+#
+# Why: each heap-death turn writes the next cycle's question after reading the
+# last learnings, so each question refined the one before. Cycles 66 to 108
+# asked 43 such questions about the power of normality tests, and all 59
+# heap-deaths that record an inheritance cite their predecessor; none
+# challenges it. Nothing ended a subject. A limit does.
+#
+# One git log and one jq, like bin/zstate.
+
+set -e
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+  echo "zthread: $*" >&2
+  exit 1
+}
+
+REF=HEAD
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --ref)
+      [[ $# -ge 2 ]] || die "--ref requires a ref"
+      REF="$2"
+      shift
+      ;;
+    *)
+      die "unknown argument '$1'"
+      ;;
+  esac
+  shift
+done
+
+MAX="${ZTHREAD_MAX:-5}"
+[[ "$MAX" =~ ^[0-9]+$ ]] || die "ZTHREAD_MAX must be a non-negative integer, got '$MAX'"
+
+# Newest first. A repo with no commits has no heap-deaths: the running cycle
+# is the subject's first. A named ref that does not resolve is a mistake.
+if git rev-parse --verify -q "${REF}^{commit}" >/dev/null 2>&1; then
+  bodies=$(git --no-pager log -n 500 --format='%x1e%b' --grep='^\[heap-death\]' "$REF" --)
+elif [[ "$REF" == HEAD ]]; then
+  bodies=""
+else
+  die "ref '$REF' does not resolve to a commit"
+fi
+
+printf '%s' "$bodies" | jq -R -s -c --argjson max "$MAX" '
+  (split("\u001e")[1:]
+   | map(split("\n") | map(select(startswith("{"))) | (first // "{}")
+         | (fromjson? // {})
+         | (try (.data.thread.new == true) catch false))) as $new
+  | ($new | index(true)) as $i
+  | ((if $i == null then ($new | length) else $i end) + 1) as $len
+  | {length: $len, max: $max, spent: ($max > 0 and $len >= $max), opened: ($i != null)}'
