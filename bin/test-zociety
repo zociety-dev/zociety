@@ -1,0 +1,334 @@
+#!/bin/bash
+# test-zociety: Dry-run harness for the host launcher (bin/zociety)
+#
+# Usage:
+#   bin/test-zociety [--keep]
+#   bin/test-zociety -h | --help
+#
+# Options:
+#   --keep    Leave the throwaway directory behind (path printed) for inspection
+#
+# Runs a copy of bin/zociety from a throwaway project under mktemp, with a
+# fake `podman` first on PATH that writes its argv to a file and starts
+# nothing. The launcher is the route for every git and gh write and had no
+# test. An exec into a running container used to carry no forwarded env and
+# no secrets, and every routed command ran in /repo whatever directory it was
+# started in. Cases: the podman command line of a fresh run and of an exec;
+# the caller's directory mapped to its place under /repo; the host variables
+# forwarded, by name only; exit codes; the refusal to run inside a container;
+# and the two bash -c scripts the container is given, run on the host.
+
+set -e
+
+SRC_BIN="$(cd "$(dirname "$0")" && pwd)"
+KEEP=0
+
+usage() {
+  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) usage; exit 0 ;;
+    --keep) KEEP=1 ;;
+    *) echo "test-zociety: unknown argument '$arg'" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+# The launcher refuses to run inside a container (its reject_container, the
+# same four checks), so from one there is nothing to test.
+if [[ -f /.dockerenv || -f /run/.containerenv || -n "${container:-}" ]] ||
+  grep -qE '(docker|containerd|kubepods|libpod)' /proc/1/cgroup 2>/dev/null; then
+  echo "test-zociety: skipped, bin/zociety does not run inside a container"
+  exit 0
+fi
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/zociety-test.XXXXXX")
+# The launcher compares physical paths, and macOS mktemp hands back /var/...
+# for what pwd -P reports as /private/var/...: canonicalise.
+TMP=$(cd "$TMP" && pwd -P)
+PROJ="$TMP/proj"
+ZO="$PROJ/bin/zociety"
+FAKEBIN="$TMP/fakebin"
+LOG="$TMP/podman.argv"
+OUT="$TMP/out"
+ERR="$TMP/err"
+IMAGE="localhost/zociety:latest"
+NL=$'\n'
+
+cleanup() {
+  if [[ $KEEP -eq 1 ]]; then echo "Kept: $TMP" >&2; else rm -rf "$TMP"; fi
+}
+trap cleanup EXIT
+
+PASSED=0
+FAILED=0
+ENVV=()
+
+# --- Fixtures ---
+
+mkdir -p "$FAKEBIN" "$PROJ/bin" "$PROJ/container/secrets" "$PROJ/sub/dir" \
+  "$PROJ/.worktrees/x" "$TMP/proj-sibling" "$TMP/secrets"
+cp "$SRC_BIN/zociety" "$ZO"
+ln -s proj "$TMP/link"
+
+# Fake podman: the image always exists, the container exists when
+# FAKE_PODMAN_RUNNING=1, and `run` and `exec` write their argv, one argument
+# per line, to FAKE_PODMAN_LOG and exit FAKE_PODMAN_RC. Anything else exits 0.
+cat > "$FAKEBIN/podman" << 'EOF'
+#!/bin/bash
+case "$1 ${2:-}" in
+  "container exists") [[ "${FAKE_PODMAN_RUNNING:-}" == 1 ]]; exit ;;
+  run\ *|exec\ *) printf '%s\n' "$@" > "$FAKE_PODMAN_LOG"; exit "${FAKE_PODMAN_RC:-0}" ;;
+esac
+exit 0
+EOF
+chmod +x "$FAKEBIN/podman"
+
+# The only PATH the launcher is given. Never the real podman.
+ZPATH="$FAKEBIN:/usr/bin:/bin"
+if [[ "$(PATH="$ZPATH" command -v podman)" != "$FAKEBIN/podman" ]]; then
+  echo "test-zociety: the fake podman is not the one PATH finds" >&2
+  exit 1
+fi
+
+# --- Assertions ---
+
+run() {
+  RC=0
+  "$@" >"$OUT" 2>"$ERR" </dev/null || RC=$?
+}
+
+# zo <dir> <launcher args...>: run the launcher from <dir> with only PATH,
+# PWD (as a shell exports it: the path as typed, symlinks kept) and the
+# NAME=value pairs in ENVV in its environment, so the forwarded names are
+# known exactly. $LOG is what podman run or exec was given, empty when
+# neither was called.
+zo() {
+  cd "$1"
+  shift
+  : > "$LOG"
+  run env -i PATH="$ZPATH" PWD="$PWD" FAKE_PODMAN_LOG="$LOG" "${ENVV[@]}" "$ZO" "$@"
+}
+
+# host <script> <args...>: run a logged bash -c script on the host
+host() { run env -i PATH=/usr/bin:/bin bash -c "$@"; }
+
+section() { echo ""; echo "=== $1 ==="; }
+pass() { echo "  ✓ ${1//$TMP/\$TMP}"; PASSED=$((PASSED + 1)); }
+fail() { echo "  ✗ ${1//$TMP/\$TMP}"; FAILED=$((FAILED + 1)); }
+
+assert_rc() {
+  if [[ "$RC" -eq "$1" ]]; then
+    pass "exit $RC"
+  else
+    fail "exit $RC (want $1)"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+# assert_err <ere>: stderr has a line matching; print the first match
+assert_err() {
+  local line
+  if line=$(grep -E -m1 -- "$1" "$ERR"); then
+    pass "stderr: $line"
+  else
+    fail "stderr lacks /$1/"
+    sed 's/^/    stderr: /' "$ERR"
+  fi
+}
+
+# assert_eq <label> <got> <want...>: <got> is exactly <want>; with several,
+# <got> is that many lines, one per <want>, in order (none: <got> is empty)
+assert_eq() {
+  local label="$1" got="$2" want
+  shift 2
+  want=$(printf '%s\n' "$@")
+  if [[ "$got" == "$want" ]]; then
+    pass "$label: ${*:-(none)}"
+  else
+    fail "$label: ${got//$NL/ | } (want ${want//$NL/ | })"
+  fi
+}
+
+# Readers of $LOG, one argument per line:
+# argc <ere>: how many arguments match
+# values <option>: the argument after each <option>, in order
+# argv_after <arg>: the arguments after the first one equal to <arg>
+# logged_script <arg>: the bash -c script; <arg> is the argument after it
+argc() { grep -c -E -- "$1" "$LOG" || true; }
+values() { OPT="$1" awk 'prev == ENVIRON["OPT"] { print } { prev = $0 }' "$LOG"; }
+argv_after() { AT="$1" awk 'found { print } $0 == ENVIRON["AT"] { found = 1 }' "$LOG"; }
+logged_script() { sed -n "/^-c\$/,/^$1\$/p" "$LOG" | sed '1d;$d'; }
+
+# --- Cases ---
+
+echo "╔════════════════════════════════════════╗"
+echo "║  Zociety Host Launcher Harness         ║"
+echo "╚════════════════════════════════════════╝"
+echo "Throwaway: $TMP"
+
+# shellcheck disable=SC2016  # the launcher's wrapper, expanded in the container
+CD_WRAP='cd "$1" && shift && exec "$@"'
+
+section "Case 1: a fresh run from the project root is the plain command"
+zo "$PROJ" git status
+assert_rc 0
+assert_eq "first argument" "$(head -n 1 "$LOG")" run
+assert_eq "--name" "$(values --name)" zociety-sandbox
+assert_eq "--volume" "$(values --volume)" "$PROJ:/repo:Z" \
+  zociety-claude-home:/home/agent "$PROJ/container/secrets:/run/secrets:ro"
+assert_eq "after the image" "$(argv_after "$IMAGE")" git status
+assert_eq "zociety-run arguments" "$(argc zociety-run)" 0
+assert_eq "--env, from an empty environment" "$(values --env)"
+assert_eq "pty arguments" "$(argc '^-it?$')" 0
+
+section "Case 2: from a subdirectory the command is wrapped in a cd"
+zo "$PROJ/sub/dir" git commit -m 'two words' 'say "hi"'
+assert_rc 0
+assert_eq "after the image" "$(argv_after "$IMAGE")" \
+  bash -c "$CD_WRAP" zociety-run /repo/sub/dir git commit -m 'two words' 'say "hi"'
+assert_eq "pty arguments (decided on git, not on the wrapper's bash)" "$(argc '^-it?$')" 0
+
+section "Case 3: from a checkout under .worktrees/"
+zo "$PROJ/.worktrees/x" git add -A
+assert_rc 0
+assert_eq "after the image" "$(argv_after "$IMAGE")" \
+  bash -c "$CD_WRAP" zociety-run /repo/.worktrees/x git add -A
+
+section "Case 4: outside the project, or beside it, it is /repo with no wrapper"
+for dir in "$TMP" "$TMP/proj-sibling"; do
+  zo "$dir" git status
+  assert_rc 0
+  assert_eq "from $dir, after the image" "$(argv_after "$IMAGE")" git status
+done
+
+section "Case 5: a fresh run forwards the allowed variables, by name only"
+# FORWARD has one variable for each pattern in forward_env's list, in sort
+# order; WITHHELD is not on the list. A value that would be recognisable in
+# argv is "secretvalue".
+FORWARD=(ANTHROPIC_MODEL=m CLAUDECODE=1 GEMINI_MODEL=g NO_COLOR=1
+  ZAGENT_EFFORT=low ZHEAP_DEATH_ANY_BRANCH=1 ZLOOP_BUDGET=1
+  ZOCIETY_AGENT_CLIENT=c ZOCIETY_BLIND_KEY=secretvalue
+  ZOCIETY_TURN_ID=secretvalue ZSTOP_BUDGET=3 ZTHREAD_MAX=2)
+WITHHELD=(UNRELATED_VAR=secretvalue ZOCIETY_ROOT=secretvalue ZLOOPX=1 MY_ZLOOP_BUDGET=9)
+ENVV=("${FORWARD[@]}" "${WITHHELD[@]}")
+zo "$PROJ" git status
+assert_rc 0
+assert_eq "--env" "$(values --env | LC_ALL=C sort)" "${FORWARD[@]%%=*}"
+assert_eq "arguments holding a value" "$(argc secretvalue)" 0
+assert_eq "after the image" "$(argv_after "$IMAGE")" git status
+ENVV=(NO_COLOR= "${WITHHELD[@]}")
+zo "$PROJ" git status
+assert_eq "--env, with NO_COLOR empty and only withheld names" "$(values --env)"
+# A value of several lines: its later lines are not names.
+ENVV=("UNRELATED_VAR=first line${NL}ZLOOP_GHOST=1${NL}ZSTOP_TWO WORDS" ZLOOP_BUDGET=1)
+zo "$PROJ" git status
+assert_eq "--env, beside a multi-line value" "$(values --env)" ZLOOP_BUDGET
+
+section "Case 6: exec into a running container"
+ENVV=(FAKE_PODMAN_RUNNING=1 "${FORWARD[@]}" "${WITHHELD[@]}")
+zo "$PROJ" exec git status
+assert_rc 0
+assert_eq "first arguments (off a terminal, no pty)" "$(head -n 2 "$LOG")" exec -i
+assert_eq "--env" "$(values --env | LC_ALL=C sort)" "${FORWARD[@]%%=*}"
+assert_eq "arguments holding a value" "$(argc secretvalue)" 0
+assert_eq "after the container" "$(argv_after zociety-sandbox | head -n 2)" bash -c
+logged_script zociety-exec > "$TMP/script"
+assert_eq "files the script tests for" \
+  "$(sed -n 's|.*-f \(/run/secrets/[a-z_]*\) .*|\1|p' "$TMP/script" | LC_ALL=C sort)" \
+  /run/secrets/anthropic_api_key /run/secrets/claude_oauth_token /run/secrets/github_token
+# shellcheck disable=SC2016  # the script's own text
+assert_eq "script's last line" "$(tail -n 1 "$TMP/script" | sed 's/^ *//')" 'exec "$@"'
+assert_eq "after the script" "$(argv_after zociety-exec)" /repo git status
+ENVV=(FAKE_PODMAN_RUNNING=1)
+zo "$PROJ" exec
+assert_eq "no command given, after the script" "$(argv_after zociety-exec)" /repo bash
+
+section "Case 7: exec from a checkout under .worktrees/"
+zo "$PROJ/.worktrees/x" exec git commit -m 'two words'
+assert_rc 0
+assert_eq "after the script" "$(argv_after zociety-exec)" \
+  /repo/.worktrees/x git commit -m 'two words'
+
+section "Case 8: exec with no container running is refused"
+ENVV=()
+zo "$PROJ" exec git status
+assert_rc 1
+assert_err "is not running"
+assert_eq "arguments podman exec was given" "$(argc '')" 0
+
+section "Case 9: podman's exit code is the launcher's (run, then exec)"
+ENVV=(FAKE_PODMAN_RC=7 FAKE_PODMAN_RUNNING=1)
+zo "$PROJ" git status
+assert_rc 7
+zo "$PROJ" exec git status
+assert_rc 7
+
+section "Case 10: started inside a container, the launcher refuses"
+ENVV=(container=podman)
+zo "$PROJ" git status
+assert_rc 1
+assert_err "must run on the host"
+assert_eq "arguments podman run was given" "$(argc '')" 0
+
+section "Case 10b: with no podman installed the launcher says so (run, then exec)"
+# Only where the base PATH has no podman of its own (a GitHub runner has one).
+if PATH=/usr/bin:/bin command -v podman >/dev/null 2>&1; then
+  echo "  (skipped: /usr/bin or /bin has a podman)"
+else
+  ENVV=()
+  SAVED_ZPATH="$ZPATH"
+  ZPATH="/usr/bin:/bin"
+  for args in "git status" "exec git status"; do
+    # shellcheck disable=SC2086  # two words on purpose
+    zo "$PROJ" $args
+    assert_rc 1
+    assert_err "podman not found"
+  done
+  ZPATH="$SAVED_ZPATH"
+fi
+
+section "Case 11: a project reached through a symlink maps by physical path"
+ENVV=()
+ZO="$TMP/link/bin/zociety"
+zo "$TMP/link/sub/dir" git status
+ZO="$PROJ/bin/zociety"
+assert_rc 0
+assert_eq "after the image" "$(argv_after "$IMAGE")" \
+  bash -c "$CD_WRAP" zociety-run /repo/sub/dir git status
+
+section "Case 12: the two logged scripts, run on the host"
+# What the container's bash is given, run for real. The command starts in the
+# directory with its arguments intact, and not at all where the cd fails. The
+# exec script exports the secrets it finds ($TMP/secrets for /run/secrets).
+# shellcheck disable=SC2016  # expanded by the probe's sh
+PROBE='pwd -P; printf "%s\n" "$@" "$GH_TOKEN" "$GITHUB_TOKEN" "$CLAUDE_CODE_OAUTH_TOKEN" "$ANTHROPIC_API_KEY"'
+zo "$PROJ/sub/dir" true
+script=$(logged_script zociety-run)
+host "$script" zociety-run "$PROJ/sub/dir" sh -c "$PROBE" sh 'a b' 'c"d'
+assert_eq "run wrapper: directory, arguments" "$(cat "$OUT")" "$PROJ/sub/dir" 'a b' 'c"d'
+host "$script" zociety-run "$TMP/missing" touch "$TMP/ran"
+assert_rc 1
+ENVV=(FAKE_PODMAN_RUNNING=1)
+zo "$PROJ" exec true
+script=$(logged_script zociety-exec | sed "s|/run/secrets|$TMP/secrets|g")
+host "$script" zociety-exec "$PROJ/.worktrees/x" sh -c "$PROBE" sh 'a b' 'c"d'
+assert_eq "exec script, no secrets: directory, arguments" "$(cat "$OUT")" \
+  "$PROJ/.worktrees/x" 'a b' 'c"d'
+printf 'gh-fixture\n' > "$TMP/secrets/github_token"
+printf ' oauth-fixture \n\n' > "$TMP/secrets/claude_oauth_token"
+printf 'api-fixture\n' > "$TMP/secrets/anthropic_api_key"
+host "$script" zociety-exec "$PROJ/.worktrees/x" sh -c "$PROBE" sh 'a b' 'c"d'
+assert_eq "exec script: directory, arguments, GH_TOKEN, GITHUB_TOKEN, OAuth token, API key" \
+  "$(cat "$OUT")" "$PROJ/.worktrees/x" 'a b' 'c"d' gh-fixture gh-fixture oauth-fixture api-fixture
+host "$script" zociety-exec "$TMP/missing" touch "$TMP/ran"
+assert_rc 1
+assert_eq "command started after a failed cd" "$([[ -e "$TMP/ran" ]] && echo yes || echo no)" no
+
+echo ""
+echo "=== Results: $PASSED passed, $FAILED failed ==="
+if [[ $FAILED -gt 0 ]]; then
+  exit 1
+fi
+echo "All launcher cases passed."

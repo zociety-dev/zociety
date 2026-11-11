@@ -146,9 +146,57 @@ setup_token() {
     log_warn "  bin/zociety --rebuild"
 }
 
+# forward_env: fill ENV_ARGS with `--env NAME` for the host variables a
+# command in the container may read. `--env NAME` (no value) passes the
+# current value through. Used by run_container and by exec: an exec into a
+# container that is already up used to forward nothing, so a loop turn's
+# ZOCIETY_TURN_ID, the ZLOOP_* and ZSTOP_* knobs and CLAUDECODE were lost
+# whenever a session held the container.
+#
+# ZLOOP_* tuning vars (VERBOSE, TIMEOUT, DEBUG, STOP), ZSTOP_* stop predicate
+# knobs (BUDGET, PATIENCE, ...), ZTHREAD_* (MAX: cycles per subject,
+# bin/zthread), ZHEAP_DEATH_* (ANY_BRANCH),
+# ZOCIETY_AGENT_CLIENT, ANTHROPIC_MODEL, GEMINI_* vars, ZOCIETY_BLIND_KEY
+# (bin/zblind seal/reveal passphrase; bin/zagent strips it from the agent's
+# env), ZOCIETY_TURN_ID (a loop turn's id, so a z* event command a turn runs
+# through bin/zociety is credited to it instead of refused) and CLAUDECODE
+# (set by Claude Code in its shells; the prepare-commit-msg hook running in
+# the container reads it to add the Agent: trailer). Also NO_COLOR if set.
+ENV_ARGS=()
+forward_env() {
+    ENV_ARGS=()
+    # compgen -e: the exported names, one per line. Parsing `env` instead
+    # read each further line of a multi-line value as a name of its own, so
+    # a value holding "ZLOOP_GHOST=1" on a line forwarded --env ZLOOP_GHOST.
+    local _name
+    while read -r _name; do
+        case "$_name" in
+            ZLOOP_*|ZSTOP_*|ZTHREAD_*|ZHEAP_DEATH_*|ZAGENT_*|ANTHROPIC_MODEL|ZOCIETY_AGENT_CLIENT|GEMINI_*|ZOCIETY_BLIND_KEY|ZOCIETY_TURN_ID|CLAUDECODE) ENV_ARGS+=(--env "$_name") ;;
+        esac
+    done < <(compgen -e)
+    [[ -n "${NO_COLOR:-}" ]] && ENV_ARGS+=(--env NO_COLOR)
+    return 0
+}
+
+# container_workdir: where in the container a command runs. The project is
+# mounted at /repo, so a command started in a subdirectory of it, or in a
+# checkout under .worktrees/, runs in the same place there. It used to run in
+# /repo whatever the caller's directory: a `git add` or `git commit` routed
+# from .worktrees/<name> acted on the main checkout, on whatever branch a run
+# had it on. Anywhere outside the project it is /repo, as before.
+container_workdir() {
+    local here root
+    here="$(pwd -P)"
+    root="$(cd "$PROJECT_DIR" && pwd -P)"
+    case "$here" in
+        "$root"/*) printf '/repo/%s\n' "${here#"$root"/}" ;;
+        *) printf '/repo\n' ;;
+    esac
+}
+
 run_container() {
-    ensure_image
     check_prereqs
+    ensure_image
 
     local cmd=("$@")
     if [[ ${#cmd[@]} -eq 0 ]]; then
@@ -173,25 +221,8 @@ run_container() {
         volume_args+=(--volume "$CLAUDE_PLUGINS_DIR:/home/agent/.claude-plugins:ro")
     fi
 
-    # Forward ZLOOP_* tuning vars (VERBOSE, TIMEOUT, DEBUG, STOP), ZSTOP_* stop
-    # predicate knobs (BUDGET, PATIENCE, ...), ZHEAP_DEATH_* (ANY_BRANCH),
-    # ZOCIETY_AGENT_CLIENT, ANTHROPIC_MODEL, GEMINI_* vars, ZOCIETY_BLIND_KEY
-    # (bin/zblind seal/reveal passphrase; bin/zagent strips it from the agent's
-    # env), ZOCIETY_TURN_ID (a loop turn's id, so a z* event command a turn
-    # runs through bin/zociety is credited to it instead of refused) and
-    # CLAUDECODE (set by Claude Code in its shells; the
-    # prepare-commit-msg hook running in the container reads it to add the
-    # Agent: trailer) from the host env. `--env NAME` (no value) passes the
-    # current value through; without this the containerized loop never sees
-    # them. Also honor NO_COLOR if set.
-    local env_args=()
-    local _name
-    while IFS='=' read -r _name _; do
-        case "$_name" in
-            ZLOOP_*|ZSTOP_*|ZHEAP_DEATH_*|ZAGENT_*|ANTHROPIC_MODEL|ZOCIETY_AGENT_CLIENT|GEMINI_*|ZOCIETY_BLIND_KEY|ZOCIETY_TURN_ID|CLAUDECODE) env_args+=(--env "$_name") ;;
-        esac
-    done < <(env)
-    [[ -n "${NO_COLOR:-}" ]] && env_args+=(--env NO_COLOR)
+    # The host env a containerized command may read (forward_env).
+    forward_env
 
     # Subscription OAuth token (mint it via: bin/zociety setup-token) is read from
     # the mounted secrets dir by docker-entrypoint.sh and exported as
@@ -205,6 +236,18 @@ run_container() {
         interactive_args=()  # no TTY: see note above; set GH_FORCE_TTY=1 for colour
     fi
 
+    # The caller's directory (container_workdir). cd, not --workdir: through
+    # the podman machine's file sharing the directory a container starts in
+    # comes back owned by root, and git then refuses a worktree there
+    # ("detected dubious ownership"; only /repo is a safe.directory). From
+    # the project root the command line is what it always was.
+    local workdir
+    workdir="$(container_workdir)"
+    if [[ "$workdir" != /repo ]]; then
+        # shellcheck disable=SC2016  # expanded by the container's bash
+        cmd=(bash -c 'cd "$1" && shift && exec "$@"' zociety-run "$workdir" "${cmd[@]}")
+    fi
+
     podman run --rm "${interactive_args[@]}" \
         --init \
         --name "$CONTAINER_NAME" \
@@ -212,7 +255,7 @@ run_container() {
         --tmpfs /tmp:size=200M,mode=1777 \
         --tmpfs /run:size=50M,mode=755 \
         "${volume_args[@]}" \
-        "${env_args[@]}" \
+        "${ENV_ARGS[@]}" \
         --memory 1g \
         --cpus 2.0 \
         --user 1000:1000 \
@@ -256,8 +299,8 @@ RUNNING THE AGENT LOOP:
     bin/zociety bin/zloop 60                       # Run loop with max 60 iterations
     bin/zociety bin/zloop --stop budget,file 60    # Pick stop modes (bin/zloop --help)
     ZLOOP_STOP=budget,file ZSTOP_BUDGET=5 bin/zociety bin/zloop 60
-    # ZLOOP_*, ZSTOP_*, ZHEAP_DEATH_*, ZOCIETY_BLIND_KEY and CLAUDECODE host env
-    # vars are forwarded into the container.
+    # ZLOOP_*, ZSTOP_*, ZTHREAD_*, ZHEAP_DEATH_*, ZOCIETY_BLIND_KEY and CLAUDECODE host
+    # env vars are forwarded into the container, a running one included.
 
 PLUGINS:
     Set CLAUDE_PLUGINS_DIR to mount plugins into container:
@@ -318,6 +361,7 @@ case "${1:-}" in
     exec)
         shift
         cmd=("${@:-bash}")
+        check_prereqs
         if ! podman container exists "$CONTAINER_NAME" 2>/dev/null; then
             log_error "Container '$CONTAINER_NAME' is not running."
             log_error "Start it first with: bin/zociety"
@@ -329,7 +373,30 @@ case "${1:-}" in
         # one only when we actually sit on a terminal.
         exec_tty=(-i)
         [[ -t 0 && -t 1 ]] && exec_tty=(-it)
-        podman exec "${exec_tty[@]}" "$CONTAINER_NAME" "${cmd[@]}"
+        # podman exec skips the entrypoint, and the entrypoint is where the
+        # files under /run/secrets become GH_TOKEN, CLAUDE_CODE_OAUTH_TOKEN
+        # and ANTHROPIC_API_KEY (container/docker-entrypoint.sh; keep the two
+        # in step). Without them gh in an exec'd command is logged out
+        # ("populate the GH_TOKEN environment variable"), so bin/zgh, and with
+        # it bin/zheap-death's landing of a cycle, failed whenever a session
+        # already held the container. The host env is forwarded as for a run,
+        # and the command runs in the caller's directory (container_workdir;
+        # cd for the reason run_container gives).
+        forward_env
+        # shellcheck disable=SC2016  # expanded by the container's bash
+        podman exec "${exec_tty[@]}" "${ENV_ARGS[@]}" "$CONTAINER_NAME" bash -c '
+            cd "$1" || exit 1
+            shift
+            if [[ -f /run/secrets/anthropic_api_key ]]; then
+                ANTHROPIC_API_KEY="$(cat /run/secrets/anthropic_api_key)"; export ANTHROPIC_API_KEY
+            fi
+            if [[ -f /run/secrets/claude_oauth_token ]]; then
+                CLAUDE_CODE_OAUTH_TOKEN="$(tr -d "[:space:]" < /run/secrets/claude_oauth_token)"; export CLAUDE_CODE_OAUTH_TOKEN
+            fi
+            if [[ -f /run/secrets/github_token ]]; then
+                GITHUB_TOKEN="$(cat /run/secrets/github_token)"; export GITHUB_TOKEN GH_TOKEN="$GITHUB_TOKEN"
+            fi
+            exec "$@"' zociety-exec "$(container_workdir)" "${cmd[@]}"
         ;;
     setup-token)
         setup_token

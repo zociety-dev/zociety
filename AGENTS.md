@@ -36,7 +36,7 @@ bin/zloop --ask "What is a rule for?" 15     # put a question to the zociety fir
 ZLOOP_STOP=budget,converge,file ZSTOP_BUDGET=5 bin/zloop
 bin/zloop --help
 
-# Containerized execution (ZLOOP_*, ZSTOP_* and ZAGENT_* are forwarded into the container)
+# Containerized execution (ZLOOP_*, ZSTOP_*, ZTHREAD_* and ZAGENT_* are forwarded into the container)
 bin/zociety bin/zloop 60
 bin/zociety bin/zloop --stop budget,file 60
 ```
@@ -358,6 +358,7 @@ All state is derived from git history. No mutable state files.
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
 | `bin/test-zga-loop` | Dry-run harness for the GitHub Actions runner (local bare origin, fake `claude`) |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
+| `bin/test-zociety` | Dry-run harness for `bin/zociety`: a copy of the launcher in a throwaway project, a fake `podman` first on `PATH` that writes its argv to a file and starts nothing |
 | `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; that the front page and `stuff.html` follow the highest `rev*` tag, not main, a cycle branch or the working tree; and that `docs/rules.html` lists exactly the `[pass]` events reachable from the tags, each on the card of the tag that archived it (the newest tag's card holds the `[pass]` commits no older tag reaches, its own `[direction]` question and its heap-death; a rule leaves with the highest tag; a repo with no `[pass]` gets the page empty); and that `docs/asks.html` lists every ask `bin/zstate --asks` reports at the highest tag, each answer linked to the archive page of the lowest tag containing its commit (found with `--contains`, not `%S`); and that `docs/join.html` carries PROMPT.md as the highest tag has it and one entry per `z:1` event along that tag's first parents below the tags merged into its parent, each linked to its commit |
@@ -664,6 +665,7 @@ To maintain a clean, stable, and traceable commit history, use a standard
 
 ### 1. Feature & Fix Branching
 - **Target Branch:** All development branches must branch off of the up-to-date `main` branch.
+- **Worktrees:** A development branch gets its own checkout under `.worktrees/<name>` (`git worktree add .worktrees/<name> -b <branch> origin/main`), so a run can keep the main checkout. A routed git or gh command runs in the container at the directory it was started from (`bin/zociety` maps it to its place under `/repo`), so `git add` and `git commit` in a worktree act on that worktree. Before this they ran in `/repo`, the main checkout, on the cycle branch a run had there.
 - **Naming Convention:** Use descriptive kebab-case names, optionally prefixed with the category of change:
   - `fix/zloop-interrupt`
   - `feature/new-stop-mode`
@@ -697,6 +699,11 @@ Before proposing any changes, verify correctness using:
   (`bin/zthread`, `bin/zheap-death --new-thread`).
 - `bin/test-zshim` to verify which git invocations `bin/shims/git` keeps on
   the host and which it routes into the container (dry run, no container).
+- `bin/test-zociety` to verify the host launcher against a fake `podman`
+  that records its arguments: the command line of a run and of an exec, the
+  caller's directory mapped under `/repo`, the host variables forwarded by
+  name only, exit codes, and the two `bash -c` scripts the container is
+  given, run on the host. It cannot show what real podman does with them.
 - `bin/test-zblind` (run as `bin/zociety bin/test-zblind`; needs gpg) to
   verify the blind model record: `bin/zblind` seal/reveal, `bin/zjoin`
   naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and the
@@ -707,8 +714,9 @@ Before proposing any changes, verify correctness using:
   staged work into them). Run it only in a throwaway copy of the repo.
 
 `.github/workflows/tests.yml` runs shellcheck (the pre-commit hook, so the
-pinned version and file set), `bin/test-zshim`, `bin/test-zcycle-id`,
-`bin/test-zga-loop`, `bin/test-zblind` and `bin/test-zstop-modes`, and, in a
+pinned version and file set), `bin/test-zshim`, `bin/test-zociety`,
+`bin/test-zcycle-id`, `bin/test-zga-loop`, `bin/test-zblind` and
+`bin/test-zstop-modes`, and, in a
 checkout with every `rev*` tag, `bin/test-zsite-archive` and
 `bin/test-prov-encoding` (after `bin/zsite-generate`), on every
 pull request into main that touches `bin/`, `.githooks/`, `container/`,

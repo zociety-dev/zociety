@@ -16,6 +16,10 @@
 #                          would fail with "name already in use")
 #   otherwise              bin/zociety git ... (fresh podman run --rm)
 #
+# The command runs where it was started: bin/zociety maps the host directory
+# to its place under /repo, so a write from a subdirectory or from a checkout
+# under .worktrees/ acts there, not on the main checkout.
+#
 # --no-pager is always passed: the container gets a TTY, so git would
 # otherwise page. stdin does NOT reach the container, so a commit message
 # must come in as an argument: -m "..." (or -F <file>), never -F -,
