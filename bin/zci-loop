@@ -3,7 +3,8 @@
 # Usage: bin/zci-loop [--check]
 # Protected file variables: ZOCIETY_GITLAB_TOKEN_FILE and one of
 # ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE / ZOCIETY_ANTHROPIC_API_KEY_FILE.
-# Optional files: ZOCIETY_GPG_SIGNING_KEY_FILE, ZOCIETY_BLIND_KEY_FILE.
+# Optional files: ZOCIETY_GPG_SIGNING_KEY_FILE, ZOCIETY_BLIND_KEY_FILE,
+# ZOCIETY_GITHUB_TOKEN_FILE (for the notes mirror).
 # Inputs come through ZOCIETY_CI_{MAX,FOR,COST,CYCLES,MODEL,ASK}.
 set -euo pipefail
 [[ $# == 0 || ( $# == 1 && "$1" == --check ) ]] || { echo 'Usage: bin/zci-loop [--check]' >&2; exit 2; }
@@ -38,6 +39,14 @@ git config --global user.email "$(glab api user | jq -r .email)"
 git config --local credential.helper ''
 git config --local credential.https://gitlab.com.helper '!glab auth git-credential'
 git remote set-url origin "https://gitlab.com/${CI_PROJECT_PATH:?}.git"
+if [[ -n "${ZOCIETY_GITHUB_TOKEN_FILE:-}" ]]; then
+    [[ -s "$ZOCIETY_GITHUB_TOKEN_FILE" ]] || { echo 'zci-loop: GitHub notes-mirror token file is empty' >&2; exit 2; }
+    git config --local credential.https://github.com.helper '!f() { GH_TOKEN=$(tr -d "[:space:]" < "$ZOCIETY_GITHUB_TOKEN_FILE") gh auth git-credential; }; f'
+    git remote get-url github >/dev/null 2>&1 || git remote add github https://github.com/zociety-dev/zociety.git
+    git remote set-url github https://github.com/zociety-dev/zociety.git
+else
+    echo 'zci-loop: GitHub notes replication disabled; no approved mirror token file' >&2
+fi
 git config --local commit.gpgsign false
 git config --local tag.gpgSign false
 if [[ -n "${ZOCIETY_GPG_SIGNING_KEY_FILE:-}" ]]; then
@@ -68,15 +77,18 @@ else
     git checkout -b "$cycle" --quiet
 fi
 publish() {
-    local rc=$? ref branch failure=0
+    local rc=$? ref branch remote failure=0
     trap - EXIT
     branch=$(git branch --show-current)
     if [[ "$branch" == cycle/* ]]; then
         git push origin "HEAD:refs/heads/$branch" --quiet || failure=1
     fi
-    while IFS= read -r ref; do
-        git push origin "$ref" --quiet || failure=1
-    done < <(git for-each-ref --format='%(refname)' refs/notes)
+    for remote in origin github; do
+        git remote get-url "$remote" >/dev/null 2>&1 || continue
+        while IFS= read -r ref; do
+            git push "$remote" "$ref" --quiet || failure=1
+        done < <(git for-each-ref --format='%(refname)' refs/notes)
+    done
     if [[ $rc == 1 && -f .zociety/run.last.json ]] && \
         jq -e '.exit == 1 and (.reason | test("^(turn|time|cost) limit"))' .zociety/run.last.json >/dev/null; then
         rc=0

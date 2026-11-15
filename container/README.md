@@ -260,6 +260,12 @@ key and pinned GitHub host key. Divergent downstream refs are retained and
 reported rather than overwritten. Pages deployment is unchanged by this
 migration.
 
+The native mirror covers branches and tags. Git notes are replicated directly
+to the `github` remote by the native runner's provenance tools, using ordinary
+fast-forward pushes so divergent notes are reported rather than overwritten.
+CI enables this supplement only when its separately approved GitHub token
+file is present.
+
 `bin/test-zglab` e󠄁x󠄁e󠄁r󠄁c󠄁i󠄁s󠄁e󠄁s󠄁 c󠄁r󠄁e󠄁d󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁 r󠄁e󠄁f󠄁u󠄁s󠄁a󠄁l󠄁,󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 p󠄁r󠄁e󠄁c󠄁e󠄁d󠄁e󠄁n󠄁c󠄁e󠄁,󠄁 r󠄁u󠄁n󠄁 a󠄁n󠄁d󠄁 e󠄁x󠄁e󠄁c󠄁
 r󠄁o󠄁u󠄁t󠄁i󠄁n󠄁g󠄁,󠄁 h󠄁o󠄁s󠄁t󠄁 p󠄁a󠄁s󠄁s󠄁t󠄁h󠄁r󠄁o󠄁u󠄁g󠄁h󠄁,󠄁 n󠄁o󠄁n󠄁-󠄁i󠄁n󠄁t󠄁e󠄁r󠄁a󠄁c󠄁t󠄁i󠄁v󠄁e󠄁 a󠄁r󠄁g󠄁u󠄁m󠄁e󠄁n󠄁t󠄁s󠄁 a󠄁n󠄁d󠄁 S󠄁S󠄁H󠄁 c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁u󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁n󠄁
 t󠄁h󠄁r󠄁o󠄁w󠄁a󠄁w󠄁a󠄁y󠄁 f󠄁i󠄁x󠄁t󠄁u󠄁r󠄁e󠄁s󠄁.󠄁 I󠄁t󠄁 i󠄁s󠄁 i󠄁n󠄁c󠄁l󠄁u󠄁d󠄁e󠄁d󠄁 i󠄁n󠄁 t󠄁h󠄁e󠄁 t󠄁o󠄁o󠄁l󠄁i󠄁n󠄁g󠄁 C󠄁I󠄁 m󠄁a󠄁t󠄁r󠄁i󠄁x󠄁.󠄁
@@ -284,6 +290,7 @@ logs.
 | `ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE` | `container/secrets/claude_oauth_token` | Claude subscription authentication |
 | `ZOCIETY_GPG_SIGNING_KEY_FILE` | `container/secrets/gpg_signing_key.asc` | Optional commit/tag signing |
 | `ZOCIETY_BLIND_KEY_FILE` | Operator's existing `ZOCIETY_BLIND_KEY` | The shared provenance sealing key |
+| `ZOCIETY_GITHUB_TOKEN_FILE` | `container/secrets/github_token` | Replicate provenance notes to the GitHub mirror |
 
 An API-authenticated installation can use `ZOCIETY_ANTHROPIC_API_KEY_FILE`
 instead of the OAuth file. Keep the existing blind key; replacing it prevents

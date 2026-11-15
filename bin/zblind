@@ -36,7 +36,7 @@
 # killed gpg with SIGPIPE ("write error: Broken pipe") on every seal.
 #
 # Both commands push refs/notes/blind and refs/notes/agent (reveal also
-# refs/notes/commits) to origin when a remote exists; a failed push is
+# refs/notes/commits) to origin and the optional github mirror; a failed push is
 # reported and ignored, as bin/zheap-death does.
 #
 # Environment:
@@ -70,11 +70,13 @@ gpg_with_key() {
 }
 
 push_notes() {
-  git remote get-url origin &>/dev/null || return 0
-  local ref
-  for ref in "$@"; do
-    git push origin "$ref" --quiet 2>/dev/null \
-      || echo "  ($ref push failed - continuing)" >&2
+  local remote ref
+  for remote in origin github; do
+    git remote get-url "$remote" &>/dev/null || continue
+    for ref in "$@"; do
+      git push "$remote" "$ref" --quiet 2>/dev/null \
+        || echo "  ($remote $ref push failed - continuing)" >&2
+    done
   done
 }
 

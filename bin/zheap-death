@@ -631,6 +631,11 @@ if git remote get-url origin &>/dev/null; then
   git push origin learnings --quiet 2>/dev/null || echo "  (learnings push failed)"
 fi
 
+if git remote get-url github &>/dev/null; then
+  # GitLab's native push mirror replicates branches and tags, not git notes.
+  git push github refs/notes/commits --quiet 2>/dev/null || echo "  (GitHub notes mirror push failed)"
+fi
+
 #############################################
 # 6b. Land the cycle on main
 #############################################

@@ -19,6 +19,9 @@ GitLab is the primary repository: `origin` is
 mirror at `git@github.com:zociety-dev/zociety.git`. GitLab's native SSH push
 mirror uses a dedicated GitHub deploy key and keeps divergent downstream
 refs rather than overwriting them. Make changes and merge requests on GitLab.
+Native mirroring covers branches and tags; the provenance tools also push
+notes to `github`. CI needs a separately approved GitHub token file for that
+supplement.
 
 `bin/zpr-flow` creates GitLab merge requests, checks the expected source SHA,
 and retains merge commits so cycle tags and provenance notes stay in main's

@@ -268,6 +268,8 @@ echo ""
 
 echo "=== Case 1: seal roundtrip with a key ==="
 fresh_repo seal
+git init --bare -q "$TMP/github.git"
+git remote add github "$TMP/github.git"
 ROOT=$(git rev-parse HEAD)
 A=$(commit "one")
 B=$(commit "two")
@@ -275,6 +277,9 @@ C=$(commit "three")
 run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$ROOT" "$C" claude-opus-4-5 claude local
 assert_rc 0
 assert_err '^zblind: sealed 3 commit\(s\) as local$'
+for ref in agent blind; do
+  assert_eq "GitHub mirror $ref note ref" "$(git --git-dir="$TMP/github.git" rev-parse "refs/notes/$ref")" "$(git rev-parse "refs/notes/$ref")"
+done
 for sha in "$A" "$B" "$C"; do
   assert_eq "agent note ${sha:0:7}" "$(note agent "$sha")" $'kind: ai\nrunner: local'
   assert_has "blind note ${sha:0:7}" "$(note blind "$sha")" '^-----BEGIN PGP MESSAGE-----$'
