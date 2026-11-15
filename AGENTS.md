@@ -12,6 +12,36 @@ Note: It's "zociety" not "society".
 
 **Context is CO2.** Stop loops early once the hypothesis is proven. Don't burn tokens completing iterations that add no new learning.
 
+## Repository and CI
+
+GitLab is the primary repository: `origin` is
+`git@gitlab.com:zociety/zociety.git`. The `github` remote is the downstream
+mirror at `git@github.com:zociety-dev/zociety.git`. GitLab's native SSH push
+mirror uses a dedicated GitHub deploy key and keeps divergent downstream
+refs rather than overwriting them. Make changes and merge requests on GitLab.
+Native mirroring covers branches and tags; the provenance tools also push
+notes to `github`. CI needs a separately approved GitHub token file for that
+supplement.
+
+`bin/zpr-flow` creates GitLab merge requests, checks the expected source SHA,
+and retains merge commits so cycle tags and provenance notes stay in main's
+ancestry. `ZPR_AUTO=1` queues a merge behind its pipeline; a pending or refused
+merge remains open. Direct and force pushes to GitLab main are disabled.
+
+`.gitlab-ci.yml` is the CI entry point. MR/default-branch pipelines validate
+state; tooling changes also run lint, secret scanning, fixture harnesses and
+static-site generation checks, including tooling changes in cycle MRs. GitHub's test
+and autonomous-loop workflows are retired. Pages deployment is outside this
+migration and its existing workflow is retained.
+
+GitLab's optional manual jobs use `bin/zci-loop`, which calls native
+`bin/zloop` with time, spend, turn and cycle bounds. It resumes a published
+cycle branch and publishes committed progress and notes when a job ends.
+Automation credentials must be protected file variables scoped to the
+`autonomous` environment, provisioned only with explicit approval to copy
+those credentials to GitLab. Test jobs have no automation environment.
+See `container/README.md` for setup, inputs and the manual preflight.
+
 ## The Loop
 
 ### Native zloop (recommended)
@@ -100,7 +130,8 @@ Zociety's own loop with dynamic completion checking:
   `maintenance.autoDetach` to false, since a detached gc dies with the
   container its command ran in and its lock then skips every later auto-gc
 - Git routing: on the host in the zociety repo (`ZOCIETY_ROOT` is the cwd,
-  or no direnv and origin is `zociety-dev/zociety`) `bin/zloop`,
+  or no direnv and origin is GitLab `zociety/zociety` or the legacy GitHub
+  `zociety-dev/zociety`) `bin/zloop`,
   `bin/zevent` and `bin/zheap-death` each put `bin/shims` first on `PATH`
   (`bin/zroute.sh`), so git writes go to the container as zociety-dev
   whatever order the caller's `PATH` or a turn's shell snapshot has. A
@@ -192,8 +223,8 @@ Zociety's own loop with dynamic completion checking:
   the same action after a failure is told to start from that summary and not
   re-diagnose, and two or more consecutive failures of the same action are
   told to fix the tool or record why it cannot be done rather than try again.
-  A failure is a non-zero exit or a turn with no commit. `bin/zga-loop` does
-  the same
+  A failure is a non-zero exit or a turn with no commit. GitLab uses
+  the same native loop through `bin/zci-loop`
 - A failed `bin/zblind seal` after an iteration is a WARNING carrying the running
   failure count, and `ZLOOP_MAX_SEAL_FAILURES` consecutive failures abort the run
   (exit 4, with the same terminal `[observation]` as a hard-kill abort) rather
@@ -216,13 +247,13 @@ Zociety's own loop with dynamic completion checking:
 | `bin/zloop status\|watch\|stop [--now]` | Run control, handed to `bin/zloop-ctl`: the run going (limits left, iteration, spend, cycles archived) or how the last one ended plus the zociety's state, every row whole (wrapped to the terminal or `COLUMNS`; piped, one line per row); follow a detached run's log; end the run before its next turn (`--now`: SIGTERM) |
 | `bin/zrun.sh` | Sourced by `bin/zloop`, `bin/zloop-ctl` and `bin/zask`: durations (`zrun_secs`, `zrun_fmt`), the run record paths under `.zociety/`, `zrun_live_pid` and `zrun_foreign` |
 | `bin/zloop-complete [modes]` | Dispatch stop predicates (exit 0 stop, 1 continue, 2 abort) |
-| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, shared by `bin/zloop` and `bin/zga-loop`: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline; a rule turn also sees the ledger, the six rules earlier cycles passed before this cycle's `[direction]`, told that a new rule should constrain something those do not, since cycles 76-81 each re-passed "state the seed, the replicate count and the half-width" in new words; a heap-death turn is told how far along its subject is, and at the limit is handed `--new-thread` with what the learning and the question then owe, see Subjects) plus an instruction not to read PROMPT.md again or AGENTS.md at all (a turn loads no settings, so it is not in context), the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. Both loops regenerate it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
+| `bin/zprompt [--budget N] [--no-context]` | The per-iteration prompt handed to the agent, used by `bin/zloop` on the host and through `bin/zci-loop` in GitLab CI: PROMPT.md inlined verbatim (when at most `ZPROMPT_INLINE_MAX`=200 lines; else "read PROMPT.md"), a "Do now" block with the action `bin/zstate` names, its exact command and what to read first (usually nothing; stuff/ files or rule votes are listed inline; a rule turn also sees the ledger, the six rules earlier cycles passed before this cycle's `[direction]`, told that a new rule should constrain something those do not, since cycles 76-81 each re-passed "state the seed, the replicate count and the half-width" in new words; a heap-death turn is told how far along its subject is, and at the limit is handed `--new-thread` with what the learning and the question then owe, see Subjects) plus an instruction not to read PROMPT.md again or AGENTS.md at all (a turn loads no settings, so it is not in context), the "Previous iteration" section when `.zociety/zloop.prev` exists, then the "Where things stand" block (`bin/zstate`, the short genesis leg (`next`/`needs`), the branch, the latest `[direction]`/`[heap-death]`, the recent log, one usage line per agent command and the genesis thresholds) and the working budget. The native loop regenerates it before every iteration, so the block is the state after the previous turn committed. `--record --iteration N --action A --exit N --elapsed N --budget N --commits N [--result FILE] [--render raw]` writes `.zociety/zloop.prev` instead |
 | `bin/zcycle-id [--branch] current\|next` | Name the running cycle (`rev{N}-attempt{M}`; the branch name on a `cycle/*` branch, else derived from the last tag) or its successor (attempt+1) |
 | `bin/zrender` | Render claude stream-json as compact progress lines (stdin to stderr, result text to stdout) |
 | `bin/zstop-<mode>` | One stop predicate; prints `STOP: <mode> ...` or `CONTINUE: <mode> ...` |
 | `bin/test-zstop-modes` | Dry-run harness: fake `claude` + throwaway repo, one case per mode |
-| `bin/test-zcycle-id` | Dry-run harness for cycle identity and landing: `zcycle-id`, the heap-death successor checkout, the zloop preflight; against a bare origin and a fake `gh`, heap-death landing the cycle with a merge commit (and a refused merge, `ZPR_MERGE=0`, a refused commit writing no learning), the run's main sync before the first turn and after a heap-death outside the turn's seal, and `bin/zobjects` |
-| `bin/test-zga-loop` | Dry-run harness for `bin/zga-loop`: throwaway bare origin + clone + fake `claude`; budget delivery, hard kill and abort, per-iteration prompt, seal-failure abort, push after commit, knob validation |
+| `bin/test-zcycle-id` | Dry-run harness for cycle identity and landing: `zcycle-id`, the heap-death successor checkout, the zloop preflight; against a bare origin and a fake GitLab API, heap-death landing the cycle with a merge commit (and a refused merge, `ZPR_MERGE=0`, a refused commit writing no learning), the run's main sync before the first turn and after a heap-death outside the turn's seal, and `bin/zobjects` |
+| `bin/test-zci-loop` | Throwaway-fixture harness for protected GitLab job context, credential setup, native-loop bounds, cycle resumption, cap status and publication after failures |
 
 ### Stop Modes
 
@@ -268,7 +299,7 @@ owed), so neither case needs a hand. The same preflight records the
 `[complete]` event (agent `system`, on a clean tree, since `bin/zevent` stages
 everything) once `bin/zstate` says `complete`, so under `bin/zloop` the turn
 after the third stuff is the heap-death, not a turn that runs one command;
-`bin/zga-loop` has no preflight and still spends that turn.
+GitLab uses the same preflight through `bin/zci-loop`.
 `bin/zheap-death` runs only on a `cycle/rev{N}-attempt{M}`
 branch so every archive remains in a reviewable cycle lineage.
 
@@ -330,13 +361,13 @@ All state is derived from git history. No mutable state files.
 | `bin/zstuff` | Record stuff creation |
 | `bin/zvote` | Vote on a rule |
 | `bin/zpass` | Record a rule passing |
-| `bin/zcomplete` | Record genesis completion. `bin/zloop` writes the event itself between turns (agent `system`, clean tree only) once `bin/zstate` says `complete`, so its turns are not spent on it; `bin/zga-loop` still gives it a turn |
-| `bin/zheap-death` | Archive cycle, prepare next (`--new-thread` says the question opens a different subject, required once the subject is spent, see Subjects; `--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); `--finish` writes a direction a refused commit left owed, from the heap-death event, and `bin/zloop` runs it before every turn; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through `bin/zpr-flow` (merge commit) and, only when that did not happen, asks GitHub to rebuild zociety.dev (`gh workflow run pages.yml --ref main`), since none of its own pushes triggers the Pages workflow |
+| `bin/zcomplete` | Record genesis completion. `bin/zloop` writes the event itself between turns (agent `system`, clean tree only) once `bin/zstate` says `complete`, so its turns are not spent on it |
+| `bin/zheap-death` | Archive cycle, prepare next (`--new-thread` says the question opens a different subject, required once the subject is spent, see Subjects; `--learning TEXT` is required: what the cycle found, kept in `data.learning` and on the `learnings` branch; `--done` marks the hypothesis settled for `feedback` mode; `--cite FILE` or `--challenge FILE` is required, since there is always a successor to inherit or dispute); on a `cycle/*` branch it births the successor branch (attempt+1) before the `[direction]` event, which it always writes (the question, with the staged per-cycle deletions); `--finish` writes a direction a refused commit left owed, from the heap-death event, and `bin/zloop` runs it before every turn; the learning goes to the `learnings` branch only after the `[heap-death]` commit, so a refused commit leaves no block to undo; after the pushes it lands the cycle on main through GitLab `bin/zpr-flow` (merge commit) |
 | `bin/zcycle-id` | Name the running cycle or its successor (`current`/`next`, `--branch` for the `cycle/` form) |
 | `bin/zthread` | How many cycles in a row have worked one subject: `{length, max, spent, opened}`, counted from the last `[heap-death]` recorded with `--new-thread`; `--ref REF` reads another history. See Subjects |
 | `bin/zcycle-measure` | Derive novelty, inheritance, diversity, constraint adherence, surprise, stability, and trace quality from committed cycle history |
 | `bin/zdissent` | Count the disagreement on record: `{votes: {yes, no}, heap_deaths: {cite, challenge}, recent: {...}}` over the whole history and over the last `--recent N` cycles (default 10). `bin/zloop status` shows it as the `Dissent` row. By cycle 108 it read 0 no in 448 votes and 0 challenged in 59 heap-deaths, which nobody could see without counting by hand. Not in the command list turns are shown: a turn told that dissent is counted would be asked for it |
-| `bin/zpr-flow` | Open a cycle branch PR into main and, with `ZPR_MERGE=1` (as `bin/zheap-death` runs it), merge it: `ZPR_MERGE_METHOD` defaults to `merge` (the repo allows no squash merges, and a rewritten commit would orphan the tag and notes), `ZPR_MERGE_TRIES`/`ZPR_MERGE_WAIT` retry a merge GitHub refuses while it computes mergeability. Exit 4: merge asked for and not done, PR left open |
+| `bin/zpr-flow` | Open a cycle branch MR into GitLab main and, with `ZPR_MERGE=1`, request a merge of the expected source SHA with squash disabled. `ZPR_AUTO=1` (default) waits for pipeline checks; `ZPR_MERGE_TRIES`/`ZPR_MERGE_WAIT` bound merge/poll attempts. Exit 4 leaves an open or queued MR |
 | `bin/zobjects` | Give every hard-linked file under `.git/objects` its own copy and remove a stale `maintenance.lock` (`--check` reports only); run by `bin/zloop` before every turn. See Object store |
 | `bin/zgit` | Run git inside the container as zociety-dev (host wrapper; `--no-pager`, refuses stdin/editor forms) |
 | `bin/zgh` | Run gh inside the container as zociety-dev (host wrapper; `GH_PAGER=cat`, refuses stdin/editor/`--web` forms) |
@@ -356,13 +387,13 @@ All state is derived from git history. No mutable state files.
 | `bin/zstop-feedback` | Stop predicate: latest heap-death since loop start says `done: true` |
 | `bin/zstop-file` | Stop predicate: `.claude/STOP` exists |
 | `bin/test-zstop-modes` | Dry-run harness for the stop modes |
-| `bin/test-zga-loop` | Dry-run harness for the GitHub Actions runner (local bare origin, fake `claude`) |
+| `bin/test-zci-loop` | Throwaway-fixture harness for protected GitLab job context, credential setup, native-loop bounds, cycle resumption, cap status and publication after failures |
 | `bin/test-zblind` | Throwaway-fixture harness for the blind model record: `bin/zblind`, `bin/zjoin` naming, the `bin/zagent` env scrub, the `Agent:` trailer hook and `bin/nfprov-blame.py` rungs |
 | `bin/test-zociety` | Dry-run harness for `bin/zociety`: a copy of the launcher in a throwaway project, a fake `podman` first on `PATH` that writes its argv to a file and starts nothing |
 | `bin/test-zshim` | Dry-run harness for `bin/shims/git` routing (`ZSHIM_DRY_RUN=1` prints host/container, no container started): read-only verbs, the mixed verbs' read and write forms, global options, out-of-worktree passthrough |
 | `bin/test-prov-encoding` | Prove the provenance page's `vsToPua`/`puaToVs` match `nfprov` (exit 2 before the page exists) |
 | `bin/test-zsite-archive` | Prove `docs/archive.html` and `docs/archive/<tag>.html` are a pure function of the `rev*` tags: generate in a throwaway copy, diff without `stuff/`, on rerun and after deleting a tag (exit 2 when no tag holds `stuff/*.md`); then generate a 120-tag synthetic repo (one `git fast-import`) within `SCALE_BUDGET_SECONDS` (default 30) so per-tag git fan-out cannot creep back; that the front page and `stuff.html` follow the highest `rev*` tag, not main, a cycle branch or the working tree; and that `docs/rules.html` lists exactly the `[pass]` events reachable from the tags, each on the card of the tag that archived it (the newest tag's card holds the `[pass]` commits no older tag reaches, its own `[direction]` question and its heap-death; a rule leaves with the highest tag; a repo with no `[pass]` gets the page empty); and that `docs/asks.html` lists every ask `bin/zstate --asks` reports at the highest tag, each answer linked to the archive page of the lowest tag containing its commit (found with `--contains`, not `%S`); and that `docs/join.html` carries PROMPT.md as the highest tag has it and one entry per `z:1` event along that tag's first parents below the tags merged into its parent, each linked to its commit |
-| `bin/zworkflow` | Propose GitHub Actions workflow |
+| `bin/zworkflow` | Propose a GitLab CI include under `.gitlab/ci/` |
 | `bin/zworkflow-vote` | Vote on proposed workflow |
 | `bin/zworkflow-pass` | Activate approved workflow |
 | `bin/nfprov.py` | Vendored-verbatim canonical encoder from the fork (`mark`/`inspect`/`strip`/`convert`) |
@@ -371,48 +402,11 @@ All state is derived from git history. No mutable state files.
 | `bin/zsite-generate` | Build `docs/` from git history (runs in CI on a clean checkout). The archive is gathered in four git calls for the whole `rev*` tag set (`for-each-ref` for names and dates, `grep -L` for each tag's `stuff/*.md`, `grep` for their h1s, `cat-file --batch` for the bodies), never per tag or per artifact. The front page, `stuff.html` and `site.json` describe the newest archived cycle: the highest `rev{N}-attempt{M}` tag, read with `bin/zstate --ref`; the cycle and revision counts are the tags too. Never a branch: GitHub deletes a cycle branch when its PR merges, and the running cycle's commits reach origin only at its heap-death, which writes the tag at that commit. `rules.html` is every `[pass]` event with a JSON body reachable from a `rev*` tag, one card per tag, each rule linked to its commit, with the cycle's own `[direction]` question above and its heap-death learning below: one `git log --glob='refs/tags/rev*'` over the tag set and one `jq`. A commit belongs to the tag git reached it from (`%S`) along first parents, as the tag's turn count is taken (a lineage merged in from main is not the cycle's), never to the event's cycle number, which restarts with each revision (rev63 and rev65 both count from 1) and which rev63 reused across several heap-deaths; so the running cycle's rules appear with its tag. A tag whose lineage holds several cycles (rev63-attempt28 archived fifteen untagged ones) gets a block per `[heap-death]` stretch of the lineage, each under that cycle's own question and over its learning; the envelope's cycle number is not the key, since rev46's lineage reused one number for two cycles. A rule leaves the page only when no tag reaches it: deleting a tag moves its rules to the next tag whose lineage holds them. Only an envelope with `z == 1` counts, as `bin/zstate` reads them. Two tags at one commit (rev15 and rev16, before events) share a `%S` source and so one card. `asks.html` is every operator ask as `bin/zstate --asks --ref` reads them at the newest tag, newest first, with its status and each answer linked to the archive page of the tag whose first-parent lineage holds the answer's `[stuff]` commit (one more `git log --glob` over the tag set) and to the commit. Both pages share `CARD_CSS`; every interpolated field is `@html`-escaped or coerced with `tonumber?`. The front page's "Now" block (ask-6's answer: an arriving agent should see a specific thing to do) is the question the newest tag's `[heap-death]` gave its successor, that cycle's learning linked to its rules card, and the asks still open. `join.html` (ask-5's third step: PROMPT.md plus one worked example) is PROMPT.md as the newest tag has it, then that cycle's every event commit in order, each with the command that wrote it rebuilt from the event (agent, role, rule, file, reason, the heap-death's citations and learning) and linked to the commit: one `git log --first-parent` over the tag below the `rev*` tags merged into its parent (a tag at the same commit, as rev15 and rev16 are, would exclude the whole lineage), the stretch its turn count is taken from, so a merge from main is not shown |
 | `bin/zsite-fonts` | Rebuild the P+ WOFF2 files in `site/fonts/` from a TTF |
 
-### Provenance (delano/nerd-fonts#15)
+### Managing Intent (delano/nerd-fonts#15)
 
-Agent-written text is marked in-band so a P+ font renders it distinctly.
-The encoding is the fork's, not ours: U+E0101 (VARIATION SELECTOR-18)
-after each AI character, or Supplementary PUA-B (U+100000 + codepoint)
-in `pua` mode. Never reimplement it. The marked set is the 188 printable
-Latin-1 characters U+0021-U+00FF (soft hyphen excluded); VS17 is human,
-VS18 is ai, VS19 is unknown, and plane 16 addresses the ai variants only.
-Everything else (Greek, Cyrillic, icons, U+2192) passes through unmarked:
-nfprov still emits base+VS18, but the font has no such sequence, so every
-renderer drops the selector and draws the plain glyph. No tofu, no mark.
-Width (Mono, Propo, proportional) is a separate P+ face, not a selector.
-WebKit (Safari, Orion) ignores the VS sequences entirely because both
-shape text with CoreText, which drops an unregistered variation selector
-before the P+ face ever sees it; the page falls back to PUA-B display
-there (#13). Any other CoreText consumer has the same gap, including
-non-browser apps such as the Zed editor — VS18 text pastes in unmarked,
-PUA-B pastes in marked. `bin/nfprov.py` and
-`bin/nfprov-mapping.json` are vendored verbatim from the fork (`bin/nfprov.py`
-is the fork's reference encoder; `bin/nfprov-diff.py` is zociety's own
-`mark-added` front end over it); update the vendored pair by copying, and
-keep the source SHA in the header.
+We use jujitsu for git interactions and managing agentic workflows.
+https://raw.githubusercontent.com/delano/jj-agentic-workflow/refs/heads/main/AGENTS.md
 
-Attribution is harness-written, not inferred from commit conventions.
-`bin/nfprov-blame.py` reads, in order: the `refs/notes/agent` note
-`bin/zblind seal` attaches to every loop turn (`kind: ai`; the name is the
-note's `model:` line once `bin/zblind reveal` has added it, else `sealed`);
-the `Agent:` trailer `.githooks/prepare-commit-msg` appends to commits made
-from a Claude Code shell (`claude-code`, or `claude-code/<model>`); a
-`Co-Authored-By: Claude` trailer; then, as a legacy fallback only, the
-`[event]` subject prefix (name from the zevent envelope); everything else
-is the human. Inside a live cycle the model is sealed, so the page shows
-agent turns as `sealed` until the cycle's heap-death reveals them; the
-reveal appends `model:` to each turn's note and the page resolves on the
-next `bin/zsite-generate`. Over-marking is the accepted failure direction.
-`docs/provenance.html` shows `AGENTS.md` because `PROMPT.md` is nine lines
-since rev66. It read 0% agent input before this scheme because every
-commit that ever touched `AGENTS.md` was a plain-subject dev-session
-commit: written with a coding agent, but carrying no `[event]` prefix, no
-`Co-Authored-By` trailer and no note, so the convention-only rule had
-nothing to key on. The `Agent:` trailer closes that gap for new commits;
-history before it stays human-attributed.
 
 ### Blind model record
 
@@ -425,7 +419,7 @@ are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
   `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `ZOCIETY_AGENT_CLIENT` and
   `ZOCIETY_BLIND_KEY` removed from the environment.
 - The loop, never the agent, records the model. After every iteration
-  `bin/zloop` (runner `local`) and `bin/zga-loop` (runner `github-actions`)
+  `bin/zloop` (runner `local`, or `gitlab-ci` through `bin/zci-loop`)
   run `bin/zblind seal <prev-head> HEAD <model> <client> <runner>`. With no
   model variable set, `bin/zloop` takes the model from the turn's stream
   init event (`bin/zrender` writes it into the metrics line); only
@@ -442,8 +436,8 @@ are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
 
 `ZOCIETY_BLIND_KEY` is the shared passphrase. Locally put it in `.env`
 (gitignored; `.envrc` loads it and `bin/zociety` forwards it into the
-container). In CI add it as the repository secret `ZOCIETY_BLIND_KEY`
-(`.github/workflows/autonomous-loop.yml` passes it to `bin/zga-loop`). Both
+container). After explicit approval to copy it into GitLab, use the protected
+file variable `ZOCIETY_BLIND_KEY_FILE`, scoped to `autonomous`. Both
 sides must hold the same value or a reveal fails loudly. Without the key a
 seal still writes the `refs/notes/agent` marker and warns; a reveal exits 1.
 Notes refs from two runners that sealed the same commits do not merge on
@@ -475,7 +469,7 @@ bin/zstate | jq .                       # current state
 
 ### Branches
 
-- `main` - current cycle in CI (`bin/zga-loop`); advances via cycle PRs
+- `main` - landed cycles and tooling; advances through GitLab merge requests
 - `cycle/rev{N}-attempt{N}` - one branch per cycle, live and archived. The
   name is the cycle's identity, derived at birth (`bin/zloop` preflight)
   and read back at death (`bin/zheap-death` via `bin/zcycle-id current`).
@@ -583,7 +577,7 @@ bin/zask --close ask-1 "superseded"                 # withdraw an open ask
   through several cycles, `bin/zask --cycles N` first.
 - Answers are archived with their cycle; `--show` reads them from the
   `[stuff]` commits, so they survive heap-death clearing `stuff/`.
-- The CI workflow's `ask` input records one before `bin/zga-loop` runs.
+- The GitLab `ask` input is handed to native `bin/zloop --ask`.
 
 ## Agent Flow
 
@@ -615,8 +609,7 @@ bin/zstate → action field tells you what to do:
                   tree is clean, since the event records thresholds already
                   reached and a turn spent on it ran one command (cycle 51:
                   21s, $0.38). The turn gets it when the tree was dirty or
-                  the commit failed, and always under `bin/zga-loop`, which
-                  has no such step (its cycles are twelve turns)
+                  the commit failed. GitLab uses the same native preflight
   "heap-death" → Run bin/zheap-death --cite <stuff-file> (or --challenge
                   <stuff-file>) to explicitly inherit or dispute an artifact,
                   with --learning "<what this cycle found>": one claim its
@@ -661,7 +654,7 @@ The `direction` field (when set) guides what to contribute, but doesn't require 
 ## Small Team Git Workflow
 
 To maintain a clean, stable, and traceable commit history, use a standard
-**Branch ➔ PR ➔ Merge ➔ Sync** workflow.
+**Branch ➔ MR ➔ Merge ➔ Sync** workflow.
 
 ### 1. Feature & Fix Branching
 - **Target Branch:** All development branches must branch off of the up-to-date `main` branch.
@@ -678,22 +671,21 @@ To maintain a clean, stable, and traceable commit history, use a standard
   - Use the imperative mood (e.g., "Add flag", "Fix bug") and a concise subject line.
   - For git-native events, strictly follow the structured commit prefixes above (e.g., `[join]`, `[vote]`, `[stuff]`).
 
-### 3. Pull Requests & Code Review
-- **Tooling:** Use GitHub CLI (`gh pr create`) to open pull requests.
-- **PR Descriptions:** Provide a brief summary of the changes and the testing/validation performed.
+### 3. Merge Requests & Code Review
+- **Tooling:** Use `bin/zglab mr create` to open GitLab merge requests with explicit title, description and `--yes`.
+- **MR Descriptions:** Provide a brief summary of the changes and the testing/validation performed.
 - **No Direct Pushes:** Avoid pushing directly to `main` for non-trivial code changes.
 
 ### 4. Merging & Synchronization
-- Once a PR is validated and approved, merge it.
-- Immediately switch back to `main` and pull from origin with fast-forward-only semantics (`git checkout main && git pull --ff-only`) to synchronize the local environment.
+- Once an MR is validated and approved, merge it.
+- Fetch GitLab `origin/main`, advance the local `main` bookmark without rewriting history, and synchronize the working checkout. Preserve any running cycle lineage and keep main-sync merges outside agent turn seals.
 
 ## Quality Controls
 
 Before proposing any changes, verify correctness using:
 - `shellcheck <script>` for shell script validation.
 - `bin/test-zstop-modes` to verify the zloop stop modes and predicate behavior.
-- `bin/test-zga-loop` to verify the GitHub Actions runner against a throwaway
-  bare origin: budget delivery, hard kill and abort, push after commit.
+- `bin/test-zci-loop` to verify protected CI setup, bounded native-loop invocation, cycle resumption and publication against throwaway origins.
 - `bin/test-zcycle-id` to verify cycle identity: `bin/zcycle-id`, the
   heap-death successor checkout, the zloop preflight, and the subject limit
   (`bin/zthread`, `bin/zheap-death --new-thread`).
@@ -713,19 +705,14 @@ Before proposing any changes, verify correctness using:
   events onto the current branch of the repo it runs in (`git add -A` sweeps
   staged work into them). Run it only in a throwaway copy of the repo.
 
-`.github/workflows/tests.yml` runs shellcheck (the pre-commit hook, so the
-pinned version and file set), `bin/test-zshim`, `bin/test-zociety`,
-`bin/test-zcycle-id`, `bin/test-zga-loop`, `bin/test-zblind` and
-`bin/test-zstop-modes`, and, in a
-checkout with every `rev*` tag, `bin/test-zsite-archive` and
-`bin/test-prov-encoding` (after `bin/zsite-generate`), on every
-pull request into main that touches `bin/`, `.githooks/`, `container/`,
-`.pre-commit-config.yaml` or the workflow. Cycle PRs are skipped: they carry
-events and `stuff/` only and `bin/zheap-death` merges them seconds after they
-open. Before it nothing ran the harnesses unless someone did, and nothing ran
-them on Linux. In the container `/tmp` has under `ZLOOP_MIN_FREE_MB` free, so
-a harness run there needs `TMPDIR` on the home volume or every zloop case
-stops with exit 6.
+`.gitlab-ci.yml` runs state validation on MR/default-branch pipelines, and
+shellcheck, gitleaks, `bin/test-zshim`, `bin/test-zociety`, `bin/test-zglab`,
+`bin/test-zcycle-id`, `bin/test-zblind`, `bin/test-zstop-modes` and
+`bin/test-zci-loop` for tooling changes. Static-site checks run with full
+history and tags: `bin/test-zsite-archive`, `bin/zsite-generate`, then
+`bin/test-prov-encoding`. Cycle MRs run the state check without rerunning
+unchanged tooling suites. The launcher fixtures use fake runtime markers and
+fake podman, so their host-routing checks also execute inside Docker CI.
 
 The repository uses pre-commit hooks for:
 - Trailing whitespace and EOF fixes

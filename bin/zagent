@@ -69,8 +69,8 @@
 #   regime, so cycles under different turn regimes are told apart in git.
 #
 # The model reaches the client as a CLI flag only. The child runs with
-# ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (the CI step variable bin/zga-loop
-# inherits), ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY removed from its
+# ANTHROPIC_MODEL, GEMINI_MODEL, MODEL (legacy CI variable),
+# ZOCIETY_AGENT_CLIENT and ZOCIETY_BLIND_KEY removed from its
 # environment (env -u), so the agent's shell cannot read which model it is,
 # which client, or the key that seals the record. The loop records the model
 # per turn with bin/zblind; see

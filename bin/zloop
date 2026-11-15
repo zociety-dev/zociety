@@ -180,7 +180,7 @@
 # thresholds already met, not a decision, and a turn spent on it ran one
 # command (cycle 51: 21s, $0.38). A cycle is therefore eleven turns, not
 # twelve; a dirty tree or a refused commit leaves the turn to do it as
-# before. bin/zga-loop has no such step and still spends the turn.
+# before. GitLab CI uses the same native preflight.
 #
 # Object store: before every turn bin/zobjects gives each hard-linked file in
 # .git/objects its own copy. A local `git clone` of this repo hard-links the
@@ -1223,7 +1223,7 @@ EOF
     if [[ -n "$seen" ]]; then turn_model="$seen"; fi
   fi
   seal_from="${SEAL_FROM:-$PREV_HEAD}"
-  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$turn_model" "$CLIENT" local; then
+  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$turn_model" "$CLIENT" "${ZOCIETY_RUNNER:-local}"; then
     SEAL_FAILURES=0
     SEAL_FROM=""
   else

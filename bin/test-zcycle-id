@@ -677,54 +677,54 @@ echo ""
 # Fixtures: an origin, a fake gh, a fake turn
 #############################################
 
-# Fake gh: pull requests against the bare origin, one state file per PR
-# ("<head> <base> open|merged"). `pr merge` merges with a merge commit, as
-# GitHub's merge button does; FAKE_GH_MERGE_FAIL=1 refuses it. Every call is
-# logged to FAKE_GH_LOG.
+# Fake GitLab API: merge requests against the bare origin. The merge
+# endpoint checks the reviewed head and creates a two-parent merge commit.
 mkdir -p "$TMP/fakegh"
-cat > "$TMP/fakegh/gh" << 'EOF'
+cat > "$TMP/fakegh/glab" << 'EOF'
 #!/bin/bash
-echo "gh $*" >> "$FAKE_GH_LOG"
+set -e
+printf 'glab %s\n' "$*" >> "$FAKE_GH_LOG"
 mkdir -p "$FAKE_GH_STATE"
-sub="$1 $2"
-shift 2
-args=("$@")
-head="" base=""
-for ((i = 0; i < ${#args[@]}; i++)); do
-  case "${args[i]}" in
-    --head) head="${args[i+1]}" ;;
-    --base) base="${args[i+1]}" ;;
-  esac
+[[ "$1" == api ]] || exit 1
+endpoint="$2"; shift 2
+method=GET; head=""; base=""; sha=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --method) method="$2"; shift 2 ;;
+        --raw-field|--field)
+            case "$2" in source_branch=*) head="${2#*=}" ;; target_branch=*) base="${2#*=}" ;; sha=*) sha="${2#*=}" ;; esac
+            shift 2 ;;
+        *) shift ;;
+    esac
 done
-case "$sub" in
-  "pr list")
-    for f in "$FAKE_GH_STATE"/*; do
-      [[ -f "$f" ]] || continue
-      read -r h b s < "$f"
-      if [[ "$h" == "$head" && "$b" == "$base" && "$s" == open ]]; then basename "$f"; fi
-    done
-    exit 0 ;;
-  "pr create")
-    n=$(( $(find "$FAKE_GH_STATE" -type f | wc -l) + 1 ))
-    echo "$head $base open" > "$FAKE_GH_STATE/$n"
-    echo "https://example.invalid/pull/$n"
-    exit 0 ;;
-  "pr merge")
-    [[ "${FAKE_GH_MERGE_FAIL:-0}" == 1 ]] && { echo "fake gh: merge refused" >&2; exit 1; }
-    read -r h b s < "$FAKE_GH_STATE/${args[0]}"
-    export GIT_DIR="$FAKE_GH_ORIGIN" GIT_AUTHOR_NAME=fakegh GIT_AUTHOR_EMAIL=gh@example.invalid \
-      GIT_COMMITTER_NAME=fakegh GIT_COMMITTER_EMAIL=gh@example.invalid
-    tree=$(git merge-tree --write-tree "refs/heads/$b" "refs/heads/$h") || exit 1
-    c=$(git commit-tree --no-gpg-sign "$tree" -p "refs/heads/$b" -p "refs/heads/$h" -m "Merge pull request #${args[0]} from $h")
-    git update-ref "refs/heads/$b" "$c"
-    echo "$h $b merged" > "$FAKE_GH_STATE/${args[0]}"
-    exit 0 ;;
-  "workflow run") exit 0 ;;
+case "$method $endpoint" in
+    'GET projects/'*/merge_requests)
+        result='[]'
+        for f in "$FAKE_GH_STATE"/*; do
+            [[ -f "$f" ]] || continue
+            read -r h b state < "$f"
+            if [[ "$h" == "$head" && "$b" == "$base" && "$state" == open ]]; then result="[{\"iid\":$(basename "$f")}]"; fi
+        done
+        echo "$result" ;;
+    'POST projects/'*/merge_requests)
+        n=$(( $(find "$FAKE_GH_STATE" -type f | wc -l) + 1 ))
+        echo "$head $base open" > "$FAKE_GH_STATE/$n"
+        printf '{"iid":%s}\n' "$n" ;;
+    'PUT projects/'*/merge_requests/*/merge)
+        [[ "${FAKE_GH_MERGE_FAIL:-0}" != 1 ]] || exit 1
+        n="${endpoint%/merge}"; n="${n##*/}"
+        read -r h b state < "$FAKE_GH_STATE/$n"
+        export GIT_DIR="$FAKE_GH_ORIGIN" GIT_AUTHOR_NAME=fakeglab GIT_AUTHOR_EMAIL=glab@example.invalid GIT_COMMITTER_NAME=fakeglab GIT_COMMITTER_EMAIL=glab@example.invalid
+        [[ "$(git rev-parse "refs/heads/$h")" == "$sha" ]] || exit 1
+        tree=$(git merge-tree --write-tree "refs/heads/$b" "refs/heads/$h")
+        c=$(git commit-tree --no-gpg-sign "$tree" -p "refs/heads/$b" -p "refs/heads/$h" -m "Merge request !$n from $h")
+        git update-ref "refs/heads/$b" "$c"
+        echo "$h $b merged" > "$FAKE_GH_STATE/$n"
+        echo '{"state":"merged"}' ;;
+    *) exit 1 ;;
 esac
-echo "fake gh: unsupported: $sub" >&2
-exit 1
 EOF
-chmod +x "$TMP/fakegh/gh"
+chmod +x "$TMP/fakegh/glab"
 
 # Fake turn: claude that (FAKE_TURN_DEV=1) first lands a commit on origin's
 # main from a second clone, as a dev PR merged mid-run would, then commits a
@@ -808,13 +808,13 @@ assert_out_has '^  cycle/rev1-attempt1 is on main$'
 ORIGIN_MAIN=$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)
 assert_eq "origin's main is a merge" "$(git --git-dir="$ORIGIN" rev-list --count --min-parents=2 -n 1 "$ORIGIN_MAIN")" 1
 assert_eq "its second parent is the heap-death" "$(git --git-dir="$ORIGIN" rev-parse "$ORIGIN_MAIN^2")" "$HD"
-assert_eq "merged as a merge commit" "$(grep -c '^gh pr merge 1 --merge$' "$FAKE_GH_LOG")" 1
+assert_eq "merged as a merge commit" "$(grep -c '^glab api .*merge_requests/1/merge --method PUT' "$FAKE_GH_LOG")" 1
 assert_eq "no rebuild request (the merge pushed main)" "$(grep -c '^gh workflow run' "$FAKE_GH_LOG")" 0
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
 assert_eq "one learning block" "$(git show learnings:LEARNINGS.md | grep -c '^## rev1-attempt1$')" 1
 echo ""
 
-echo "=== Case 17: a refused merge leaves the PR open and asks for the rebuild ==="
+echo "=== Case 17: a refused merge leaves the MR open without a Pages dispatch ==="
 origin_repo hd-refused
 git checkout -q -b cycle/rev1-attempt1
 event join
@@ -822,10 +822,10 @@ BEFORE_MAIN=$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)
 run env PATH="$TMP/fakegh:$PATH" ZPR_MERGE_WAIT=0 FAKE_GH_MERGE_FAIL=1 \
   bin/zheap-death --cite inherited.md --learning "Refused." tester "refused question" 3
 assert_rc 0
-assert_out_has '^  cycle/rev1-attempt1 is not on main; its PR stays open$'
+assert_out_has '^  cycle/rev1-attempt1 is not on main; its MR stays open$'
 assert_eq "origin's main unchanged" "$(git --git-dir="$ORIGIN" rev-parse refs/heads/main)" "$BEFORE_MAIN"
-assert_eq "three merge attempts" "$(grep -c '^gh pr merge 1 --merge$' "$FAKE_GH_LOG")" 3
-assert_eq "rebuild requested" "$(grep -c '^gh workflow run pages.yml --ref main$' "$FAKE_GH_LOG")" 1
+assert_eq "three merge attempts" "$(grep -c '^glab api .*merge_requests/1/merge --method PUT' "$FAKE_GH_LOG")" 3
+assert_eq "no Pages dispatch" "$(grep -c 'workflow run' "$FAKE_GH_LOG")" 0
 assert_eq "PR open" "$(cat "$FAKE_GH_STATE/1")" "cycle/rev1-attempt1 main open"
 assert_eq "current branch" "$(git branch --show-current)" cycle/rev1-attempt2
 echo ""
@@ -837,9 +837,9 @@ event join
 run env PATH="$TMP/fakegh:$PATH" ZPR_MERGE=0 \
   bin/zheap-death --cite inherited.md --learning "Opened only." tester "open question" 3
 assert_rc 0
-assert_eq "PR opened" "$(grep -c '^gh pr create --head cycle/rev1-attempt1 --base main' "$FAKE_GH_LOG")" 1
-assert_eq "no merge" "$(grep -c '^gh pr merge' "$FAKE_GH_LOG")" 0
-assert_out_has '^  cycle/rev1-attempt1 is not on main; its PR stays open$'
+assert_eq "PR opened" "$(grep -c '^glab api .*merge_requests --method POST' "$FAKE_GH_LOG")" 1
+assert_eq "no merge" "$(grep -c '^glab api .*merge_requests/1/merge' "$FAKE_GH_LOG")" 0
+assert_out_has '^  cycle/rev1-attempt1 is not on main; its MR stays open$'
 echo ""
 
 echo "=== Case 19: a heap-death whose commit fails writes no learning ==="

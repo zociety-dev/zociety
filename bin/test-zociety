@@ -35,14 +35,6 @@ for arg in "$@"; do
   esac
 done
 
-# The launcher refuses to run inside a container (its reject_container, the
-# same four checks), so from one there is nothing to test.
-if [[ -f /.dockerenv || -f /run/.containerenv || -n "${container:-}" ]] ||
-  grep -qE '(docker|containerd|kubepods|libpod)' /proc/1/cgroup 2>/dev/null; then
-  echo "test-zociety: skipped, bin/zociety does not run inside a container"
-  exit 0
-fi
-
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/zociety-test.XXXXXX")
 # The launcher compares physical paths, and macOS mktemp hands back /var/...
 # for what pwd -P reports as /private/var/...: canonicalise.
@@ -69,7 +61,16 @@ ENVV=()
 
 mkdir -p "$FAKEBIN" "$PROJ/bin" "$PROJ/container/secrets" "$PROJ/sub/dir" \
   "$PROJ/.worktrees/x" "$TMP/proj-sibling" "$TMP/secrets"
-cp "$SRC_BIN/zociety" "$ZO"
+python3 - "$SRC_BIN/zociety" "$ZO" "$TMP" <<'FIXTURE'
+from pathlib import Path
+import sys
+source, target, root = map(Path, sys.argv[1:])
+text = source.read_text()
+for marker in ('/.dockerenv', '/run/.containerenv', '/proc/1/cgroup'):
+    text = text.replace(marker, str(root / marker.lstrip('/')))
+target.write_text(text)
+target.chmod(0o755)
+FIXTURE
 ln -s proj "$TMP/link"
 
 # Fake podman: the image always exists, the container exists when

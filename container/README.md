@@ -43,14 +43,20 @@ bin/zloop 60
 
 The container uses dedicated credentials for the zociety agent identity. All files go in `container/secrets/` (gitignored).
 
-### API Key (required)
+### Claude authentication
+
+Use the existing `claude_oauth_token` for subscription authentication, or
+provide an API key:
 
 ```bash
 echo 'sk-ant-api03-...' > container/secrets/anthropic_api_key
 chmod 600 container/secrets/anthropic_api_key
 ```
 
-### SSH Key (required for GitHub push)
+### GitHub mirror credentials (optional)
+
+GitLab is the primary forge; see **GitLab Service Account** below for its
+credentials. The existing GitHub identity can still administer the mirror.
 
 Generate a dedicated SSH key for agent@zociety.dev:
 
@@ -90,20 +96,26 @@ gpg --export --armor agent@zociety.dev
 # Copy output → GitHub Settings → SSH and GPG keys → New GPG key
 ```
 
-### Summary: Required Files
+### Summary: Local Credential Files
 
 ```
 container/secrets/
-├── anthropic_api_key       # API key (required)
-├── zociety_ssh_key         # Private SSH key (required for push)
-├── zociety_ssh_key.pub     # Public SSH key (add to GitHub)
-├── gpg_signing_key.asc     # GPG key (for verified commits)
-└── github_token            # GitHub PAT (for gh CLI, optional)
+├── claude_oauth_token       # Claude subscription token, or use an API key
+├── anthropic_api_key        # Alternative Claude authentication
+├── gitlab_token             # GitLab service-account API token
+├── gitlab_account.json      # Nonsecret account and expiration metadata
+├── zociety_gitlab_ssh_key    # Dedicated GitLab push key
+├── zociety_gitlab_ssh_key.pub
+├── gpg_signing_key.asc      # Commit/tag signing key
+├── zociety_ssh_key          # Existing GitHub administration key (optional)
+├── zociety_ssh_key.pub
+└── github_token             # Existing gh CLI token (optional)
 ```
 
 ## GitHub Account Setup
 
-The zociety agent needs its own GitHub account to push commits independently.
+The existing GitHub account administers the downstream mirror. New changes
+and merge requests belong on GitLab.
 
 ### 1. Email Access
 
@@ -179,10 +191,11 @@ The `--with-token` flag tells `gh` to read a PAT from stdin rather than launchin
 
 ### 7. Update Remote URL
 
-Switch the repo to use SSH with the zociety account:
+Keep GitLab as origin and GitHub as the mirror remote:
 
 ```bash
-git remote set-url origin git@github.com:zociety-dev/zociety.git
+git remote set-url origin git@gitlab.com:zociety/zociety.git
+git remote set-url github git@github.com:zociety-dev/zociety.git
 ```
 
 ### What the Agent Can Do Independently
@@ -198,6 +211,109 @@ Once set up:
 - Initial account creation (CAPTCHA)
 - Recovery if 2FA device is lost
 - Responding to GitHub support/abuse inquiries
+
+## G󠄁i󠄁t󠄁L󠄁a󠄁b󠄁 a󠄁u󠄁t󠄁o󠄁m󠄁a󠄁t󠄁i󠄁o󠄁n󠄁
+
+T󠄁h󠄁e󠄁 G󠄁i󠄁t󠄁L󠄁a󠄁b󠄁 h󠄁o󠄁m󠄁e󠄁 i󠄁s󠄁 [z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁/󠄁z󠄁o󠄁c󠄁i󠄁e󠄁t󠄁y󠄁](https://gitlab.com/zociety/zociety).󠄁
+T󠄁h󠄁e󠄁 h󠄁u󠄁m󠄁a󠄁n󠄁 g󠄁r󠄁o󠄁u󠄁p󠄁 O󠄁w󠄁n󠄁e󠄁r󠄁 p󠄁r󠄁o󠄁v󠄁i󠄁s󠄁i󠄁o󠄁n󠄁s󠄁 t󠄁h󠄁e󠄁 n󠄁a󠄁t󠄁i󠄁v󠄁e󠄁 g󠄁r󠄁o󠄁u󠄁p󠄁 s󠄁e󠄁r󠄁v󠄁i󠄁c󠄁e󠄁 a󠄁c󠄁c󠄁o󠄁u󠄁n󠄁t󠄁
+`zociety-dev`.󠄁 I󠄁t󠄁 h󠄁a󠄁s󠄁 M󠄁a󠄁i󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁 a󠄁c󠄁c󠄁e󠄁s󠄁s󠄁 t󠄁o󠄁 t󠄁h󠄁i󠄁s󠄁 p󠄁r󠄁o󠄁j󠄁e󠄁c󠄁t󠄁 a󠄁n󠄁d󠄁 n󠄁o󠄁 g󠄁r󠄁o󠄁u󠄁p󠄁
+a󠄁d󠄁m󠄁i󠄁n󠄁i󠄁s󠄁t󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 r󠄁o󠄁l󠄁e󠄁.󠄁 `main` a󠄁c󠄁c󠄁e󠄁p󠄁t󠄁s󠄁 m󠄁e󠄁r󠄁g󠄁e󠄁s󠄁 b󠄁y󠄁 M󠄁a󠄁i󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁s󠄁;󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁 a󠄁n󠄁d󠄁 f󠄁o󠄁r󠄁c󠄁e󠄁
+p󠄁u󠄁s󠄁h󠄁e󠄁s󠄁 a󠄁r󠄁e󠄁 d󠄁i󠄁s󠄁a󠄁b󠄁l󠄁e󠄁d󠄁.󠄁 S󠄁e󠄁e󠄁 [G󠄁i󠄁t󠄁L󠄁a󠄁b󠄁 s󠄁e󠄁r󠄁v󠄁i󠄁c󠄁e󠄁 a󠄁c󠄁c󠄁o󠄁u󠄁n󠄁t󠄁s󠄁](https://docs.gitlab.com/user/profile/service_accounts/).󠄁
+
+T󠄁h󠄁e󠄁 g󠄁i󠄁t󠄁i󠄁g󠄁n󠄁o󠄁r󠄁e󠄁d󠄁 `container/secrets/` d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁o󠄁r󠄁y󠄁 h󠄁o󠄁l󠄁d󠄁s󠄁 `gitlab_token` (󠄁a󠄁n󠄁
+e󠄁x󠄁p󠄁i󠄁r󠄁i󠄁n󠄁g󠄁 s󠄁e󠄁r󠄁v󠄁i󠄁c󠄁e󠄁-󠄁a󠄁c󠄁c󠄁o󠄁u󠄁n󠄁t󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 w󠄁i󠄁t󠄁h󠄁 `api` a󠄁n󠄁d󠄁 `write_repository` s󠄁c󠄁o󠄁p󠄁e󠄁s󠄁)󠄁,󠄁
+`zociety_gitlab_ssh_key` (󠄁a󠄁 d󠄁e󠄁d󠄁i󠄁c󠄁a󠄁t󠄁e󠄁d󠄁 E󠄁D󠄁2󠄁5󠄁5󠄁1󠄁9󠄁 k󠄁e󠄁y󠄁)󠄁,󠄁 a󠄁n󠄁d󠄁 `gitlab_account.json`
+(󠄁a󠄁c󠄁c󠄁o󠄁u󠄁n󠄁t󠄁,󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 I󠄁D󠄁 a󠄁n󠄁d󠄁 e󠄁x󠄁p󠄁i󠄁r󠄁y󠄁 m󠄁e󠄁t󠄁a󠄁d󠄁a󠄁t󠄁a󠄁 w󠄁i󠄁t󠄁h󠄁o󠄁u󠄁t󠄁 t󠄁h󠄁e󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 v󠄁a󠄁l󠄁u󠄁e󠄁)󠄁.󠄁 K󠄁e󠄁e󠄁p󠄁 p󠄁r󠄁i󠄁v󠄁a󠄁t󠄁e󠄁
+f󠄁i󠄁l󠄁e󠄁s󠄁 m󠄁o󠄁d󠄁e󠄁 `0600`.󠄁 T󠄁h󠄁e󠄁 l󠄁a󠄁u󠄁n󠄁c󠄁h󠄁e󠄁r󠄁 m󠄁o󠄁u󠄁n󠄁t󠄁s󠄁 t󠄁h󠄁i󠄁s󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁o󠄁r󠄁y󠄁 r󠄁e󠄁a󠄁d󠄁-󠄁o󠄁n󠄁l󠄁y󠄁 a󠄁t󠄁
+`/run/secrets`.󠄁
+
+`container/glab` l󠄁o󠄁a󠄁d󠄁s󠄁 t󠄁h󠄁e󠄁 m󠄁o󠄁u󠄁n󠄁t󠄁e󠄁d󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 f󠄁o󠄁r󠄁 e󠄁a󠄁c󠄁h󠄁 C󠄁L󠄁I󠄁 i󠄁n󠄁v󠄁o󠄁c󠄁a󠄁t󠄁i󠄁o󠄁n󠄁,󠄁 i󠄁n󠄁c󠄁l󠄁u󠄁d󠄁i󠄁n󠄁g󠄁
+`podman exec`,󠄁 w󠄁i󠄁t󠄁h󠄁o󠄁u󠄁t󠄁 e󠄁x󠄁p󠄁o󠄁r󠄁t󠄁i󠄁n󠄁g󠄁 i󠄁t󠄁 t󠄁o󠄁 e󠄁v󠄁e󠄁r󠄁y󠄁 e󠄁n󠄁t󠄁r󠄁y󠄁p󠄁o󠄁i󠄁n󠄁t󠄁 c󠄁h󠄁i󠄁l󠄁d󠄁.󠄁 M󠄁i󠄁s󠄁s󠄁i󠄁n󠄁g󠄁 o󠄁r󠄁
+e󠄁m󠄁p󠄁t󠄁y󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁s󠄁 c󠄁a󠄁u󠄁s󠄁e󠄁 A󠄁P󠄁I󠄁 c󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁s󠄁 t󠄁o󠄁 f󠄁a󠄁i󠄁l󠄁 i󠄁n󠄁s󠄁t󠄁e󠄁a󠄁d󠄁 o󠄁f󠄁 u󠄁s󠄁i󠄁n󠄁g󠄁 i󠄁n󠄁h󠄁e󠄁r󠄁i󠄁t󠄁e󠄁d󠄁 c󠄁r󠄁e󠄁d󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁s󠄁
+o󠄁r󠄁 s󠄁t󠄁o󠄁r󠄁e󠄁d󠄁 l󠄁o󠄁g󠄁i󠄁n󠄁s󠄁.󠄁 S󠄁S󠄁H󠄁 u󠄁s󠄁e󠄁s󠄁 t󠄁h󠄁e󠄁 s󠄁e󠄁p󠄁a󠄁r󠄁a󠄁t󠄁e󠄁 G󠄁i󠄁t󠄁L󠄁a󠄁b󠄁 k󠄁e󠄁y󠄁 a󠄁n󠄁d󠄁 G󠄁i󠄁t󠄁L󠄁a󠄁b󠄁.󠄁c󠄁o󠄁m󠄁'󠄁s󠄁 p󠄁u󠄁b󠄁l󠄁i󠄁s󠄁h󠄁e󠄁d󠄁
+E󠄁D󠄁2󠄁5󠄁5󠄁1󠄁9󠄁 h󠄁o󠄁s󠄁t󠄁 k󠄁e󠄁y󠄁 w󠄁i󠄁t󠄁h󠄁 s󠄁t󠄁r󠄁i󠄁c󠄁t󠄁 c󠄁h󠄁e󠄁c󠄁k󠄁i󠄁n󠄁g󠄁.󠄁 R󠄁e󠄁m󠄁o󠄁v󠄁i󠄁n󠄁g󠄁 t󠄁h󠄁e󠄁 m󠄁o󠄁u󠄁n󠄁t󠄁e󠄁d󠄁 S󠄁S󠄁H󠄁 k󠄁e󠄁y󠄁 c󠄁l󠄁e󠄁a󠄁r󠄁s󠄁
+i󠄁t󠄁s󠄁 m󠄁a󠄁n󠄁a󠄁g󠄁e󠄁d󠄁 c󠄁o󠄁p󠄁y󠄁 a󠄁t󠄁 t󠄁h󠄁e󠄁 n󠄁e󠄁x󠄁t󠄁 c󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁 s󠄁t󠄁a󠄁r󠄁t󠄁u󠄁p󠄁.󠄁
+
+```bash
+bin/zociety --build
+bin/zglab api user | jq '{id, username}'
+bin/zglab mr list --repo zociety/zociety
+```
+
+T󠄁h󠄁e󠄁 i󠄁d󠄁e󠄁n󠄁t󠄁i󠄁t󠄁y󠄁 c󠄁h󠄁e󠄁c󠄁k󠄁 m󠄁u󠄁s󠄁t󠄁 r󠄁e󠄁t󠄁u󠄁r󠄁n󠄁 `zociety-dev`.󠄁 `bin/zglab` u󠄁s󠄁e󠄁s󠄁 a󠄁 r󠄁u󠄁n󠄁n󠄁i󠄁n󠄁g󠄁
+c󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁 o󠄁r󠄁 s󠄁t󠄁a󠄁r󠄁t󠄁s󠄁 o󠄁n󠄁e󠄁 f󠄁o󠄁r󠄁 t󠄁h󠄁e󠄁 c󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁.󠄁 T󠄁h󠄁e󠄁 r󠄁e󠄁p󠄁o󠄁'󠄁s󠄁 `glab` P󠄁A󠄁T󠄁H󠄁 s󠄁h󠄁i󠄁m󠄁 d󠄁o󠄁e󠄁s󠄁
+t󠄁h󠄁e󠄁 s󠄁a󠄁m󠄁e󠄁;󠄁 `glab orbit` s󠄁t󠄁a󠄁y󠄁s󠄁 o󠄁n󠄁 t󠄁h󠄁e󠄁 h󠄁o󠄁s󠄁t󠄁 f󠄁o󠄁r󠄁 i󠄁t󠄁s󠄁 l󠄁o󠄁c󠄁a󠄁l󠄁 c󠄁o󠄁d󠄁e󠄁 i󠄁n󠄁d󠄁e󠄁x󠄁.󠄁 O󠄁u󠄁t󠄁s󠄁i󠄁d󠄁e󠄁
+t󠄁h󠄁e󠄁 r󠄁e󠄁p󠄁o󠄁,󠄁 t󠄁h󠄁e󠄁 s󠄁h󠄁i󠄁m󠄁 u󠄁s󠄁e󠄁s󠄁 t󠄁h󠄁e󠄁 h󠄁o󠄁s󠄁t󠄁 C󠄁L󠄁I󠄁.󠄁 C󠄁r󠄁e󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 c󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁s󠄁 n󠄁e󠄁e󠄁d󠄁 `--title`,󠄁
+`--description` (󠄁o󠄁r󠄁 `--fill`)󠄁,󠄁 a󠄁n󠄁d󠄁 `--yes`.󠄁 B󠄁r󠄁o󠄁w󠄁s󠄁e󠄁r󠄁,󠄁 e󠄁d󠄁i󠄁t󠄁o󠄁r󠄁 a󠄁n󠄁d󠄁 s󠄁t󠄁d󠄁i󠄁n󠄁 f󠄁o󠄁r󠄁m󠄁s󠄁
+a󠄁r󠄁e󠄁 r󠄁e󠄁f󠄁u󠄁s󠄁e󠄁d󠄁.󠄁
+
+U󠄁s󠄁e󠄁 t󠄁h󠄁e󠄁 h󠄁u󠄁m󠄁a󠄁n󠄁 O󠄁w󠄁n󠄁e󠄁r󠄁'󠄁s󠄁 h󠄁o󠄁s󠄁t󠄁 c󠄁r󠄁e󠄁d󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁s󠄁 f󠄁o󠄁r󠄁 a󠄁c󠄁c󠄁o󠄁u󠄁n󠄁t󠄁 a󠄁d󠄁m󠄁i󠄁n󠄁i󠄁s󠄁t󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁,󠄁 o󠄁u󠄁t󠄁s󠄁i󠄁d󠄁e󠄁
+t󠄁h󠄁i󠄁s󠄁 r󠄁e󠄁p󠄁o󠄁 o󠄁r󠄁 w󠄁i󠄁t󠄁h󠄁 `env -u ZOCIETY_ROOT glab ...`.󠄁 U󠄁s󠄁e󠄁 t󠄁h󠄁e󠄁 [s󠄁e󠄁r󠄁v󠄁i󠄁c󠄁e󠄁 a󠄁c󠄁c󠄁o󠄁u󠄁n󠄁t󠄁s󠄁 A󠄁P󠄁I󠄁](https://docs.gitlab.com/api/service_accounts/)
+t󠄁o󠄁 i󠄁s󠄁s󠄁u󠄁e󠄁 a󠄁 r󠄁e󠄁p󠄁l󠄁a󠄁c󠄁e󠄁m󠄁e󠄁n󠄁t󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁,󠄁 s󠄁a󠄁v󠄁e󠄁 i󠄁t󠄁 d󠄁i󠄁r󠄁e󠄁c󠄁t󠄁l󠄁y󠄁 t󠄁o󠄁 t󠄁h󠄁e󠄁 m󠄁o󠄁u󠄁n󠄁t󠄁e󠄁d󠄁 f󠄁i󠄁l󠄁e󠄁,󠄁 v󠄁e󠄁r󠄁i󠄁f󠄁y󠄁
+t󠄁h󠄁e󠄁 c󠄁o󠄁n󠄁t󠄁a󠄁i󠄁n󠄁e󠄁r󠄁 i󠄁d󠄁e󠄁n󠄁t󠄁i󠄁t󠄁y󠄁,󠄁 t󠄁h󠄁e󠄁n󠄁 r󠄁e󠄁v󠄁o󠄁k󠄁e󠄁 t󠄁h󠄁e󠄁 o󠄁l󠄁d󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁.󠄁 C󠄁h󠄁e󠄁c󠄁k󠄁 t󠄁h󠄁e󠄁 l󠄁o󠄁c󠄁a󠄁l󠄁 m󠄁e󠄁t󠄁a󠄁d󠄁a󠄁t󠄁a󠄁
+f󠄁o󠄁r󠄁 e󠄁x󠄁p󠄁i󠄁r󠄁y󠄁;󠄁 t󠄁h󠄁e󠄁 i󠄁n󠄁i󠄁t󠄁i󠄁a󠄁l󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 a󠄁n󠄁d󠄁 S󠄁S󠄁H󠄁 k󠄁e󠄁y󠄁 h󠄁a󠄁v󠄁e󠄁 a󠄁 9󠄁0󠄁-󠄁d󠄁a󠄁y󠄁 l󠄁i󠄁f󠄁e󠄁t󠄁i󠄁m󠄁e󠄁.󠄁 K󠄁e󠄁e󠄁p󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁
+v󠄁a󠄁l󠄁u󠄁e󠄁s󠄁 o󠄁u󠄁t󠄁 o󠄁f󠄁 c󠄁o󠄁m󠄁m󠄁a󠄁n󠄁d󠄁 a󠄁r󠄁g󠄁u󠄁m󠄁e󠄁n󠄁t󠄁s󠄁,󠄁 t󠄁r󠄁a󠄁c󠄁k󠄁e󠄁d󠄁 f󠄁i󠄁l󠄁e󠄁s󠄁,󠄁 d󠄁i󠄁s󠄁c󠄁u󠄁s󠄁s󠄁i󠄁o󠄁n󠄁s󠄁 a󠄁n󠄁d󠄁 l󠄁o󠄁g󠄁s󠄁.󠄁
+
+GitLab is `origin` and owns cycle landing and CI. The `github` remote is
+GitLab's native downstream SSH mirror, using a dedicated write-enabled deploy
+key and pinned GitHub host key. Divergent downstream refs are retained and
+reported rather than overwritten. Pages deployment is unchanged by this
+migration.
+
+The native mirror covers branches and tags. Git notes are replicated directly
+to the `github` remote by the native runner's provenance tools, using ordinary
+fast-forward pushes so divergent notes are reported rather than overwritten.
+CI enables this supplement only when its separately approved GitHub token
+file is present.
+
+`bin/test-zglab` e󠄁x󠄁e󠄁r󠄁c󠄁i󠄁s󠄁e󠄁s󠄁 c󠄁r󠄁e󠄁d󠄁e󠄁n󠄁t󠄁i󠄁a󠄁l󠄁 r󠄁e󠄁f󠄁u󠄁s󠄁a󠄁l󠄁,󠄁 t󠄁o󠄁k󠄁e󠄁n󠄁 p󠄁r󠄁e󠄁c󠄁e󠄁d󠄁e󠄁n󠄁c󠄁e󠄁,󠄁 r󠄁u󠄁n󠄁 a󠄁n󠄁d󠄁 e󠄁x󠄁e󠄁c󠄁
+r󠄁o󠄁u󠄁t󠄁i󠄁n󠄁g󠄁,󠄁 h󠄁o󠄁s󠄁t󠄁 p󠄁a󠄁s󠄁s󠄁t󠄁h󠄁r󠄁o󠄁u󠄁g󠄁h󠄁,󠄁 n󠄁o󠄁n󠄁-󠄁i󠄁n󠄁t󠄁e󠄁r󠄁a󠄁c󠄁t󠄁i󠄁v󠄁e󠄁 a󠄁r󠄁g󠄁u󠄁m󠄁e󠄁n󠄁t󠄁s󠄁 a󠄁n󠄁d󠄁 S󠄁S󠄁H󠄁 c󠄁o󠄁n󠄁f󠄁i󠄁g󠄁u󠄁r󠄁a󠄁t󠄁i󠄁o󠄁n󠄁 i󠄁n󠄁
+t󠄁h󠄁r󠄁o󠄁w󠄁a󠄁w󠄁a󠄁y󠄁 f󠄁i󠄁x󠄁t󠄁u󠄁r󠄁e󠄁s󠄁.󠄁 I󠄁t󠄁 i󠄁s󠄁 i󠄁n󠄁c󠄁l󠄁u󠄁d󠄁e󠄁d󠄁 i󠄁n󠄁 t󠄁h󠄁e󠄁 t󠄁o󠄁o󠄁l󠄁i󠄁n󠄁g󠄁 C󠄁I󠄁 m󠄁a󠄁t󠄁r󠄁i󠄁x󠄁.󠄁
+
+## GitLab CI
+
+MR/default-branch pipelines run state validation. Tooling changes also run
+shellcheck, gitleaks, seven fixture harnesses and static-site tests with full
+history and tags. Tests have no `autonomous` environment or model credentials.
+Agent-proposed workflows target `.gitlab/ci/` and become active only after
+approval and merge.
+
+To enable CI automation, explicitly approve copying the following local
+credentials into this project's GitLab CI variables. Use type **File**,
+**Protected**, **Raw**, and environment scope **autonomous**. Mask and hide
+single-line values when supported. Keep values out of command arguments and
+logs.
+
+| GitLab variable | Local source | Purpose |
+| --- | --- | --- |
+| `ZOCIETY_GITLAB_TOKEN_FILE` | `container/secrets/gitlab_token` | Service-account Git/API access |
+| `ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE` | `container/secrets/claude_oauth_token` | Claude subscription authentication |
+| `ZOCIETY_GPG_SIGNING_KEY_FILE` | `container/secrets/gpg_signing_key.asc` | Optional commit/tag signing |
+| `ZOCIETY_BLIND_KEY_FILE` | Operator's existing `ZOCIETY_BLIND_KEY` | The shared provenance sealing key |
+| `ZOCIETY_GITHUB_TOKEN_FILE` | `container/secrets/github_token` | Replicate provenance notes to the GitHub mirror |
+
+An API-authenticated installation can use `ZOCIETY_ANTHROPIC_API_KEY_FILE`
+instead of the OAuth file. Keep the existing blind key; replacing it prevents
+other runners from revealing archived model seals.
+
+After provisioning, start the manual `autonomous-preflight` job on protected
+`main`. It checks the service account, Git credential helper and installed
+client without starting an agent turn. Then create a web pipeline with
+`run_autonomous=true`, review its validated inputs and start the manual
+`autonomous` job. Defaults are 30 turns, 90 minutes, $5 and one cycle. The job
+has a two-hour hard timeout and a `resource_group` serializes CI runs. Stop
+local runs before starting CI: that resource group does not lock host loops.
+
+The wrapper resumes a remote successor cycle when one exists, calls native
+`bin/zloop`, and publishes committed progress and provenance notes on exit.
+A recorded normal time/turn/cost cap is successful CI completion; failures
+retain their non-zero status. Only run metadata is retained as a restricted
+artifact. A hard kill can still lose uncommitted work, as on the host.
+
+The agent job uses an immutable ARM64 image digest from the project registry.
+The optional `build-agent-image` job builds with rootless BuildKit on protected
+main and publishes an immutable commit tag. Verify it and update the digest
+in a reviewed change; the build does not replace a running job's image.
 
 ## Security Properties
 
@@ -359,21 +475,21 @@ Verify SSH key is loaded:
 bin/zociety bash
 ls -la /home/agent/.ssh/
 cat /home/agent/.ssh/config
-ssh -T git@github.com
+ssh -T git@gitlab.com
 ```
 
-Check that the public key is added to GitHub.
+Check that the dedicated GitLab public key is registered to the service account.
 
 ### Git push fails (wrong remote)
 
 Check the remote is using SSH URL:
 ```bash
 git remote -v
-# Should show: git@github.com:zociety-dev/zociety.git
-# Not: https://github.com/zociety-dev/zociety.git
+# Origin should show: git@gitlab.com:zociety/zociety.git
+# The github remote should show: git@github.com:zociety-dev/zociety.git
 
 # Fix if needed:
-git remote set-url origin git@github.com:zociety-dev/zociety.git
+git remote set-url origin git@gitlab.com:zociety/zociety.git
 ```
 
 ### GPG signing fails

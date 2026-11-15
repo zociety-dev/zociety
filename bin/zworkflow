@@ -1,9 +1,9 @@
 #!/bin/bash
-# zworkflow: Propose a GitHub Actions workflow
+# zworkflow: Propose a GitLab CI workflow
 # Usage: bin/zworkflow <agent> <workflow_name> <workflow_file> [description]
 #
 # The workflow file should be a valid YAML file. It will be staged but NOT
-# committed to .github/workflows/ until the workflow passes via zworkflow-pass.
+# committed to .gitlab/ci/ until the workflow passes via zworkflow-pass.
 #
 # Example:
 #   bin/zworkflow alice daily-heartbeat workflows/daily.yml "Run daily status check"
@@ -14,6 +14,7 @@ AGENT="$1"
 WORKFLOW_NAME="$2"
 WORKFLOW_FILE="$3"
 DESCRIPTION="${4:-proposed workflow}"
+[[ "$WORKFLOW_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || { echo "Invalid workflow name" >&2; exit 1; }
 
 if [[ -z "$AGENT" || -z "$WORKFLOW_NAME" || -z "$WORKFLOW_FILE" ]]; then
   echo "Usage: bin/zworkflow <agent> <workflow_name> <workflow_file> [description]" >&2
@@ -34,10 +35,7 @@ fi
 
 # Validate YAML syntax (basic check)
 if ! command -v yq &>/dev/null; then
-  # Fall back to checking it looks like YAML
-  if ! grep -q "^name:" "$WORKFLOW_FILE" 2>/dev/null; then
-    echo "Warning: Workflow file may not be valid YAML (no 'name:' found)" >&2
-  fi
+  echo "YAML validation deferred to GitLab CI lint (yq is unavailable)" >&2
 else
   if ! yq eval '.' "$WORKFLOW_FILE" >/dev/null 2>&1; then
     echo "Error: Invalid YAML in workflow file" >&2
@@ -61,7 +59,7 @@ DATA=$(jq -nc \
   --argjson workflow_num "$WORKFLOW_NUM" \
   --arg workflow_name "$WORKFLOW_NAME" \
   --arg description "$DESCRIPTION" \
-  --arg target_file ".github/workflows/${WORKFLOW_NAME}.yml" \
+  --arg target_file ".gitlab/ci/${WORKFLOW_NAME}.yml" \
   --arg content "$WORKFLOW_CONTENT" \
   '{
     workflow_num: $workflow_num,

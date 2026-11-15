@@ -1,8 +1,8 @@
 #!/bin/bash
-# zworkflow-pass: Pass a workflow and commit it to .github/workflows/
+# zworkflow-pass: Pass a workflow and commit it to .gitlab/ci/
 # Usage: bin/zworkflow-pass <agent> <workflow_num> [for_votes] [against_votes]
 #
-# This moves the proposed workflow from .proposed-workflows/ to .github/workflows/
+# This moves the proposed workflow from .proposed-workflows/ to .gitlab/ci/
 # and creates a workflow-pass event recording the vote totals.
 #
 # Example:
@@ -34,6 +34,8 @@ TARGET_FILE=$(echo "$WORKFLOW_EVENT" | jq -r '.data.target_file')
 DESCRIPTION=$(echo "$WORKFLOW_EVENT" | jq -r '.data.description')
 CONTENT=$(echo "$WORKFLOW_EVENT" | jq -r '.data.content')
 
+[[ "$WORKFLOW_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ && "$TARGET_FILE" == ".gitlab/ci/${WORKFLOW_NAME}.yml" ]] || { echo "Re-propose this workflow for .gitlab/ci/" >&2; exit 1; }
+
 # Check if already passed
 EXISTING_PASS=$(git log --format=%b | grep '^{"z":1' | jq -s --argjson num "$WORKFLOW_NUM" \
   '[.[] | select(.event == "workflow-pass" and .data.workflow_num == $num)] | first // empty' 2>/dev/null)
@@ -44,7 +46,7 @@ if [[ -n "$EXISTING_PASS" ]]; then
 fi
 
 # Create target directory
-mkdir -p .github/workflows
+mkdir -p .gitlab/ci
 
 # Write the workflow file
 echo "$CONTENT" > "$TARGET_FILE"
@@ -78,4 +80,4 @@ bin/zevent workflow-pass "$AGENT" "workflow $WORKFLOW_NUM passed: $WORKFLOW_NAME
 
 echo ""
 echo "Workflow #$WORKFLOW_NUM passed and committed to $TARGET_FILE"
-echo "The workflow will be active after pushing to GitHub."
+echo "The workflow will be active after merging into GitLab main."

@@ -1,0 +1,53 @@
+#!/bin/bash
+# zglab: Run GitLab CLI commands as the container's zociety-dev service account.
+# Usage: bin/zglab <glab args...>
+# Mounted credentials are loaded by container/glab on both run and exec.
+set -euo pipefail
+
+if [[ $# -eq 0 || "$1" == --help || "$1" == -h ]]; then
+    echo 'Usage: bin/zglab <glab args...>'
+    exit 0
+fi
+
+die() { echo "zglab: $*" >&2; exit 1; }
+prev=""
+for arg in "$@"; do
+    case "$arg" in
+        --web|-w|--stdin|--input=-|--description-file=-|--attach=-|--description=-|-d-|-d=-|*@-)
+            die 'stdin, browser and editor forms are unavailable; supply explicit non-interactive arguments' ;;
+        -)
+            case "$prev" in --input|--description-file|--attach|--description|-d) die "'$prev -' needs stdin or an editor" ;; esac ;;
+    esac
+    prev="$arg"
+done
+if [[ "${1:-}" == auth && "${2:-}" == login ]]; then
+    die 'authentication comes from /run/secrets/gitlab_token; provision the service-account token on the host'
+fi
+if [[ ( "$1" == mr || "$1" == issue ) && "${2:-}" == create ]]; then
+    title=0; body=0; yes=0
+    for arg in "${@:3}"; do
+        case "$arg" in
+            --fill|-f) title=1; body=1 ;;
+            --title|--title=*|-t|-t?*) title=1 ;;
+            --description|--description=*|-d|-d?*|--description-file|--description-file=*) body=1 ;;
+            --yes|-y) yes=1 ;;
+        esac
+    done
+    [[ $title == 1 && $body == 1 && $yes == 1 ]] || die 'create needs --title, --description (or --fill), and --yes to avoid prompts'
+fi
+if [[ -f /run/.containerenv || -f /.dockerenv || -n "${container:-}" ]]; then
+    exec glab "$@"
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LAUNCHER="$SCRIPT_DIR/zociety"
+# A development workspace under .worktrees/ uses the original repo mount.
+if [[ -n "${ZOCIETY_ROOT:-}" && ( "$PWD" == "$ZOCIETY_ROOT" || "$PWD" == "$ZOCIETY_ROOT"/* ) ]]; then
+    LAUNCHER="$ZOCIETY_ROOT/bin/zociety"
+fi
+if podman container exists zociety-sandbox 2>/dev/null; then
+    rc=0
+    "$LAUNCHER" exec glab "$@" || rc=$?
+    [[ $rc == 125 ]] && ! podman container exists zociety-sandbox 2>/dev/null || exit "$rc"
+fi
+exec "$LAUNCHER" glab "$@"
