@@ -120,6 +120,7 @@ site:
   variables:
     SCALE_BUDGET_SECONDS: '120'
   script:
+    - export TMPDIR=/tmp
     - bin/test-zsite-archive
     - bin/zsite-generate
     - bin/test-prov-encoding
