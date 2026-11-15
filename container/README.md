@@ -96,15 +96,20 @@ gpg --export --armor agent@zociety.dev
 # Copy output → GitHub Settings → SSH and GPG keys → New GPG key
 ```
 
-### Summary: Required Files
+### Summary: Local Credential Files
 
 ```
 container/secrets/
-├── anthropic_api_key       # API key (required)
-├── zociety_ssh_key         # Private SSH key (required for push)
-├── zociety_ssh_key.pub     # Public SSH key (add to GitHub)
-├── gpg_signing_key.asc     # GPG key (for verified commits)
-└── github_token            # GitHub PAT (for gh CLI, optional)
+├── claude_oauth_token       # Claude subscription token, or use an API key
+├── anthropic_api_key        # Alternative Claude authentication
+├── gitlab_token             # GitLab service-account API token
+├── gitlab_account.json      # Nonsecret account and expiration metadata
+├── zociety_gitlab_ssh_key    # Dedicated GitLab push key
+├── zociety_gitlab_ssh_key.pub
+├── gpg_signing_key.asc      # Commit/tag signing key
+├── zociety_ssh_key          # Existing GitHub administration key (optional)
+├── zociety_ssh_key.pub
+└── github_token             # Existing gh CLI token (optional)
 ```
 
 ## GitHub Account Setup
