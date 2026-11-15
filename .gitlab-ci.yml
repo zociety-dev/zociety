@@ -55,6 +55,8 @@ variables:
     name: registry.gitlab.com/zociety/zociety/agent@sha256:172268af9a4529a23397edc8b24a37d600f9c058e70e02b0c3f05351b28a5808
     entrypoint: ['']
   tags: [saas-linux-small-arm64]
+  before_script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
 
 .tool-changes:
   rules:

@@ -94,10 +94,9 @@
 #      that wrote an event; AGENTS.md, Tags), and a git note on HEAD.
 #   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
 #      a remote exists, and lands the cycle on main: bin/zpr-flow opens the
-#      cycle branch's PR and merges it with a merge commit (ZPR_MERGE=0 opens
-#      it only). A cycle that did not land leaves its PR open and asks GitHub
-#      to rebuild zociety.dev (gh workflow run pages.yml); a merge pushes
-#      main, which rebuilds it anyway. bin/zloop then merges main into the
+#      cycle branch's GitLab MR and requests a merge commit (ZPR_MERGE=0 opens
+#      it only). A pending or refused merge leaves the MR open. Pages
+#      deployment is handled separately. bin/zloop merges main into the
 #      successor branch between turns (ZLOOP_SYNC_MAIN).
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
 #      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
@@ -639,10 +638,10 @@ fi
 # Opens cycle branch -> main and merges it with a merge commit (bin/zpr-flow
 # explains why never squash or rebase). The PR used to be opened and left:
 # ZPR_MERGE was never set, so main stayed at cycle 41 while cycles 42-47 sat
-# in six nested PRs. ZPR_MERGE=0 opens it only. Non-fatal: no origin, gh
-# unable to reach GitHub, or a refused merge leave the cycle archived and its
-# PR open, and the next cycle's PR carries it too. Landed is read from git,
-# not from gh: the archived head is on origin's main. gh runs as zociety-dev
+# in six nested PRs. ZPR_MERGE=0 opens it only. Non-fatal: no origin, glab
+# unable to reach GitLab, or a refused merge leave the cycle archived and its
+# MR open, and the next cycle's MR carries it too. Landed is read from git,
+# not from glab: the archived head is on origin's main. glab runs as zociety-dev
 # in the container.
 
 LANDED=0
