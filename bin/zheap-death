@@ -618,11 +618,11 @@ batch_remaining: $REMAINING
 thread: cycle $(jq -r '.length' <<<"$THREAD_DATA") of the subject$([[ "$NEW_THREAD" == true ]] && echo "; the question opens a new one")" HEAD 2>/dev/null || true
 
 #############################################
-# 6. Push to GitHub
+# 6. Push to GitLab
 #############################################
 
 if git remote get-url origin &>/dev/null; then
-  echo "Pushing to GitHub..."
+  echo "Pushing to GitLab..."
   git push origin HEAD --quiet 2>/dev/null || echo "  (push failed - continuing)"
   git push origin "$TAG" --quiet 2>/dev/null || echo "  (tag push failed)"
   git push origin "$CYCLE_BRANCH" --quiet 2>/dev/null || echo "  (branch push failed)"
@@ -656,26 +656,8 @@ if git remote get-url origin &>/dev/null; then
     LANDED=1
     echo "  $CYCLE_BRANCH is on main"
   else
-    echo "  $CYCLE_BRANCH is not on main; its PR stays open"
+    echo "  $CYCLE_BRANCH is not on main; its MR stays open"
   fi
-fi
-
-#############################################
-# 6c. Rebuild zociety.dev
-#############################################
-#
-# The site's archive and learnings come from the tag and the learnings branch
-# pushed above, but no push here triggers .github/workflows/pages.yml (a push
-# to main, or once a day), so a cycle reached the site up to a day late. A
-# cycle that landed pushed main, which runs it; for one that did not, ask for
-# a build of main now: the github-pages environment deploys from main only.
-# Non-fatal, like the PR; an origin gh does not know (a test's local bare
-# repo) fails here and nothing else.
-
-if [[ "$LANDED" -eq 0 ]] && git remote get-url origin &>/dev/null; then
-  echo "Requesting a zociety.dev rebuild..."
-  gh workflow run pages.yml --ref main 2>/dev/null \
-    || echo "  (site rebuild not requested - continuing)"
 fi
 
 #############################################
