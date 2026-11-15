@@ -5,14 +5,15 @@
 set -euo pipefail
 
 unset GITLAB_TOKEN GITLAB_ACCESS_TOKEN OAUTH_TOKEN
-if [[ -s /run/secrets/gitlab_token ]]; then
-    GITLAB_TOKEN="$(tr -d '[:space:]' < /run/secrets/gitlab_token)"
+TOKEN_FILE="${ZOCIETY_GITLAB_TOKEN_FILE:-/run/secrets/gitlab_token}"
+if [[ -s "$TOKEN_FILE" ]]; then
+    GITLAB_TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
     export GITLAB_TOKEN
 fi
 if [[ -z "${GITLAB_TOKEN:-}" ]]; then
     case "${1:-}" in
         --version|version|--help|-h|help|completion|orbit) ;;
-        *) echo "glab: /run/secrets/gitlab_token is missing or empty; service-account authentication required" >&2; exit 1 ;;
+        *) echo "glab: $TOKEN_FILE is missing or empty; service-account authentication required" >&2; exit 1 ;;
     esac
 fi
 export GITLAB_HOST=gitlab.com

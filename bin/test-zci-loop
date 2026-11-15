@@ -1,0 +1,117 @@
+#!/bin/bash
+# test-zci-loop: Verify protected CI setup, native-loop bounds and recovery.
+# Uses local bare origins and fake glab/claude/zloop; never calls a model.
+set -euo pipefail
+exec python3 - "$(cd "$(dirname "$0")/.." && pwd)" <<'TEST'
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+source=Path(sys.argv[1])
+real_git=next(str(Path(d)/'git') for d in os.environ['PATH'].split(os.pathsep) if '/shims' not in d and (Path(d)/'git').is_file())
+passed=0
+
+def check(label, condition):
+    global passed
+    assert condition, label
+    passed+=1
+    print('PASS: '+label)
+
+def write(path,text):
+    path.write_text(text)
+    path.chmod(0o755)
+
+def git(cwd,*args):
+    return subprocess.check_output([real_git,*args],cwd=cwd,text=True,stderr=subprocess.DEVNULL).strip()
+
+with tempfile.TemporaryDirectory(prefix='zci-test-') as tmp:
+    root=Path(tmp).resolve()
+    def fixture(name):
+        project=root/name
+        (project/'bin').mkdir(parents=True)
+        (project/'container').mkdir()
+        fake=project/'fake'
+        fake.mkdir()
+        shutil.copy2(source/'bin/zci-loop',project/'bin/zci-loop')
+        shutil.copy2(source/'bin/zcycle-id',project/'bin/zcycle-id')
+        write(fake/'glab', '#!/usr/bin/env python3\nimport json,os\nprint(json.dumps({"username":os.getenv("FAKE_IDENTITY","zociety-dev"),"email":"service@example.invalid"}))\n')
+        write(fake/'claude', '#!/bin/sh\n[ "$1" = --version ] || exit 90\necho fixture-claude\n')
+        write(fake/'git', '#!/usr/bin/env python3\nimport json,os,subprocess,sys\na=sys.argv[1:]\nwith open(os.environ["FAKE_GIT_LOG"],"a") as f: f.write(json.dumps(a)+chr(10))\nif a[:3]==["remote","set-url","origin"]: a[3]=os.environ["FAKE_ORIGIN"]\nif a and a[0]=="push" and os.getenv("FAKE_PUSH_FAIL")=="1": sys.exit(1)\nsys.exit(subprocess.call([os.environ["FAKE_REAL_GIT"],*a]))\n')
+        write(project/'bin/zloop', '#!/usr/bin/env python3\nimport json,os,pathlib,subprocess,sys\nsubprocess.run(["git","add","work.txt"],check=True) if pathlib.Path("work.txt").exists() else None\nwith open("work.txt","a") as f: f.write("turn"+chr(10))\nsubprocess.run(["git","add","work.txt"],check=True)\nsubprocess.run(["git","commit","-qm","fixture turn"],check=True)\nsubprocess.run(["git","notes","--ref=agent","add","-m","fixture note","HEAD"],check=True)\npathlib.Path(".zociety").mkdir(exist_ok=True)\nrc=int(os.getenv("FAKE_LOOP_RC","0"))\nreason="turn limit (1) reached" if os.getenv("FAKE_CAP")=="1" else "aborted: fixture failure"\npathlib.Path(".zociety/run.last.json").write_text(json.dumps({"exit":rc,"reason":reason}))\npathlib.Path("result.json").write_text(json.dumps({"args":sys.argv[1:],"runner":os.getenv("ZOCIETY_RUNNER"),"model":os.getenv("ANTHROPIC_MODEL"),"oauth":os.getenv("CLAUDE_CODE_OAUTH_TOKEN"),"api":os.getenv("ANTHROPIC_API_KEY")}))\nsys.exit(rc)\n')
+        git(project,'init','-q','-b','main')
+        git(project,'config','user.name','fixture')
+        git(project,'config','user.email','fixture@example.invalid')
+        git(project,'config','commit.gpgsign','false')
+        git(project,'config','core.hooksPath',str(root/'no-hooks'))
+        (project/'PROMPT.md').write_text('fixture prompt\n')
+        git(project,'add','PROMPT.md')
+        git(project,'commit','-qm','fixture genesis')
+        git(project,'tag','rev1-attempt1-iterations1ofx')
+        origin=root/(name+'.git')
+        git(root,'init','-q','--bare','-b','main',str(origin))
+        git(project,'remote','add','origin',str(origin))
+        git(project,'push','-q','origin','main','--tags')
+        token=project/'token'; token.write_text('fixture-token\n')
+        oauth=project/'oauth'; oauth.write_text(' fixture-oauth \n')
+        env=os.environ.copy()
+        for key in list(env):
+            if key.startswith(('ZOCIETY_','GITLAB_','CI_','ZLOOP_','ZSTOP_')) or key in ('GIT_DIR','GIT_WORK_TREE','GIT_INDEX_FILE','GPG_SIGNING_KEY','CLAUDE_CODE_OAUTH_TOKEN','ANTHROPIC_API_KEY'):
+                env.pop(key,None)
+        env.update(PATH=str(fake)+os.pathsep+os.environ['PATH'],GITLAB_CI='true',CI_COMMIT_REF_PROTECTED='true',CI_COMMIT_BRANCH='main',CI_DEFAULT_BRANCH='main',CI_PROJECT_PATH='zociety/zociety',ZOCIETY_GITLAB_TOKEN_FILE=str(token),ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE=str(oauth),FAKE_GIT_LOG=str(project/'git.log'),FAKE_ORIGIN=str(origin),FAKE_REAL_GIT=real_git,GIT_CONFIG_GLOBAL=str(project/'global.gitconfig'))
+        return project,origin,env
+
+    def run(project,env,*args):
+        result=subprocess.run([str(project/'bin/zci-loop'),*args],cwd=project,env=env,text=True,capture_output=True)
+        if result.returncode not in (0,1,2,3):
+            raise AssertionError(result.stderr)
+        return result
+
+    project,origin,env=fixture('guards')
+    for key,value in [('GITLAB_CI','false'),('CI_COMMIT_REF_PROTECTED','false'),('CI_COMMIT_BRANCH','feature')]:
+        bad=env|{key:value}
+        check('rejects unsafe job context '+key,run(project,bad).returncode==2 and not (project/'git.log').exists())
+    check('rejects a human identity',run(project,env|{'FAKE_IDENTITY':'delano'}).returncode==2)
+    Path(env['ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE']).write_text(' \n')
+    check('rejects empty Claude credentials',run(project,env).returncode==2)
+    Path(env['ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE']).write_text('fixture-oauth')
+    result=run(project,env,'--check')
+    if result.returncode: raise AssertionError(result.stderr)
+    check('preflight checks credentials without starting a turn',result.returncode==0 and not (project/'result.json').exists())
+    check('preflight does not change main',git(origin,'rev-parse','main')==git(project,'rev-parse','HEAD'))
+
+    project,origin,env=fixture('bounds')
+    ask='Literal $(touch should-not-exist); two words'
+    env.update(ZOCIETY_CI_MAX='2',ZOCIETY_CI_FOR='10m',ZOCIETY_CI_COST='1.25',ZOCIETY_CI_CYCLES='2',ZOCIETY_CI_MODEL='fixture-model',ZOCIETY_CI_ASK=ask)
+    result=run(project,env)
+    if result.returncode: raise AssertionError(result.stderr)
+    data=json.loads((project/'result.json').read_text())
+    check('passes all four run bounds and the literal ask',data['args']==['--max','2','--for','10m','--cost','1.25','--cycles','2','--ask',ask] and not (project/'should-not-exist').exists())
+    check('records GitLab runner and selected model',data['runner']=='gitlab-ci' and data['model']=='fixture-model')
+    check('loads OAuth without retaining an API key',data['oauth']=='fixture-oauth' and data['api'] is None)
+    check('publishes the unfinished cycle branch',git(origin,'rev-parse','cycle/rev1-attempt2')==git(project,'rev-parse','HEAD'))
+    check('publishes provenance notes',git(origin,'rev-parse','refs/notes/agent')==git(project,'rev-parse','refs/notes/agent'))
+    check('never pushes directly to main',all('main' not in a[2:] for a in map(json.loads,(project/'git.log').read_text().splitlines()) if a and a[0]=='push'))
+
+    for name,rc,cap,want in [('cap',1,True,0),('failure',3,False,3),('unexpected-one',1,False,1),('push-failure',0,False,1)]:
+        project,origin,env=fixture(name)
+        env.update(FAKE_LOOP_RC=str(rc),FAKE_CAP='1' if cap else '0',FAKE_PUSH_FAIL='1' if name=='push-failure' else '0')
+        result=run(project,env)
+        check('preserves correct status: '+name,result.returncode==want)
+        if name!='push-failure':
+            check('preserves committed progress: '+name,git(origin,'rev-parse','cycle/rev1-attempt2')==git(project,'rev-parse','HEAD'))
+
+    project,origin,env=fixture('resume')
+    git(project,'checkout','-qb','cycle/rev1-attempt2')
+    (project/'prior.txt').write_text('earlier job\n')
+    git(project,'add','prior.txt'); git(project,'commit','-qm','prior job')
+    prior=git(project,'rev-parse','HEAD')
+    git(project,'push','-q','origin','cycle/rev1-attempt2')
+    git(project,'checkout','-q','main')
+    result=run(project,env)
+    check('resumes the published cycle instead of replacing it',result.returncode==0 and git(project,'rev-parse','HEAD^')==prior)
+print(str(passed)+' CI wrapper checks passed.')
+TEST

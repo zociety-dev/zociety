@@ -1223,7 +1223,7 @@ EOF
     if [[ -n "$seen" ]]; then turn_model="$seen"; fi
   fi
   seal_from="${SEAL_FROM:-$PREV_HEAD}"
-  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$turn_model" "$CLIENT" local; then
+  if bin/zblind seal "$seal_from" "$CUR_HEAD" "$turn_model" "$CLIENT" "${ZOCIETY_RUNNER:-local}"; then
     SEAL_FAILURES=0
     SEAL_FROM=""
   else

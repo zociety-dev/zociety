@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# zci-loop: Run the native loop from a protected GitLab manual job.
+# Usage: bin/zci-loop [--check]
+# Protected file variables: ZOCIETY_GITLAB_TOKEN_FILE and one of
+# ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE / ZOCIETY_ANTHROPIC_API_KEY_FILE.
+# Optional files: ZOCIETY_GPG_SIGNING_KEY_FILE, ZOCIETY_BLIND_KEY_FILE.
+# Inputs come through ZOCIETY_CI_{MAX,FOR,COST,CYCLES,MODEL,ASK}.
+set -euo pipefail
+[[ $# == 0 || ( $# == 1 && "$1" == --check ) ]] || { echo 'Usage: bin/zci-loop [--check]' >&2; exit 2; }
+[[ "${GITLAB_CI:-}" == true && "${CI_COMMIT_REF_PROTECTED:-}" == true && "${CI_COMMIT_BRANCH:-}" == "${CI_DEFAULT_BRANCH:-main}" ]] \
+    || { echo 'zci-loop: only a protected default-branch GitLab job may run automation' >&2; exit 2; }
+: "${ZOCIETY_GITLAB_TOKEN_FILE:?protected service-account file variable required}"
+[[ -s "$ZOCIETY_GITLAB_TOKEN_FILE" ]] || { echo 'zci-loop: service-account file is empty' >&2; exit 2; }
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+export PATH="$ROOT/container:$PATH"
+[[ "$(glab api user | jq -r .username)" == zociety-dev ]] || { echo 'zci-loop: wrong GitLab service-account identity' >&2; exit 2; }
+if [[ -n "${ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE:-}" ]]; then
+    CLAUDE_CODE_OAUTH_TOKEN=$(tr -d '[:space:]' < "$ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE")
+    export CLAUDE_CODE_OAUTH_TOKEN
+    unset ANTHROPIC_API_KEY
+elif [[ -n "${ZOCIETY_ANTHROPIC_API_KEY_FILE:-}" ]]; then
+    ANTHROPIC_API_KEY=$(tr -d '[:space:]' < "$ZOCIETY_ANTHROPIC_API_KEY_FILE")
+    export ANTHROPIC_API_KEY
+    unset CLAUDE_CODE_OAUTH_TOKEN
+else
+    echo 'zci-loop: a protected Claude authentication file is required' >&2
+    exit 2
+fi
+[[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-${ANTHROPIC_API_KEY:-}}" ]] || { echo 'zci-loop: Claude authentication file is empty' >&2; exit 2; }
+if [[ -n "${ZOCIETY_BLIND_KEY_FILE:-}" ]]; then
+    ZOCIETY_BLIND_KEY=$(cat "$ZOCIETY_BLIND_KEY_FILE")
+    [[ -n "$ZOCIETY_BLIND_KEY" ]] || { echo 'zci-loop: blind-key file is empty' >&2; exit 2; }
+    export ZOCIETY_BLIND_KEY
+fi
+git config --global user.name zociety-dev
+git config --global user.email "$(glab api user | jq -r .email)"
+git config --local credential.helper ''
+git config --local credential.https://gitlab.com.helper '!glab auth git-credential'
+git remote set-url origin "https://gitlab.com/${CI_PROJECT_PATH:?}.git"
+git config --local commit.gpgsign false
+git config --local tag.gpgSign false
+if [[ -n "${ZOCIETY_GPG_SIGNING_KEY_FILE:-}" ]]; then
+    mkdir -p "${GNUPGHOME:-$HOME/.gnupg}"
+    chmod 700 "${GNUPGHOME:-$HOME/.gnupg}"
+    gpg --batch --quiet --import "$ZOCIETY_GPG_SIGNING_KEY_FILE"
+    key=$(gpg --batch --with-colons --list-secret-keys agent@zociety.dev | awk -F: '$1 == "fpr" {print $10; exit}')
+    [[ -n "$key" ]] || { echo 'zci-loop: signing key import failed' >&2; exit 2; }
+    git config --local user.signingkey "$key"
+    git config --local commit.gpgsign true
+    git config --local tag.gpgSign true
+fi
+git ls-remote origin "refs/heads/${CI_DEFAULT_BRANCH:-main}" >/dev/null
+claude --version
+if [[ "${1:-}" == --check ]]; then
+    echo 'zci-loop: protected credentials and Git access verified; no agent turn started'
+    exit 0
+fi
+# Resume the successor branch a previous bounded job published, if present.
+git fetch origin --tags '+refs/heads/*:refs/remotes/origin/*' '+refs/notes/*:refs/notes/*' --quiet
+git checkout -B "${CI_DEFAULT_BRANCH:-main}" "origin/${CI_DEFAULT_BRANCH:-main}" --quiet
+cycle=$(bin/zcycle-id --branch current)
+if git show-ref --verify --quiet "refs/remotes/origin/$cycle"; then
+    git checkout -B "$cycle" "origin/$cycle" --quiet
+else
+    git checkout -b "$cycle" --quiet
+fi
+publish() {
+    local rc=$? ref branch failure=0
+    trap - EXIT
+    branch=$(git branch --show-current)
+    if [[ "$branch" == cycle/* ]]; then
+        git push origin "HEAD:refs/heads/$branch" --quiet || failure=1
+    fi
+    while IFS= read -r ref; do
+        git push origin "$ref" --quiet || failure=1
+    done < <(git for-each-ref --format='%(refname)' refs/notes)
+    if [[ $rc == 1 && -f .zociety/run.last.json ]] && \
+        jq -e '.exit == 1 and (.reason | test("^(turn|time|cost) limit"))' .zociety/run.last.json >/dev/null; then
+        rc=0
+    fi
+    [[ $failure == 0 ]] || rc=1
+    exit "$rc"
+}
+trap publish EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+export ZOCIETY_RUNNER=gitlab-ci
+export ANTHROPIC_MODEL="${ZOCIETY_CI_MODEL:-claude-haiku-4-5-20251001}"
+args=(--max "${ZOCIETY_CI_MAX:-30}" --for "${ZOCIETY_CI_FOR:-90m}" --cost "${ZOCIETY_CI_COST:-5}" --cycles "${ZOCIETY_CI_CYCLES:-1}")
+[[ -z "${ZOCIETY_CI_ASK:-}" ]] || args+=(--ask "$ZOCIETY_CI_ASK")
+bin/zloop "${args[@]}"
