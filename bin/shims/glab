@@ -1,0 +1,19 @@
+#!/bin/bash
+# Route GitLab operations in the repo through its container identity.
+# Orbit's local code index stays on the host, where the checkout lives.
+set -euo pipefail
+SELF="$(cd "$(dirname "$0")" && pwd)"
+real=""
+IFS=:
+for d in $PATH; do
+    [[ "$d" == "$SELF" ]] && continue
+    [[ -x "$d/glab" ]] && { real="$d/glab"; break; }
+done
+unset IFS
+ROOT="${ZOCIETY_ROOT:-}"
+if [[ -z "$ROOT" || ( "$PWD" != "$ROOT" && "$PWD" != "$ROOT"/* ) || "${1:-}" == orbit ]]; then
+    [[ -n "$real" ]] && exec "$real" "$@"
+    echo 'glab-shim: real glab not found on PATH' >&2
+    exit 127
+fi
+exec "$ROOT/bin/zglab" "$@"

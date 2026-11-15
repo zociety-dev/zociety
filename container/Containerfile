@@ -87,6 +87,21 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | g
     && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
+# Install the GitLab CLI from a pinned upstream release (amd64 and arm64).
+ARG GLAB_VERSION=1.128.0
+RUN case "$(dpkg --print-architecture)" in \
+        amd64) glab_sha=bc024819e7598b19429a199cd87f640d98b2b67416d8ad796f19e4260b57a7c7 ;; \
+        arm64) glab_sha=60d0512085a8c1be7c5ef51aa7e4ee28213444cea0376b3260707d90489199ea ;; \
+        *) echo "glab: unsupported architecture" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/${GLAB_VERSION}/glab_${GLAB_VERSION}_linux_$(dpkg --print-architecture).tar.gz" -o /tmp/glab.tar.gz \
+    && echo "$glab_sha  /tmp/glab.tar.gz" | sha256sum -c - \
+    && mkdir -p /opt/glab \
+    && tar -xzf /tmp/glab.tar.gz -C /opt/glab bin/glab \
+    && rm /tmp/glab.tar.gz \
+    && /opt/glab/bin/glab --version
+COPY --chmod=755 glab /usr/local/bin/glab
+
 # Install Rust via rustup
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && mv /root/.cargo /opt/cargo \

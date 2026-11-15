@@ -59,6 +59,7 @@ jobs:
         harness:
           - test-zshim
           - test-zociety
+          - test-zglab
           - test-zcycle-id
           - test-zga-loop
           - test-zblind
