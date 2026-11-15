@@ -58,6 +58,33 @@ EOF
     fi
 fi
 
+# GitLab has its own SSH key, independent of the GitHub identity.
+if [[ -f /run/secrets/zociety_gitlab_ssh_key ]]; then
+    cp /run/secrets/zociety_gitlab_ssh_key /home/agent/.ssh/id_ed25519_gitlab
+    chmod 600 /home/agent/.ssh/id_ed25519_gitlab
+    mkdir -p /home/agent/.ssh/config.d
+    touch /home/agent/.ssh/config
+    if ! grep -qxF 'Include ~/.ssh/config.d/*' /home/agent/.ssh/config; then
+        { printf '%s\n' 'Include ~/.ssh/config.d/*'; cat /home/agent/.ssh/config; } > /home/agent/.ssh/config.new
+        mv /home/agent/.ssh/config.new /home/agent/.ssh/config
+    fi
+    cat > /home/agent/.ssh/config.d/gitlab << 'EOF'
+Host gitlab.com
+    HostName gitlab.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_gitlab
+    IdentitiesOnly yes
+    StrictHostKeyChecking yes
+    UserKnownHostsFile ~/.ssh/gitlab_known_hosts
+EOF
+    # GitLab.com publishes this ED25519 host key over HTTPS:
+    # https://docs.gitlab.com/user/gitlab_com/#ssh-host-keys-fingerprints
+    printf '%s\n' 'gitlab.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAfuCHKVTjquxvt6CM6tdG4SLp1Btn/nOeHHE5UOzRdf' > /home/agent/.ssh/gitlab_known_hosts
+    chmod 600 /home/agent/.ssh/config /home/agent/.ssh/config.d/gitlab /home/agent/.ssh/gitlab_known_hosts
+else
+    rm -f /home/agent/.ssh/id_ed25519_gitlab /home/agent/.ssh/config.d/gitlab /home/agent/.ssh/gitlab_known_hosts
+fi
+
 # ============================================================
 # GPG Setup - signing key from secrets
 # ============================================================

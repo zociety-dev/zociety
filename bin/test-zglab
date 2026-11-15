@@ -1,0 +1,116 @@
+#!/bin/bash
+# test-zglab: Fixture tests for container credentials and GitLab CLI routing.
+# No network, real credentials or containers are used.
+set -euo pipefail
+exec python3 - "$(cd "$(dirname "$0")/.." && pwd)" <<'PYTEST'
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+source = Path(sys.argv[1])
+passed = 0
+
+def check(label, condition):
+    global passed
+    if not condition:
+        raise AssertionError(label)
+    passed += 1
+    print('PASS: ' + label)
+
+def write(path, text):
+    path.write_text(text)
+    path.chmod(0o755)
+
+def run(command, cwd, extra=None):
+    env = os.environ.copy()
+    for name in ('container', 'ZOCIETY_ROOT', 'GITLAB_TOKEN', 'GITLAB_ACCESS_TOKEN', 'OAUTH_TOKEN'):
+        env.pop(name, None)
+    env.update(extra or {})
+    return subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True)
+
+with tempfile.TemporaryDirectory(prefix='zglab-test-') as tmp:
+    root = Path(tmp).resolve()
+    project = root / 'project'
+    bindir = project / 'bin'
+    bindir.mkdir(parents=True)
+    sub = project / 'sub'
+    sub.mkdir()
+    fake = root / 'fake'
+    fake.mkdir()
+    secret = root / 'gitlab_token'
+    real = fake / 'glab'
+    write(real, '#!/usr/bin/env python3\nimport os,json,sys\nprint(json.dumps({"args":sys.argv[1:],"token":os.getenv("GITLAB_TOKEN"),"host":os.getenv("GITLAB_HOST"),"repo":os.getenv("GITLAB_REPO")}))\n')
+    loader = root / 'container-glab'
+    write(loader, (source / 'container/glab').read_text().replace('/run/secrets/gitlab_token', str(secret)).replace('/opt/glab/bin/glab', str(real)))
+    token_env = {'GITLAB_TOKEN':'wrong-human-token','GITLAB_ACCESS_TOKEN':'wrong-fallback','OAUTH_TOKEN':'wrong-oauth'}
+    result=run([str(loader),'api','user'], root, token_env)
+    check('missing mounted token refuses every inherited fallback', result.returncode == 1 and not result.stdout)
+    secret.write_text('  fixture-token \n')
+    result=run([str(loader),'api','user'], root, token_env)
+    data=json.loads(result.stdout)
+    check('mounted service token overrides inherited credentials', result.returncode == 0 and data['token'] == 'fixture-token')
+    check('GitLab host and repository are explicit', data['host']=='gitlab.com' and data['repo']=='zociety/zociety')
+    result=run([str(loader),'api','user'], root, {'GITLAB_REPO':'zociety/another'})
+    check('caller can select another explicitly authorized repository', json.loads(result.stdout)['repo']=='zociety/another')
+    secret.write_text(' \n')
+    result=run([str(loader),'api','user'], root, token_env)
+    check('whitespace-only mounted token is refused', result.returncode==1 and not result.stdout)
+    secret.unlink()
+    result=run([str(loader),'--version'], root, token_env)
+    check('local version inspection needs no credential', result.returncode==0 and json.loads(result.stdout)['token'] is None)
+
+    write(bindir/'zglab', (source/'bin/zglab').read_text())
+    write(bindir/'zociety', '#!/usr/bin/env python3\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\n')
+    write(fake/'podman', '#!/bin/sh\n[ "${FAKE_PODMAN_RUNNING:-0}" = 1 ]\n')
+    path=str(fake)+os.pathsep+os.environ['PATH']
+    result=run([str(bindir/'zglab'),'api','user'], project, {'PATH':path})
+    check('fresh container route preserves arguments', result.returncode==0 and json.loads(result.stdout)==['glab','api','user'])
+    result=run([str(bindir/'zglab'),'api','user'], sub, {'PATH':path,'FAKE_PODMAN_RUNNING':'1','ZOCIETY_ROOT':str(project)})
+    check('running container route uses exec from a subdirectory', result.returncode==0 and json.loads(result.stdout)==['exec','glab','api','user'])
+    result=run([str(bindir/'zglab'),'api','user'], project, {'PATH':path,'container':'podman'})
+    check('inside container route calls glab directly', result.returncode==0 and json.loads(result.stdout)['args']==['api','user'])
+    for args in (['auth','login'],['api','x','--input=-'],['api','x','-F','body=@-'],['mr','create','-d-'],['mr','create'],['mr','create','--fill'],['mr','create','--description','-'],['issue','create','--web']):
+        result=run([str(bindir/'zglab'),*args], project, {'PATH':path})
+        check('refuses interactive form: '+' '.join(args), result.returncode==1 and not result.stdout)
+    args=['mr','create','--title','Two words','--description','A complete body','--yes']
+    result=run([str(bindir/'zglab'),*args], project, {'PATH':path})
+    check('explicit merge-request creation retains quoted values', result.returncode==0 and json.loads(result.stdout)==['glab',*args])
+
+    shims=bindir/'shims'
+    shims.mkdir()
+    write(shims/'glab',(source/'bin/shims/glab').read_text())
+    shim_env={'PATH':str(shims)+os.pathsep+path,'ZOCIETY_ROOT':str(project)}
+    for cwd,label in ((project,'repo root'),(sub,'subdirectory')):
+        result=run([str(shims/'glab'),'api','user'],cwd,shim_env)
+        check('shim uses container in '+label,result.returncode==0 and json.loads(result.stdout)==['glab','api','user'])
+    result=run([str(shims/'glab'),'api','user'],root,shim_env)
+    check('shim outside repo uses host CLI',result.returncode==0 and json.loads(result.stdout)['args']==['api','user'])
+    result=run([str(shims/'glab'),'orbit','context','README.md'],project,shim_env)
+    check('Orbit code reads stay on the host',result.returncode==0 and json.loads(result.stdout)['args']==['orbit','context','README.md'])
+
+    home=root/'home'
+    secrets=root/'secrets'
+    secrets.mkdir()
+    (secrets/'zociety_ssh_key').write_text('github-fixture')
+    (secrets/'zociety_gitlab_ssh_key').write_text('gitlab-fixture')
+    write(fake/'git','#!/bin/sh\nexit 0\n')
+    write(fake/'gpg','#!/bin/sh\nexit 1\n')
+    write(fake/'ssh-keyscan','#!/bin/sh\nexit 0\n')
+    entry=root/'entrypoint'
+    write(entry,(source/'container/docker-entrypoint.sh').read_text().replace('/home/agent',str(home)).replace('/run/secrets',str(secrets)))
+    for _ in range(2):
+        result=run([str(entry),'true'],root,{'PATH':path})
+        check('entrypoint succeeds with separate GitHub and GitLab credentials',result.returncode==0)
+    config=(home/'.ssh/config').read_text()
+    check('SSH include is idempotent and preserves GitHub stanza',config.count('Include ~/.ssh/config.d/*')==1 and 'Host github.com' in config)
+    check('GitLab key has private permissions', (home/'.ssh/id_ed25519_gitlab').stat().st_mode & 0o777 == 0o600)
+    config=(home/'.ssh/config.d/gitlab').read_text()
+    check('GitLab requires its pinned host key', 'StrictHostKeyChecking yes' in config and 'gitlab_known_hosts' in config)
+    (secrets/'zociety_gitlab_ssh_key').unlink()
+    result=run([str(entry),'true'],root,{'PATH':path})
+    check('removing mounted GitLab key removes persistent credential copies',result.returncode==0 and not (home/'.ssh/id_ed25519_gitlab').exists() and not (home/'.ssh/config.d/gitlab').exists())
+print(str(passed)+' GitLab credential and routing checks passed.')
+PYTEST
