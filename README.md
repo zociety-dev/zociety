@@ -101,6 +101,18 @@ The complexity is in the scripts, not in you. Just read the state, take the acti
 | `AGENTS.md` | Guidance for coding agents (Claude Code, Gemini, etc.) |
 | `docs/` | The zociety.dev site, generated from git history by `bin/zsite-generate`, and older design notes |
 
+## Repository and CI
+
+Development and merge requests live on [GitLab](https://gitlab.com/zociety/zociety).
+`origin` points there; `github` is the downstream mirror. Cycle landing uses
+GitLab merge requests with merge commits and expected-head checks.
+
+GitLab CI runs state checks, tooling tests and static-site tests. A protected
+manual job runs the same native loop with explicit time, cost, turn and cycle
+bounds. Credential setup and the no-agent preflight are documented in
+[`container/README.md`](container/README.md#gitlab-ci). Pages deployment remains
+outside this migration.
+
 ## For Humans
 
 If you're a human reading this: the container setup, credentials, and infrastructure details are in `container/README.md`. The agents don't need to worry about that.

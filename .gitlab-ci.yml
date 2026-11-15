@@ -1,0 +1,189 @@
+spec:
+  inputs:
+    run_autonomous:
+      description: Offer the protected manual agent job in a web pipeline
+      type: boolean
+      default: false
+    max_iterations:
+      type: string
+      default: '30'
+      regex: '^[1-9][0-9]{0,2}$'
+    run_for:
+      type: string
+      default: '90m'
+      regex: '^([0-9]+[smhd]?)+$'
+    cost_limit:
+      type: string
+      default: '5'
+      regex: '^[0-9]+(\.[0-9]{1,2})?$'
+    cycles:
+      type: string
+      default: '1'
+      regex: '^[1-9][0-9]{0,2}$'
+    model:
+      type: string
+      default: claude-haiku-4-5-20251001
+      regex: '^[A-Za-z0-9._-]+$'
+    ask:
+      type: string
+      default: ''
+---
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: never
+
+include:
+  - local: '/.gitlab/ci/*.yml'
+
+stages: [validate, test, operate]
+
+variables:
+  GIT_DEPTH: '0'
+  PRE_COMMIT_HOME: '$CI_PROJECT_DIR/.cache/pre-commit'
+  ZOCIETY_CI_MAX: '$[[ inputs.max_iterations ]]'
+  ZOCIETY_CI_FOR: '$[[ inputs.run_for ]]'
+  ZOCIETY_CI_COST: '$[[ inputs.cost_limit ]]'
+  ZOCIETY_CI_CYCLES: '$[[ inputs.cycles ]]'
+  ZOCIETY_CI_MODEL: '$[[ inputs.model ]]'
+  ZOCIETY_CI_ASK: '$[[ inputs.ask ]]'
+
+# The same immutable ARM64 runtime was built and verified on the operator host.
+.agent-image:
+  image:
+    name: registry.gitlab.com/zociety/zociety/agent@sha256:172268af9a4529a23397edc8b24a37d600f9c058e70e02b0c3f05351b28a5808
+    entrypoint: ['']
+  tags: [saas-linux-small-arm64]
+  before_script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+
+.tool-changes:
+  rules:
+    - changes:
+        paths:
+          - bin/**/*
+          - container/**/*
+          - .githooks/**/*
+          - .pre-commit-config.yaml
+          - .gitlab-ci.yml
+          - .gitlab/ci/**/*
+
+.fixture-job:
+  image: node:26-trixie-slim
+  interruptible: true
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends git jq gnupg python3 ca-certificates > /tmp/ci-packages.log
+    - git config --global user.name 'zociety tests'
+    - git config --global user.email tests@zociety.invalid
+    - mkdir -p "$CI_PROJECT_DIR/.zociety/tmp"
+    - export TMPDIR="$CI_PROJECT_DIR/.zociety/tmp"
+
+state:
+  extends: .fixture-job
+  stage: validate
+  script:
+    - bin/validate-state
+    - bin/zstate
+
+lint:
+  extends: [.agent-image, .tool-changes]
+  stage: validate
+  interruptible: true
+  cache:
+    key:
+      prefix: pre-commit-arm64
+      files: [.pre-commit-config.yaml]
+    paths: [.cache/pre-commit/]
+  script:
+    - pre-commit run shellcheck --all-files
+    - |
+      scan_from="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-${CI_COMMIT_BEFORE_SHA:-}}"
+      case "$scan_from" in
+        ''|0000000000000000000000000000000000000000) scan_from=$(git rev-parse "$CI_COMMIT_SHA^") ;;
+      esac
+      gitleaks git --redact --log-opts="$scan_from..$CI_COMMIT_SHA"
+
+harnesses:
+  extends: [.fixture-job, .tool-changes]
+  stage: test
+  parallel:
+    matrix:
+      - HARNESS: [test-zshim, test-zociety, test-zglab, test-zcycle-id, test-zblind, test-zstop-modes, test-zci-loop]
+  script:
+    - 'bin/$HARNESS'
+
+site:
+  extends: [.fixture-job, .tool-changes]
+  stage: test
+  variables:
+    SCALE_BUDGET_SECONDS: '120'
+  script:
+    - export TMPDIR=/tmp
+    - bin/test-zsite-archive
+    - bin/zsite-generate
+    - bin/test-prov-encoding
+
+# File variables are scoped to this environment and protected main; test jobs
+# have no environment and receive none of the automation credentials.
+autonomous-preflight:
+  extends: .agent-image
+  stage: operate
+  environment:
+    name: autonomous
+    action: verify
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: true
+  script:
+    - bin/zci-loop --check
+
+autonomous:
+  extends: .agent-image
+  stage: operate
+  timeout: 2h
+  interruptible: false
+  resource_group: zociety-loop
+  environment:
+    name: autonomous
+    action: access
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true" && "$[[ inputs.run_autonomous ]]" == "true"'
+      when: manual
+      allow_failure: true
+    - when: never
+  manual_confirmation: Start the bounded paid zociety run with these pipeline inputs?
+  script:
+    - bin/zci-loop
+  artifacts:
+    when: always
+    access: maintainer
+    expire_in: 7 days
+    paths: [.zociety/run.last.json]
+
+# Rebuild deliberately on protected main; publish an immutable tag. Updating
+# the runtime digest above is a separate reviewed change after verification.
+build-agent-image:
+  stage: operate
+  image:
+    name: moby/buildkit:rootless
+    entrypoint: ['']
+  tags: [saas-linux-small-arm64]
+  variables:
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: true
+    - when: never
+  before_script:
+    - mkdir -p ~/.docker
+    - 'printf "{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\"}}}" "$CI_REGISTRY" "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" > ~/.docker/config.json'
+  script:
+    - >-
+      buildctl-daemonless.sh build --frontend dockerfile.v0
+      --local context=container --local dockerfile=container
+      --opt filename=Containerfile
+      --output "type=image,name=$CI_REGISTRY_IMAGE/agent:$CI_COMMIT_SHA,push=true"

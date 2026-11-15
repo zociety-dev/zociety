@@ -1,0 +1,3 @@
+# Approved agent-proposed workflows are included from this directory.
+.approved-workflows:
+  variables: {}

@@ -94,10 +94,9 @@
 #      that wrote an event; AGENTS.md, Tags), and a git note on HEAD.
 #   5. Pushes HEAD, tag, branch, notes and the learnings branch to origin if
 #      a remote exists, and lands the cycle on main: bin/zpr-flow opens the
-#      cycle branch's PR and merges it with a merge commit (ZPR_MERGE=0 opens
-#      it only). A cycle that did not land leaves its PR open and asks GitHub
-#      to rebuild zociety.dev (gh workflow run pages.yml); a merge pushes
-#      main, which rebuilds it anyway. bin/zloop then merges main into the
+#      cycle branch's GitLab MR and requests a merge commit (ZPR_MERGE=0 opens
+#      it only). A pending or refused merge leaves the MR open. Pages
+#      deployment is handled separately. bin/zloop merges main into the
 #      successor branch between turns (ZLOOP_SYNC_MAIN).
 #   6. git rm's per-cycle files: stuff/, artifacts/, members.txt, rules.txt,
 #      REGISTRY.md, LAWS.md, .batch, DIRECTION.md; removes the untracked
@@ -618,11 +617,11 @@ batch_remaining: $REMAINING
 thread: cycle $(jq -r '.length' <<<"$THREAD_DATA") of the subject$([[ "$NEW_THREAD" == true ]] && echo "; the question opens a new one")" HEAD 2>/dev/null || true
 
 #############################################
-# 6. Push to GitHub
+# 6. Push to GitLab
 #############################################
 
 if git remote get-url origin &>/dev/null; then
-  echo "Pushing to GitHub..."
+  echo "Pushing to GitLab..."
   git push origin HEAD --quiet 2>/dev/null || echo "  (push failed - continuing)"
   git push origin "$TAG" --quiet 2>/dev/null || echo "  (tag push failed)"
   git push origin "$CYCLE_BRANCH" --quiet 2>/dev/null || echo "  (branch push failed)"
@@ -632,6 +631,11 @@ if git remote get-url origin &>/dev/null; then
   git push origin learnings --quiet 2>/dev/null || echo "  (learnings push failed)"
 fi
 
+if git remote get-url github &>/dev/null; then
+  # GitLab's native push mirror replicates branches and tags, not git notes.
+  git push github refs/notes/commits --quiet 2>/dev/null || echo "  (GitHub notes mirror push failed)"
+fi
+
 #############################################
 # 6b. Land the cycle on main
 #############################################
@@ -639,13 +643,12 @@ fi
 # Opens cycle branch -> main and merges it with a merge commit (bin/zpr-flow
 # explains why never squash or rebase). The PR used to be opened and left:
 # ZPR_MERGE was never set, so main stayed at cycle 41 while cycles 42-47 sat
-# in six nested PRs. ZPR_MERGE=0 opens it only. Non-fatal: no origin, gh
-# unable to reach GitHub, or a refused merge leave the cycle archived and its
-# PR open, and the next cycle's PR carries it too. Landed is read from git,
-# not from gh: the archived head is on origin's main. gh runs as zociety-dev
+# in six nested PRs. ZPR_MERGE=0 opens it only. Non-fatal: no origin, glab
+# unable to reach GitLab, or a refused merge leave the cycle archived and its
+# MR open, and the next cycle's MR carries it too. Landed is read from git,
+# not from glab: the archived head is on origin's main. glab runs as zociety-dev
 # in the container.
 
-LANDED=0
 if git remote get-url origin &>/dev/null; then
   echo "Landing $CYCLE_BRANCH on main..."
   ZPR_MERGE="${ZPR_MERGE:-1}" bin/zpr-flow "$CYCLE_BRANCH" main \
@@ -653,29 +656,10 @@ if git remote get-url origin &>/dev/null; then
     || echo "  (zpr-flow skipped/failed - continuing)"
   if git fetch origin main --quiet 2>/dev/null \
     && [[ "$(git rev-list --count refs/remotes/origin/main..HEAD 2>/dev/null || echo 1)" -eq 0 ]]; then
-    LANDED=1
     echo "  $CYCLE_BRANCH is on main"
   else
-    echo "  $CYCLE_BRANCH is not on main; its PR stays open"
+    echo "  $CYCLE_BRANCH is not on main; its MR stays open"
   fi
-fi
-
-#############################################
-# 6c. Rebuild zociety.dev
-#############################################
-#
-# The site's archive and learnings come from the tag and the learnings branch
-# pushed above, but no push here triggers .github/workflows/pages.yml (a push
-# to main, or once a day), so a cycle reached the site up to a day late. A
-# cycle that landed pushed main, which runs it; for one that did not, ask for
-# a build of main now: the github-pages environment deploys from main only.
-# Non-fatal, like the PR; an origin gh does not know (a test's local bare
-# repo) fails here and nothing else.
-
-if [[ "$LANDED" -eq 0 ]] && git remote get-url origin &>/dev/null; then
-  echo "Requesting a zociety.dev rebuild..."
-  gh workflow run pages.yml --ref main 2>/dev/null \
-    || echo "  (site rebuild not requested - continuing)"
 fi
 
 #############################################

@@ -26,7 +26,7 @@ def write(path, text):
 
 def run(command, cwd, extra=None):
     env = os.environ.copy()
-    for name in ('container', 'ZOCIETY_ROOT', 'GITLAB_TOKEN', 'GITLAB_ACCESS_TOKEN', 'OAUTH_TOKEN'):
+    for name in ('container', 'ZOCIETY_ROOT', 'GITLAB_TOKEN', 'GITLAB_ACCESS_TOKEN', 'OAUTH_TOKEN', 'ZOCIETY_GITLAB_TOKEN_FILE'):
         env.pop(name, None)
     env.update(extra or {})
     return subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True)
@@ -52,6 +52,12 @@ with tempfile.TemporaryDirectory(prefix='zglab-test-') as tmp:
     result=run([str(loader),'api','user'], root, token_env)
     data=json.loads(result.stdout)
     check('mounted service token overrides inherited credentials', result.returncode == 0 and data['token'] == 'fixture-token')
+    selected = root / 'ci-token'
+    selected.write_text('ci-fixture-token\n')
+    result=run([str(loader),'api','user'], root, {'ZOCIETY_GITLAB_TOKEN_FILE':str(selected)})
+    check('protected file variable selects the CI credential', result.returncode==0 and json.loads(result.stdout)['token']=='ci-fixture-token')
+    result=run([str(loader),'api','user'], root, {'ZOCIETY_GITLAB_TOKEN_FILE':str(root/'missing')})
+    check('missing selected file never falls back to the mounted token', result.returncode==1 and not result.stdout)
     check('GitLab host and repository are explicit', data['host']=='gitlab.com' and data['repo']=='zociety/zociety')
     result=run([str(loader),'api','user'], root, {'GITLAB_REPO':'zociety/another'})
     check('caller can select another explicitly authorized repository', json.loads(result.stdout)['repo']=='zociety/another')
@@ -62,7 +68,10 @@ with tempfile.TemporaryDirectory(prefix='zglab-test-') as tmp:
     result=run([str(loader),'--version'], root, token_env)
     check('local version inspection needs no credential', result.returncode==0 and json.loads(result.stdout)['token'] is None)
 
-    write(bindir/'zglab', (source/'bin/zglab').read_text())
+    wrapper=(source/'bin/zglab').read_text()
+    for marker in ('/.dockerenv','/run/.containerenv'):
+        wrapper=wrapper.replace(marker,str(root/marker.lstrip('/')))
+    write(bindir/'zglab',wrapper)
     write(bindir/'zociety', '#!/usr/bin/env python3\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\n')
     write(fake/'podman', '#!/bin/sh\n[ "${FAKE_PODMAN_RUNNING:-0}" = 1 ]\n')
     path=str(fake)+os.pathsep+os.environ['PATH']

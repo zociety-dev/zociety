@@ -22,7 +22,7 @@ zroute() {
   [[ -f /run/.containerenv || -f /.dockerenv || -n "${container:-}" ]] && return 0
   [[ -x bin/shims/git ]] || return 0
   if [[ "${ZOCIETY_ROOT:-}" == "$PWD" ]] \
-    || { [[ -z "${ZOCIETY_ROOT:-}" ]] && git remote get-url origin 2>/dev/null | grep -q 'zociety-dev/zociety'; }; then
+    || { [[ -z "${ZOCIETY_ROOT:-}" ]] && git remote get-url origin 2>/dev/null | grep -Eq '(gitlab\.com[:/]zociety/zociety|github\.com[:/]zociety-dev/zociety)(\.git)?$'; }; then
     export ZOCIETY_ROOT="$PWD"
     export PATH="$PWD/bin/shims:$PATH"
   fi

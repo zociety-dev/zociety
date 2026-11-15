@@ -268,6 +268,8 @@ echo ""
 
 echo "=== Case 1: seal roundtrip with a key ==="
 fresh_repo seal
+git init --bare -q "$TMP/github.git"
+git remote add github "$TMP/github.git"
 ROOT=$(git rev-parse HEAD)
 A=$(commit "one")
 B=$(commit "two")
@@ -275,6 +277,9 @@ C=$(commit "three")
 run env ZOCIETY_BLIND_KEY="$KEY" bin/zblind seal "$ROOT" "$C" claude-opus-4-5 claude local
 assert_rc 0
 assert_err '^zblind: sealed 3 commit\(s\) as local$'
+for ref in agent blind; do
+  assert_eq "GitHub mirror $ref note ref" "$(git --git-dir="$TMP/github.git" rev-parse "refs/notes/$ref")" "$(git rev-parse "refs/notes/$ref")"
+done
 for sha in "$A" "$B" "$C"; do
   assert_eq "agent note ${sha:0:7}" "$(note agent "$sha")" $'kind: ai\nrunner: local'
   assert_has "blind note ${sha:0:7}" "$(note blind "$sha")" '^-----BEGIN PGP MESSAGE-----$'
@@ -474,8 +479,7 @@ echo ""
 
 echo "=== Case 6: zagent passes the model as a flag and scrubs the env ==="
 fresh_repo agent
-# MODEL is the CI step variable (.github/workflows/autonomous-loop.yml) that
-# bin/zga-loop and its children inherit; it must not reach the agent either.
+# MODEL was the legacy CI step variable; it must not reach the agent either.
 run env ANTHROPIC_MODEL=claude-test-1 GEMINI_MODEL=gemini-test MODEL=claude-ci ZOCIETY_AGENT_CLIENT=claude ZOCIETY_BLIND_KEY="$KEY" \
   bin/zagent --render text "say hi"
 assert_rc 0

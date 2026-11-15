@@ -1,171 +1,71 @@
 #!/bin/bash
-# zpr-flow: Open (and optionally merge) a pull request for a completed cycle
-#
-# A workflow command (invoked by bin/zheap-death), not a host convenience: it
-# runs as zociety-dev inside the container, where gh is present and
-# authenticated via GH_TOKEN. On the host, bin/zgh/bin/zgit route its gh/git
-# calls into the container, so it needs no gh-availability guards of its own.
-#
-# Usage:
-#   bin/zpr-flow <head_branch> [base_branch] [title]
-#   bin/zpr-flow -h | --help
-#
-# Arguments:
-#   head_branch  Branch to merge FROM (e.g. cycle/rev35-attempt1). Required.
-#   base_branch  Branch to merge INTO (default: main).
-#   title        PR title (default: derived from head_branch + last subject).
-#
-# Environment:
-#   ZPR_MERGE=1          After creating, merge the PR (default: 0, create only;
-#                        bin/zheap-death sets 1).
-#   ZPR_MERGE_METHOD=... merge | squash | rebase (default: merge). A cycle
-#                        lands with a merge commit: squash and rebase write
-#                        new commits, so its tag, its notes (refs/notes/blind,
-#                        agent, commits) and the next cycle, born from its
-#                        head, would point at commits main never has. The
-#                        repo allows no squash merges anyway.
-#   ZPR_MERGE_TRIES=3    Merge attempts before giving up. GitHub works out a
-#   ZPR_MERGE_WAIT=5     new PR's mergeability in the background and can
-#                        refuse a merge right after `gh pr create`, or one
-#                        whose base just moved; seconds between attempts.
-#   ZPR_AUTO=1           Merge with --auto (waits for required checks) instead
-#                        of merging immediately.
-#   ZPR_DRAFT=1          Open the PR as a draft.
-#
-# Exit codes: 0 the PR is open (and merged, when asked) or there was nothing
-# to open, 1 usage, 2 no origin, 3 the push failed, 4 a merge was asked for
-# and did not happen (the PR stays open). Callers that treat the PR as
-# optional should guard the call with `|| true`.
-#
-# Not an event: this is a GitHub side-effect utility (like zlog/zcheck). It does
-# not write a zevent and does not touch git-derived state.
-
-set -e
-
-usage() {
-  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
-}
+# zpr-flow: Open and optionally merge a cycle's GitLab merge request.
+# Usage: bin/zpr-flow <head_branch> [base_branch] [title]
+# ZPR_MERGE=1 requests a merge; ZPR_AUTO=1 (default) waits for pipeline checks.
+# ZPR_REPO defaults to zociety/zociety. ZPR_DRAFT=1 opens a draft.
+# ZPR_MERGE_TRIES=3 and ZPR_MERGE_WAIT=5 bound merge/poll attempts.
+# Merge commits preserve the archive tags, notes and successor ancestry.
+# Exit: 0 open/merged, 1 usage, 2 no origin, 3 push failed, 4 not merged.
+set -euo pipefail
 
 case "${1:-}" in
-  -h|--help)
-    usage
-    exit 0
-    ;;
+    -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 esac
-
 HEAD_BRANCH="${1:-}"
 BASE_BRANCH="${2:-main}"
 TITLE="${3:-}"
-
 MERGE="${ZPR_MERGE:-0}"
-MERGE_METHOD="${ZPR_MERGE_METHOD:-merge}"
-MERGE_TRIES="${ZPR_MERGE_TRIES:-3}"
-MERGE_WAIT="${ZPR_MERGE_WAIT:-5}"
-
-if [[ -z "$HEAD_BRANCH" ]]; then
-  usage >&2
-  exit 1
+TRIES="${ZPR_MERGE_TRIES:-3}"
+WAIT="${ZPR_MERGE_WAIT:-5}"
+[[ -n "$HEAD_BRANCH" && "$HEAD_BRANCH" != "$BASE_BRANCH" ]] || { echo 'zpr-flow: supply distinct head and base branches' >&2; exit 1; }
+[[ "$TRIES" =~ ^[1-9][0-9]*$ && "$WAIT" =~ ^[0-9]+$ ]] || { echo 'zpr-flow: invalid retry limits' >&2; exit 1; }
+[[ "${ZPR_MERGE_METHOD:-merge}" == merge ]] || { echo 'zpr-flow: cycle history requires merge commits' >&2; exit 1; }
+PROJECT=$(jq -rn --arg repo "${ZPR_REPO:-zociety/zociety}" '$repo | @uri')
+ENDPOINT="projects/$PROJECT/merge_requests"
+git remote get-url origin >/dev/null 2>&1 || { echo 'zpr-flow: no origin remote' >&2; exit 2; }
+git push origin "$HEAD_BRANCH" --quiet || { echo "zpr-flow: failed to push $HEAD_BRANCH" >&2; exit 3; }
+git fetch origin "$BASE_BRANCH" --quiet
+COMMITS=$(git rev-list --count "origin/$BASE_BRANCH..$HEAD_BRANCH")
+if [[ "$COMMITS" == 0 ]]; then
+    echo 'zpr-flow: no commits to merge'
+    exit 0
 fi
-
-if [[ "$HEAD_BRANCH" == "$BASE_BRANCH" ]]; then
-  echo "zpr-flow: head and base are both '$HEAD_BRANCH'; nothing to open" >&2
-  exit 1
+HEAD_SHA=$(git rev-parse "$HEAD_BRANCH")
+REQUESTS=$(glab api "$ENDPOINT" --method GET --raw-field state=opened \
+    --raw-field "source_branch=$HEAD_BRANCH" --raw-field "target_branch=$BASE_BRANCH") || exit 4
+MR=$(jq -r '.[0].iid // empty' <<<"$REQUESTS")
+if [[ -z "$MR" ]]; then
+    [[ -n "$TITLE" ]] || TITLE="$HEAD_BRANCH: $(git log -1 --format=%s "$HEAD_BRANCH")"
+    [[ "${ZPR_DRAFT:-0}" != 1 ]] || TITLE="Draft: $TITLE"
+    count() { git log --format=%s --grep="$1" "origin/$BASE_BRANCH..$HEAD_BRANCH" | wc -l | tr -d ' '; }
+    BODY=$(printf '%s\n' "Cycle branch $HEAD_BRANCH -> $BASE_BRANCH, $COMMITS commit(s)." \
+        "" "- joins: $(count '^\[join\]')" "- rules adopted: $(count '^\[pass\]')" \
+        "- stuff: $(count '^\[stuff\]')" "" 'Opened by bin/zpr-flow; merge commits preserve archive ancestry.')
+    REQUEST=$(glab api "$ENDPOINT" --method POST --raw-field "source_branch=$HEAD_BRANCH" \
+        --raw-field "target_branch=$BASE_BRANCH" --raw-field "title=$TITLE" \
+        --raw-field "description=$BODY" --field remove_source_branch=true --field squash=false) || exit 4
+    MR=$(jq -er .iid <<<"$REQUEST")
 fi
-
-[[ "$MERGE_TRIES" =~ ^[1-9][0-9]*$ ]] || { echo "zpr-flow: ZPR_MERGE_TRIES must be at least 1, got '$MERGE_TRIES'" >&2; exit 1; }
-[[ "$MERGE_WAIT" =~ ^[0-9]+$ ]] || { echo "zpr-flow: ZPR_MERGE_WAIT must be whole seconds, got '$MERGE_WAIT'" >&2; exit 1; }
-
-if ! git remote get-url origin &>/dev/null; then
-  echo "zpr-flow: no 'origin' remote; cannot open a PR" >&2
-  exit 2
-fi
-
-# Ensure the head branch is on origin so gh can open the PR against it.
-git push origin "$HEAD_BRANCH" --quiet 2>/dev/null || {
-  echo "zpr-flow: failed to push $HEAD_BRANCH to origin" >&2
-  exit 3
-}
-
-# Bail early if there is nothing to merge (e.g. cycle branch == base). The
-# base is fetched first: a stale origin/main counts commits a merge already
-# brought in, and gh then refuses the PR.
-git fetch origin "$BASE_BRANCH" --quiet 2>/dev/null || true
-COMMITS=0
-for ref in "origin/$BASE_BRANCH" "$BASE_BRANCH"; do
-  if git rev-parse --verify --quiet "$ref" >/dev/null; then
-    COMMITS=$(git rev-list --count "$ref..$HEAD_BRANCH" 2>/dev/null || echo 0)
-    break
-  fi
+echo "zpr-flow: MR !$MR ready for $HEAD_BRANCH -> $BASE_BRANCH"
+[[ "$MERGE" == 1 ]] || exit 0
+AUTO=true
+[[ "${ZPR_AUTO:-1}" != 0 ]] || AUTO=false
+requested=0
+for ((attempt=1; attempt<=TRIES; attempt++)); do
+    response=""
+    if [[ $requested == 0 ]]; then
+        if response=$(glab api "$ENDPOINT/$MR/merge" --method PUT --raw-field "sha=$HEAD_SHA" \
+            --field squash=false --field should_remove_source_branch=true --field "auto_merge=$AUTO"); then
+            requested=1
+        fi
+    else
+        response=$(glab api "$ENDPOINT/$MR") || response=""
+    fi
+    if [[ -n "$response" ]] && [[ "$(jq -r '.state // empty' <<<"$response")" == merged ]]; then
+        echo "zpr-flow: MR !$MR merged"
+        exit 0
+    fi
+    (( attempt == TRIES )) || sleep "$WAIT"
 done
-if [[ "$COMMITS" -eq 0 ]]; then
-  echo "zpr-flow: no commits between $BASE_BRANCH and $HEAD_BRANCH; nothing to open"
-  exit 0
-fi
-
-# Reuse an already-open PR for this head->base pair if one exists.
-EXISTING=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" \
-  --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-
-if [[ -n "$EXISTING" ]]; then
-  PR_NUM="$EXISTING"
-  echo "zpr-flow: reusing open PR #$PR_NUM for $HEAD_BRANCH -> $BASE_BRANCH"
-else
-  if [[ -z "$TITLE" ]]; then
-    SUBJECT=$(git log -1 --format='%s' "$HEAD_BRANCH" 2>/dev/null || echo "")
-    TITLE="$HEAD_BRANCH: ${SUBJECT:-completed cycle}"
-  fi
-
-  # Summarize the cycle from its structured commits for the PR body.
-  count() { git log --oneline --grep="$1" "$BASE_BRANCH..$HEAD_BRANCH" 2>/dev/null | wc -l | tr -d ' '; }
-  JOINS=$(count '^\[join\]')
-  RULES=$(count '^\[pass\]')
-  STUFF=$(count '^\[stuff\]')
-  HEAP=$(git log -1 --format='%s' --grep='^\[heap-death\]' "$BASE_BRANCH..$HEAD_BRANCH" 2>/dev/null || echo "")
-
-  BODY=$(printf '%s\n' \
-    "Cycle branch \`$HEAD_BRANCH\` -> \`$BASE_BRANCH\`, $COMMITS commit(s)." \
-    "" \
-    "- joins: $JOINS" \
-    "- rules adopted: $RULES" \
-    "- stuff: $STUFF" \
-    "" \
-    "${HEAP:+Heap-death: $HEAP}" \
-    "" \
-    "Opened by bin/zpr-flow.")
-
-  DRAFT_FLAG=()
-  [[ "${ZPR_DRAFT:-0}" == "1" ]] && DRAFT_FLAG=(--draft)
-
-  echo "zpr-flow: opening PR $HEAD_BRANCH -> $BASE_BRANCH ..."
-  gh pr create \
-    --head "$HEAD_BRANCH" \
-    --base "$BASE_BRANCH" \
-    --title "$TITLE" \
-    --body "$BODY" \
-    "${DRAFT_FLAG[@]}"
-
-  PR_NUM=$(gh pr list --head "$HEAD_BRANCH" --base "$BASE_BRANCH" \
-    --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-fi
-
-echo "zpr-flow: PR ready${PR_NUM:+ (#$PR_NUM)}"
-
-# Merge only when explicitly requested.
-if [[ "$MERGE" == "1" && -n "$PR_NUM" ]]; then
-  case "$MERGE_METHOD" in
-    merge)  METHOD_FLAG=--merge ;;
-    rebase) METHOD_FLAG=--rebase ;;
-    squash|*) METHOD_FLAG=--squash ;;
-  esac
-
-  AUTO_FLAG=()
-  [[ "${ZPR_AUTO:-0}" == "1" ]] && AUTO_FLAG=(--auto)
-
-  for ((try = 1; try <= MERGE_TRIES; try++)); do
-    echo "zpr-flow: merging PR #$PR_NUM ($MERGE_METHOD${ZPR_AUTO:+, auto}), attempt $try of $MERGE_TRIES..."
-    gh pr merge "$PR_NUM" "$METHOD_FLAG" "${AUTO_FLAG[@]}" && exit 0
-    [[ $try -lt $MERGE_TRIES ]] && sleep "$MERGE_WAIT"
-  done
-  echo "zpr-flow: PR #$PR_NUM not merged after $MERGE_TRIES attempt(s); left open" >&2
-  exit 4
-fi
+echo "zpr-flow: MR !$MR remains open or awaits its pipeline" >&2
+exit 4
