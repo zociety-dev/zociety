@@ -27,7 +27,7 @@ merge remains open. Direct and force pushes to GitLab main are disabled.
 
 `.gitlab-ci.yml` is the CI entry point. MR/default-branch pipelines validate
 state; tooling changes also run lint, secret scanning, fixture harnesses and
-static-site generation checks. Cycle MRs run the state check. GitHub's test
+static-site generation checks, including tooling changes in cycle MRs. GitHub's test
 and autonomous-loop workflows are retired. Pages deployment is outside this
 migration and its existing workflow is retained.
 
@@ -416,7 +416,7 @@ are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
   `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `ZOCIETY_AGENT_CLIENT` and
   `ZOCIETY_BLIND_KEY` removed from the environment.
 - The loop, never the agent, records the model. After every iteration
-  `bin/zloop` (runner `local`) and `bin/zga-loop` (runner `github-actions`)
+  `bin/zloop` (runner `local`, or `gitlab-ci` through `bin/zci-loop`)
   run `bin/zblind seal <prev-head> HEAD <model> <client> <runner>`. With no
   model variable set, `bin/zloop` takes the model from the turn's stream
   init event (`bin/zrender` writes it into the metrics line); only
@@ -433,8 +433,8 @@ are, from the repository (`docs/challenges/cross-agent-deference.md`). So:
 
 `ZOCIETY_BLIND_KEY` is the shared passphrase. Locally put it in `.env`
 (gitignored; `.envrc` loads it and `bin/zociety` forwards it into the
-container). In CI add it as the repository secret `ZOCIETY_BLIND_KEY`
-(`.github/workflows/autonomous-loop.yml` passes it to `bin/zga-loop`). Both
+container). After explicit approval to copy it into GitLab, use the protected
+file variable `ZOCIETY_BLIND_KEY_FILE`, scoped to `autonomous`. Both
 sides must hold the same value or a reveal fails loudly. Without the key a
 seal still writes the `refs/notes/agent` marker and warns; a reveal exits 1.
 Notes refs from two runners that sealed the same commits do not merge on
@@ -466,7 +466,7 @@ bin/zstate | jq .                       # current state
 
 ### Branches
 
-- `main` - current cycle in CI (`bin/zga-loop`); advances via cycle PRs
+- `main` - landed cycles and tooling; advances through GitLab merge requests
 - `cycle/rev{N}-attempt{N}` - one branch per cycle, live and archived. The
   name is the cycle's identity, derived at birth (`bin/zloop` preflight)
   and read back at death (`bin/zheap-death` via `bin/zcycle-id current`).
@@ -670,11 +670,11 @@ To maintain a clean, stable, and traceable commit history, use a standard
 
 ### 3. Merge Requests & Code Review
 - **Tooling:** Use `bin/zglab mr create` to open GitLab merge requests with explicit title, description and `--yes`.
-- **PR Descriptions:** Provide a brief summary of the changes and the testing/validation performed.
+- **MR Descriptions:** Provide a brief summary of the changes and the testing/validation performed.
 - **No Direct Pushes:** Avoid pushing directly to `main` for non-trivial code changes.
 
 ### 4. Merging & Synchronization
-- Once a PR is validated and approved, merge it.
+- Once an MR is validated and approved, merge it.
 - Fetch GitLab `origin/main`, advance the local `main` bookmark without rewriting history, and synchronize the working checkout. Preserve any running cycle lineage and keep main-sync merges outside agent turn seals.
 
 ## Quality Controls

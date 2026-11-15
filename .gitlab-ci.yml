@@ -60,8 +60,6 @@ variables:
 
 .tool-changes:
   rules:
-    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^cycle\//'
-      when: never
     - changes:
         paths:
           - bin/**/*

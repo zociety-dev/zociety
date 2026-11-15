@@ -45,7 +45,7 @@
 #                       --passphrase-fd. bin/zagent removes it from the agent's
 #                       environment.
 #
-# Callers: bin/zloop and bin/zga-loop seal after every iteration and reveal
+# Caller: bin/zloop (local and CI) seals after every iteration and reveals
 # for every [heap-death] commit the iteration produced. The loop writes the
 # record, never the agent; see docs/challenges/cross-agent-deference.md.
 

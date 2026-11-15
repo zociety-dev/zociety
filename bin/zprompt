@@ -21,8 +21,8 @@
 #                  summary) and --render raw (FILE is stream-json: the result
 #                  event's text is the summary).
 #
-# Prints the prompt on stdout. Single source of truth so bin/zloop (local) and
-# bin/zga-loop (GitHub Actions) cannot drift.
+# Prints the prompt on stdout. Local and GitLab CI runs use the same native
+# bin/zloop and per-turn prompt.
 #
 # Four things go in besides PROMPT.md:
 #

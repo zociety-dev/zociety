@@ -35,10 +35,7 @@ fi
 
 # Validate YAML syntax (basic check)
 if ! command -v yq &>/dev/null; then
-  # Fall back to checking it looks like YAML
-  if ! grep -q "^name:" "$WORKFLOW_FILE" 2>/dev/null; then
-    echo "Warning: Workflow file may not be valid YAML (no 'name:' found)" >&2
-  fi
+  echo "YAML validation deferred to GitLab CI lint (yq is unavailable)" >&2
 else
   if ! yq eval '.' "$WORKFLOW_FILE" >/dev/null 2>&1; then
     echo "Error: Invalid YAML in workflow file" >&2

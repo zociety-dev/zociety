@@ -50,6 +50,8 @@ if [[ -n "${ZOCIETY_GPG_SIGNING_KEY_FILE:-}" ]]; then
     git config --local commit.gpgsign true
     git config --local tag.gpgSign true
 fi
+# Install the same commit checks used by local native loops before any turn.
+pre-commit install --install-hooks --hook-type pre-commit --hook-type prepare-commit-msg
 git ls-remote origin "refs/heads/${CI_DEFAULT_BRANCH:-main}" >/dev/null
 claude --version
 if [[ "${1:-}" == --check ]]; then

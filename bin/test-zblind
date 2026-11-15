@@ -474,8 +474,7 @@ echo ""
 
 echo "=== Case 6: zagent passes the model as a flag and scrubs the env ==="
 fresh_repo agent
-# MODEL is the CI step variable (.github/workflows/autonomous-loop.yml) that
-# bin/zga-loop and its children inherit; it must not reach the agent either.
+# MODEL was the legacy CI step variable; it must not reach the agent either.
 run env ANTHROPIC_MODEL=claude-test-1 GEMINI_MODEL=gemini-test MODEL=claude-ci ZOCIETY_AGENT_CLIENT=claude ZOCIETY_BLIND_KEY="$KEY" \
   bin/zagent --render text "say hi"
 assert_rc 0

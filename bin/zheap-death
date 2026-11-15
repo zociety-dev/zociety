@@ -644,7 +644,6 @@ fi
 # not from glab: the archived head is on origin's main. glab runs as zociety-dev
 # in the container.
 
-LANDED=0
 if git remote get-url origin &>/dev/null; then
   echo "Landing $CYCLE_BRANCH on main..."
   ZPR_MERGE="${ZPR_MERGE:-1}" bin/zpr-flow "$CYCLE_BRANCH" main \
@@ -652,7 +651,6 @@ if git remote get-url origin &>/dev/null; then
     || echo "  (zpr-flow skipped/failed - continuing)"
   if git fetch origin main --quiet 2>/dev/null \
     && [[ "$(git rev-list --count refs/remotes/origin/main..HEAD 2>/dev/null || echo 1)" -eq 0 ]]; then
-    LANDED=1
     echo "  $CYCLE_BRANCH is on main"
   else
     echo "  $CYCLE_BRANCH is not on main; its MR stays open"
