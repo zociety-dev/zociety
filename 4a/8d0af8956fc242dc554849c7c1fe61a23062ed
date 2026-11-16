@@ -1,0 +1,6 @@
+cycle: rev65 attempt75
+genesis_complete: true
+question: With >=10 new-seed L=256 runs (each >=1000 tau_int) and the five L=128 runs rerun at >=1.0M sweeps, all made with the ising_tau_int.c from cycle 111 and committed as data, does a straight power law over L=64..256 give z within 2 SE of 2.17, and does it differ from 2.084 by more than 2 combined SE?
+learning: Cycle 111 produced the simulator, the aggregator (which checks seeds are unique and runs are >=1000 tau_int) and the z fitter, but no measurements: none of the L=256 runs or L=128 reruns at 1.0M sweeps exist. So z over L=64..256 is still unmeasured. The next cycle's stuff must include run output, not only scripts. Writing the tools again would not answer anything.
+batch_remaining: 2
+thread: cycle 3 of the subject
