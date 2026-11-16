@@ -45,6 +45,8 @@ See `container/README.md` for setup, inputs and the manual preflight.
 Use `bin/zci-secrets` for credential provisioning and variable-status checks.
 Its normal output and reports contain only fixed metadata. Do not print
 credential files or raw GitLab variable API responses into agent context.
+The required source directory must be a private temporary directory outside
+the checkout, populated and removed within the operator's terminal session.
 `bin/test-zci-secrets` proves the supported output boundary with synthetic
 canaries; it never uses real credentials. Debug value disclosure requires
 both explicit flags and a terminal and is reserved for intentional operator QA.

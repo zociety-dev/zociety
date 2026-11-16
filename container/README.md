@@ -283,13 +283,13 @@ credentials into this project's GitLab CI variables. Use type **File**,
 **Protected**, **Raw**, **Masked and hidden**, and environment scope
 **autonomous**. Keep values out of command arguments and logs.
 
-| GitLab variable | Local source | Purpose |
+| GitLab variable | Temporary staging file | Purpose |
 | --- | --- | --- |
-| `ZOCIETY_GITLAB_TOKEN_FILE` | `container/secrets/gitlab_token` | Service-account Git/API access |
-| `ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE` | `container/secrets/claude_oauth_token` | Claude subscription authentication |
-| `ZOCIETY_GPG_SIGNING_KEY_FILE` | `container/secrets/gpg_signing_key.asc` | Optional commit/tag signing |
-| `ZOCIETY_BLIND_KEY_FILE` | Operator's existing `ZOCIETY_BLIND_KEY` | The shared provenance sealing key |
-| `ZOCIETY_GITHUB_TOKEN_FILE` | `container/secrets/github_token` | Replicate provenance notes to the GitHub mirror |
+| `ZOCIETY_GITLAB_TOKEN_FILE` | `gitlab_token` | Service-account Git/API access |
+| `ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE` | `claude_oauth_token` | Claude subscription authentication |
+| `ZOCIETY_GPG_SIGNING_KEY_FILE` | `gpg_signing_key.asc` | Optional commit/tag signing |
+| `ZOCIETY_BLIND_KEY_FILE` | `blind_key` | The shared provenance sealing key |
+| `ZOCIETY_GITHUB_TOKEN_FILE` | `github_token` | Replicate provenance notes to the GitHub mirror |
 
 Use the dedicated transfer command after approving that destination and scope:
 
@@ -297,15 +297,41 @@ Use the dedicated transfer command after approving that destination and scope:
 # Reproducible proof: synthetic credentials only, no network or model calls.
 bin/test-zci-secrets --report .zociety/secret-transfer-proof.json
 
-# Metadata-only status; the default mode never prints values.
-bin/zci-secrets --report .zociety/secret-transfer-status.json
+# In the operator's terminal, create a private, uniquely named staging directory.
+# Python selects the platform temporary location via TMPDIR, TEMP or TMP.
+secret_stage=$(python3 -I -c \
+  'import tempfile; print(tempfile.mkdtemp(prefix="zociety-secrets-"))')
+chmod 700 "$secret_stage"
+cleanup_secret_stage() {
+  python3 -I -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' \
+    "$secret_stage"
+}
+trap cleanup_secret_stage EXIT
 
-# Copy missing credentials from the local files and ZOCIETY_BLIND_KEY.
-bin/zci-secrets --set --report .zociety/secret-transfer-status.json
+# Export the five approved values from the operator's secret store into the
+# filenames above, each mode 600. Do not populate this directory through an
+# agent or paste values into agent-visible commands.
+
+# Copy missing credentials, then perform a metadata-only verification.
+bin/zci-secrets --set --source-dir "$secret_stage" \
+  --report .zociety/secret-transfer-status.json
+bin/zci-secrets --source-dir "$secret_stage" \
+  --report .zociety/secret-transfer-verified.json
+
+# Remove the staging directory before returning control to an agent.
+cleanup_secret_stage
+trap - EXIT
+unset secret_stage
+unset -f cleanup_secret_stage
 ```
 
-`--source-dir` selects the local credential directory; `--blind-key-file`
-can supply the provenance passphrase instead of the operator environment.
+`--source-dir` is required. The command rejects the checkout and any path or
+symlink that enters or leaves the selected external directory. Temporary
+staging limits the lifetime of the extra credential copy; it is not an access
+boundary against another process already running as the same user. Populate,
+transfer and remove the directory within one operator-controlled terminal
+session.
+
 Existing variables are kept unless `--force` is supplied. An existing visible
 variable requires deliberate recreation because GitLab cannot make it hidden
 with an update. All source values are validated before the first write.
@@ -316,7 +342,7 @@ key files remain supported.
 Normal-mode output contains only the fixed project ID, scope, variable names
 and statuses. The same schema is used for receipts. No value hashes, previews,
 API response bodies, exception messages or tracebacks are emitted. Credentials
-travel from local files/environment through Python memory directly to the
+travel from local files through Python memory directly to the
 fixed GitLab HTTPS endpoint; no child process receives them. Redirects and
 proxy-environment overrides are disabled. Failed runs remove an old success
 receipt; a fresh status check identifies any partially completed transfer.
