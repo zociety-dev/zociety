@@ -273,7 +273,7 @@ t󠄁h󠄁r󠄁o󠄁w󠄁a󠄁w󠄁a󠄁y󠄁 f󠄁i󠄁x󠄁t󠄁u󠄁r󠄁e�
 ## GitLab CI
 
 MR/default-branch pipelines run state validation. Tooling changes also run
-shellcheck, gitleaks, seven fixture harnesses, the secret-transfer proof, and static-site tests with full
+shellcheck, gitleaks, fixture harnesses, the secret-transfer proof, and static-site tests with full
 history and tags. Tests have no `autonomous` environment or model credentials.
 Agent-proposed workflows target `.gitlab/ci/` and become active only after
 approval and merge.
@@ -283,7 +283,7 @@ credentials into this project's GitLab CI variables. Use type **File**,
 **Protected**, **Raw**, **Masked and hidden**, and environment scope
 **autonomous**. Keep values out of command arguments and logs.
 
-| GitLab variable | Temporary staging file | Purpose |
+| GitLab variable | Mounted file under `/run/secrets` | Purpose |
 | --- | --- | --- |
 | `ZOCIETY_GITLAB_TOKEN_FILE` | `gitlab_token` | Service-account Git/API access |
 | `ZOCIETY_CLAUDE_OAUTH_TOKEN_FILE` | `claude_oauth_token` | Claude subscription authentication |
@@ -292,31 +292,48 @@ credentials into this project's GitLab CI variables. Use type **File**,
 | `ZOCIETY_GITHUB_TOKEN_FILE` | `github_token` | Replicate provenance notes to the GitHub mirror |
 
 Use the reviewed operator command after approving that destination and scope.
-Run it from the repository root in a terminal that is not shared with an agent:
+All five files must already be available through the container's secret mount,
+including `blind_key` containing the existing provenance passphrase. The
+provisioner never generates or rotates that passphrase and never falls back
+to a host environment variable. It uses the mounted armored signing key
+directly; do not import the agent's private key into the host keyring.
+
+Run from the repository root in your own terminal. Start the container with
+`bin/zociety bash` in another terminal if it is not running. The provisioner
+uses that running container and fails if it is unavailable.
 
 ```bash
 # Reproducible proof: synthetic credentials only, no network or model calls.
 bin/test-zci-secrets --report .zociety/secret-transfer-proof.json
 bin/test-zci-secrets-provision
+# Actual host wrapper and launcher, isolated Podman container, no network:
+bin/test-zci-secrets-provision --podman
 
-# Pin both executables to the reviewed implementation, then run one path.
-/usr/bin/git diff --quiet bc12af9d1a85b43a616c54e779f4bc015b7f77fb \
-  -- bin/zci-secrets bin/zci-secrets-provision \
+# Pin the launcher, host wrapper, container implementation, and backend.
+/usr/bin/git diff --quiet a87846363d6860d5f6a5f4318030464a7f780ad6 \
+  -- bin/zociety bin/zci-secrets-provision \
+     bin/zci-secrets-provision-container bin/zci-secrets \
   && ./bin/zci-secrets-provision
 ```
 
-`bin/zci-secrets-provision` resolves Python, GPG and `gpgconf` only from fixed
-absolute install locations. Before the first prompt it checks Python 3.9+
-compatibility by importing `bin/zci-secrets`, checks the signing key, and checks
-agent-control support. It rejects empty or non-maskable input and validates the
-public prefixes of the GitLab, Claude and GitHub tokens. It creates the private
-staging directory through Python's platform temporary location (`TMPDIR`,
-`TEMP`, `TMP` or the platform default), removes it on exit, and reloads
-`gpg-agent` to clear the export's cached passphrase.
+`bin/zci-secrets-provision` is a thin host launcher. It clears inherited
+credentials and debug settings, uses a fixed host PATH without repository
+shims, and delegates through `bin/zociety exec` to the container's
+`/usr/bin/python3 -I`. It neither prompts for nor reads secrets on the host.
+The running, reviewed container image and Podman installation are trusted
+prerequisites; the git check pins repository code, not those installed tools.
 
-Temporary staging limits the lifetime of the extra credential copy; it is not
-an access boundary against another process already running as the same user.
-Do not run an agent or loop concurrently with the operator command.
+`bin/zci-secrets-provision-container` checks for a container and requires
+`/tmp` to be tmpfs before accessing inputs. It creates a private directory
+there, ignoring inherited `TMPDIR`, copies the five mounted files into it with
+private permissions, and removes the copies on success, failure, and handled
+interrupts. It rejects missing, empty, oversized, symlinked or non-maskable
+inputs and checks public token prefixes before the first network request.
+The signing key remains opaque data; no GPG command or host keyring is used.
+
+The output proof covers these programs' supported execution paths. It does
+not deny filesystem access to an agent or another process already authorized
+inside the container. Run provisioning without a concurrent agent or loop.
 
 The command writes `.zociety/ci-secrets-provisioned.json`. That receipt reports
 only variable presence and security settings. The `--set` operation already
@@ -324,7 +341,7 @@ reads those settings back after every create or update; GitLab does not return
 hidden values, so neither the command nor the receipt claims to compare them.
 
 The low-level `bin/zci-secrets` backend keeps existing variables unless it is
-run directly with `--force`; the reviewed wrapper does not force replacements.
+run directly inside the container with `--force`; the wrapper does not force replacements.
 An existing visible variable requires deliberate recreation because GitLab
 cannot make it hidden with an update. All source values are validated before
 the first write.
@@ -335,10 +352,11 @@ key files remain supported.
 Normal-mode output contains only the fixed project ID, scope, variable names
 and statuses. The same schema is used for receipts. No value hashes, previews,
 API response bodies, exception messages or tracebacks are emitted. Credentials
-travel from local files through Python memory directly to the
+travel from mounted files through Python memory inside the container to the
 fixed GitLab HTTPS endpoint; no child process receives them. Redirects and
-proxy-environment overrides are disabled. Failed runs remove an old success
-receipt; a fresh status check identifies any partially completed transfer.
+proxy-environment overrides are disabled. Once the container guard succeeds,
+the command removes any old receipt before staging. Check the command's exit
+status; a receipt left by an earlier run is not proof that a failed launch ran.
 
 The proof uses freshly generated canaries and checks raw, JSON-escaped,
 hexadecimal and base64 representations against stdout, stderr, reports, argv
@@ -347,7 +365,18 @@ exceptions and interrupts. Eight unrelated valid credential sets must produce
 identical normal transcripts. Test failures themselves suppress captured data.
 GitLab publishes the metadata-only proof artifact from `secret-transfer-proof`.
 
-Intentional operator QA can disclose values with both `--debug-show-values`
+The provisioning proof captures the host wrapper's output, checks its fixed
+arguments and sanitized environment, and exercises the actual container
+implementation with a fake API. `--podman` uses the production launcher with
+only its container name changed for isolation, mounts only the test fixture,
+disables networking, and instruments the container process with synthetic
+sources and transport. It checks exact uploaded values, identical transcripts
+for unrelated valid inputs, preflight rejection, private staging permissions,
+and cleanup after API errors and SIGTERM. CI runs the runtime-double version;
+the Podman variant is an explicit local integration check.
+
+Intentional operator QA inside the container can disclose values through the
+low-level backend with both `--debug-show-values`
 and `--confirm-secret-disclosure`, with stdin and stdout attached to a terminal.
 The proof exercises this exception with synthetic credentials. Real credential
 provisioning and agent-facing status checks use normal mode. This establishes

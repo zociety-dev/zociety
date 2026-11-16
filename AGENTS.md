@@ -43,14 +43,17 @@ those credentials to GitLab. Test jobs have no automation environment.
 See `container/README.md` for setup, inputs and the manual preflight.
 
 Use the externally pinned `bin/zci-secrets-provision` wrapper for operator
-credential provisioning and `bin/zci-secrets` for its transfer backend and
-variable-status checks. Their normal output and reports contain only fixed
-metadata. Do not print credential files or raw GitLab variable API responses
-into agent context. The wrapper creates and removes its private external
-temporary directory within the operator's terminal session.
-`bin/test-zci-secrets` proves the supported output boundary with synthetic
-canaries; it never uses real credentials. Debug value disclosure requires
-both explicit flags and a terminal and is reserved for intentional operator QA.
+credential provisioning. It delegates to `bin/zci-secrets-provision-container`
+in the running container through `bin/zociety exec`. Mounted credentials,
+tmpfs staging, and HTTPS transfer stay inside that container; never import the
+agent's GPG key into the host keyring or stage its credentials on the host.
+Only fixed metadata may cross back through output or reports. Do not print
+credential files or raw GitLab variable API responses into agent context.
+`bin/test-zci-secrets-provision --podman` tests the actual host/container
+boundary with synthetic canaries, an isolated container, and no network.
+`bin/test-zci-secrets` covers the transfer backend. Intentional operator QA
+disclosure requires both debug flags and a terminal in the container; the
+normal host wrapper accepts no flags and cannot enable it.
 
 ## The Loop
 
