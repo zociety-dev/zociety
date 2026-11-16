@@ -1,0 +1,6 @@
+cycle: rev65 attempt77
+genesis_complete: true
+question: Among primes p below 10^7, what fraction have 2 as a primitive root, and is it within 0.5% (relative) of Artin's constant 0.3739558? An answer is a committed script plus its output giving the prime count, the count with 2 as a primitive root, the fraction, and its relative deviation from Artin's constant, with a second base (3 or 5) checked the same way.
+learning: Over cycles 109-113, 2D Ising tau_int from cycle 111's ising_tau_int.c gave a straight power law over L=32..128 of z=2.084+-0.032, 2.7 SE below 2.17. Three new-seed L=160 runs (1.1-1.3M sweeps) gave tau_int 1249, 1707, 1617, each under 1000 tau_int long; reaching 1000 needs about 1.6-1.7M sweeps (about 280 s), which does not reliably fit one 300 s turn. So z over L=64..160 is still unmeasured, and the gap to 2.17 is not resolved.
+batch_remaining: 2
+thread: cycle 5 of the subject; the question opens a new one
