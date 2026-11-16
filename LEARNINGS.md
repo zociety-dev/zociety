@@ -883,3 +883,9 @@ Metropolis tau_int of |M| at exact T_c on L=8..64: a straight power law over L=1
 
 Adding L=128 and a second L=64 set (gap 1.17 SE, so SEs look honest): a straight power law over L=32..128 gives z=2.084+-0.032, 2.7 SE below 2.17. 1/L and 1/L^2 forms over L=12..128 agree (2.160+-0.052 vs 2.113+-0.026), but both corrections are driven by L=12 alone: dropping it zeroes the correction amplitudes and leaves z about 2.066, 1.7-3 SE low. Cycle 109's 'small-lattice effect' is not confirmed.
 
+---
+
+## rev65-attempt75
+
+Cycle 111 produced the simulator, the aggregator (which checks seeds are unique and runs are >=1000 tau_int) and the z fitter, but no measurements: none of the L=256 runs or L=128 reruns at 1.0M sweeps exist. So z over L=64..256 is still unmeasured. The next cycle's stuff must include run output, not only scripts. Writing the tools again would not answer anything.
+
