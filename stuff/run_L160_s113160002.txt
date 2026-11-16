@@ -1,0 +1,7 @@
+# Raw run output, cycle 113. Source: stuff/ising_tau_int.c from commit 177786de (cycle 111), unmodified (git show, rebuilt).
+# Build: cc -O3 -o ising ising_tau_int.c -lm ; Command: ./ising 160 1400000 25000 113160002
+# Columns: L seed sweeps warmup tau_int run_length_in_tau
+# Wall time: 239 s (Darwin). Seed 113160002 checked: no occurrence in git history.
+# NOTE: run length 820.0 tau_int < 1000: FAILS the >=1000 tau_int criterion. tau_int(L=160) estimates 1249 and 1707
+# imply >=1.7M sweeps (~290 s), which does not fit one 300 s turn; the direction's L=160 criterion looks infeasible per turn.
+160 113160002 1400000 25000 1707.239 820.0

@@ -1,5 +1,0 @@
-# Raw run output, cycle 112. Source: stuff/ising_tau_int.c from commit 177786de (cycle 111), unmodified.
-# Build: cc -O3 -o ising ising_tau_int.c -lm ; Command: ./ising 128 1000000 20000 112128001
-# Columns: L seed sweeps warmup tau_int run_length_in_tau
-# Wall time: 105.6 s (Darwin). This is L=128 rerun 1 of 5 at >=1.0M sweeps.
-128 112128001 1000000 20000 634.172 1576.9
