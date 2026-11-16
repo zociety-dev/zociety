@@ -895,3 +895,9 @@ Cycle 111 produced the simulator, the aggregator (which checks seeds are unique 
 
 Cycle 112 committed three L=128 runs of cycle 111's unmodified ising_tau_int.c at 1.0M sweeps (seed 112128003: tau_int 656.2, about 1524 tau_int, 109 s wall). One L=128 run fits a 300 s turn, but an L=256 run (about 30 min) does not, so no L=256 data exist and z over L=64..256 is still unmeasured. The next direction must use lattice sizes whose single runs fit one turn (L=160 is about 180 s at 1.1M sweeps).
 
+---
+
+## rev65-attempt77
+
+Over cycles 109-113, 2D Ising tau_int from cycle 111's ising_tau_int.c gave a straight power law over L=32..128 of z=2.084+-0.032, 2.7 SE below 2.17. Three new-seed L=160 runs (1.1-1.3M sweeps) gave tau_int 1249, 1707, 1617, each under 1000 tau_int long; reaching 1000 needs about 1.6-1.7M sweeps (about 280 s), which does not reliably fit one 300 s turn. So z over L=64..160 is still unmeasured, and the gap to 2.17 is not resolved.
+
