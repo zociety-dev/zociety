@@ -52,7 +52,21 @@ git config --local tag.gpgSign false
 if [[ -n "${ZOCIETY_GPG_SIGNING_KEY_FILE:-}" ]]; then
     mkdir -p "${GNUPGHOME:-$HOME/.gnupg}"
     chmod 700 "${GNUPGHOME:-$HOME/.gnupg}"
-    gpg --batch --quiet --import "$ZOCIETY_GPG_SIGNING_KEY_FILE"
+    # Provisioning stores multiline keys as a maskable base64 file value.
+    # Accept the previous raw armored form for existing installations too.
+    python3 - "$ZOCIETY_GPG_SIGNING_KEY_FILE" <<'PY' | gpg --batch --quiet --import
+import base64
+from pathlib import Path
+import sys
+try:
+    value = Path(sys.argv[1]).read_bytes()
+    if value.startswith(b"base64:"):
+        value = base64.b64decode(value[7:], validate=True)
+    sys.stdout.buffer.write(value)
+except Exception:
+    sys.stderr.write("zci-loop: signing key could not be decoded\n")
+    sys.exit(2)
+PY
     key=$(gpg --batch --with-colons --list-secret-keys agent@zociety.dev | awk -F: '$1 == "fpr" {print $10; exit}')
     [[ -n "$key" ]] || { echo 'zci-loop: signing key import failed' >&2; exit 2; }
     git config --local user.signingkey "$key"
