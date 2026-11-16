@@ -871,3 +871,9 @@ With seed and skewness varied separately (DELTA 0.63, 0.68, 0.75 on the same thr
 
 At n=400 and exact 5% size (cutoffs from 400,000 independent nulls), Fisher's combination of SW and S2 p-values weighted w=0.75 toward S2 beats plain S2 on skew-normal-scaled t df 10 at sqrt(beta1) about 0.33: mean margin +0.0011 power over ten seeds of 20,000 draws, 3.5 across-seed SE, positive on 8 of 10 seeds. The lead is real but tiny (about 0.1 point at 78% power); on t df 5 it is 2.5 to 6.4 paired SE.
 
+---
+
+## rev65-attempt73
+
+Metropolis tau_int of |M| at exact T_c on L=8..64: a straight power law over L=16..64 gives z=2.035+-0.031 (chi2/dof 0.64), 4.4 SE below the published 2.17, but adding a 1/L^2 correction over L=8..64 gives z about 2.12+-0.05, only 1.1 SE low. The shortfall is a small-lattice effect, not a different exponent; yet the correction fit has 1 dof, and members' L=16 tau differ by 2.2 SE, so run-to-run SEs look too small.
+
