@@ -291,50 +291,43 @@ credentials into this project's GitLab CI variables. Use type **File**,
 | `ZOCIETY_BLIND_KEY_FILE` | `blind_key` | The shared provenance sealing key |
 | `ZOCIETY_GITHUB_TOKEN_FILE` | `github_token` | Replicate provenance notes to the GitHub mirror |
 
-Use the dedicated transfer command after approving that destination and scope:
+Use the reviewed operator command after approving that destination and scope.
+Run it from the repository root in a terminal that is not shared with an agent:
 
 ```bash
 # Reproducible proof: synthetic credentials only, no network or model calls.
 bin/test-zci-secrets --report .zociety/secret-transfer-proof.json
+bin/test-zci-secrets-provision
 
-# In the operator's terminal, create a private, uniquely named staging directory.
-# Python selects the platform temporary location via TMPDIR, TEMP or TMP.
-secret_stage=$(python3 -I -c \
-  'import tempfile; print(tempfile.mkdtemp(prefix="zociety-secrets-"))')
-chmod 700 "$secret_stage"
-cleanup_secret_stage() {
-  python3 -I -c 'import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)' \
-    "$secret_stage"
-}
-trap cleanup_secret_stage EXIT
-
-# Export the five approved values from the operator's secret store into the
-# filenames above, each mode 600. Do not populate this directory through an
-# agent or paste values into agent-visible commands.
-
-# Copy missing credentials, then perform a metadata-only verification.
-bin/zci-secrets --set --source-dir "$secret_stage" \
-  --report .zociety/secret-transfer-status.json
-bin/zci-secrets --source-dir "$secret_stage" \
-  --report .zociety/secret-transfer-verified.json
-
-# Remove the staging directory before returning control to an agent.
-cleanup_secret_stage
-trap - EXIT
-unset secret_stage
-unset -f cleanup_secret_stage
+# Pin both executables to the reviewed implementation, then run one path.
+/usr/bin/git diff --quiet bc12af9d1a85b43a616c54e779f4bc015b7f77fb \
+  -- bin/zci-secrets bin/zci-secrets-provision \
+  && ./bin/zci-secrets-provision
 ```
 
-`--source-dir` is required. The command rejects the checkout and any path or
-symlink that enters or leaves the selected external directory. Temporary
-staging limits the lifetime of the extra credential copy; it is not an access
-boundary against another process already running as the same user. Populate,
-transfer and remove the directory within one operator-controlled terminal
-session.
+`bin/zci-secrets-provision` resolves Python, GPG and `gpgconf` only from fixed
+absolute install locations. Before the first prompt it checks Python 3.9+
+compatibility by importing `bin/zci-secrets`, checks the signing key, and checks
+agent-control support. It rejects empty or non-maskable input and validates the
+public prefixes of the GitLab, Claude and GitHub tokens. It creates the private
+staging directory through Python's platform temporary location (`TMPDIR`,
+`TEMP`, `TMP` or the platform default), removes it on exit, and reloads
+`gpg-agent` to clear the export's cached passphrase.
 
-Existing variables are kept unless `--force` is supplied. An existing visible
-variable requires deliberate recreation because GitLab cannot make it hidden
-with an update. All source values are validated before the first write.
+Temporary staging limits the lifetime of the extra credential copy; it is not
+an access boundary against another process already running as the same user.
+Do not run an agent or loop concurrently with the operator command.
+
+The command writes `.zociety/ci-secrets-provisioned.json`. That receipt reports
+only variable presence and security settings. The `--set` operation already
+reads those settings back after every create or update; GitLab does not return
+hidden values, so neither the command nor the receipt claims to compare them.
+
+The low-level `bin/zci-secrets` backend keeps existing variables unless it is
+run directly with `--force`; the reviewed wrapper does not force replacements.
+An existing visible variable requires deliberate recreation because GitLab
+cannot make it hidden with an update. All source values are validated before
+the first write.
 The multiline GPG key is stored with a `base64:` prefix so it can be masked
 and hidden; `bin/zci-loop` decodes it before importing it. Existing raw armored
 key files remain supported.
