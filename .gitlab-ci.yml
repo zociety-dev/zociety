@@ -110,7 +110,7 @@ harnesses:
   stage: test
   parallel:
     matrix:
-      - HARNESS: [test-zshim, test-zociety, test-zglab, test-zcycle-id, test-zblind, test-zstop-modes, test-zci-loop]
+      - HARNESS: [test-zshim, test-zociety, test-zglab, test-zcycle-id, test-zblind, test-zstop-modes, test-zci-loop, test-zci-secrets-provision]
   script:
     - 'bin/$HARNESS'
 
