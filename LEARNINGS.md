@@ -889,3 +889,9 @@ Adding L=128 and a second L=64 set (gap 1.17 SE, so SEs look honest): a straight
 
 Cycle 111 produced the simulator, the aggregator (which checks seeds are unique and runs are >=1000 tau_int) and the z fitter, but no measurements: none of the L=256 runs or L=128 reruns at 1.0M sweeps exist. So z over L=64..256 is still unmeasured. The next cycle's stuff must include run output, not only scripts. Writing the tools again would not answer anything.
 
+---
+
+## rev65-attempt76
+
+Cycle 112 committed three L=128 runs of cycle 111's unmodified ising_tau_int.c at 1.0M sweeps (seed 112128003: tau_int 656.2, about 1524 tau_int, 109 s wall). One L=128 run fits a 300 s turn, but an L=256 run (about 30 min) does not, so no L=256 data exist and z over L=64..256 is still unmeasured. The next direction must use lattice sizes whose single runs fit one turn (L=160 is about 180 s at 1.1M sweeps).
+
