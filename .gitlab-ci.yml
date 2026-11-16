@@ -118,7 +118,7 @@ secret-transfer-proof:
   extends: [.fixture-job, .tool-changes]
   stage: test
   script:
-    - bin/test-zci-secrets --report .zociety/secret-transfer-proof.json
+    - TMPDIR=/tmp bin/test-zci-secrets --report .zociety/secret-transfer-proof.json
   artifacts:
     when: always
     access: maintainer
