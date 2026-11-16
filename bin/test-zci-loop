@@ -3,6 +3,7 @@
 # Uses local bare origins and fake glab/claude/zloop; never calls a model.
 set -euo pipefail
 exec python3 - "$(cd "$(dirname "$0")/.." && pwd)" <<'TEST'
+import base64
 import json
 import os
 from pathlib import Path
@@ -39,6 +40,7 @@ with tempfile.TemporaryDirectory(prefix='zci-test-') as tmp:
         shutil.copy2(source/'bin/zci-loop',project/'bin/zci-loop')
         shutil.copy2(source/'bin/zcycle-id',project/'bin/zcycle-id')
         write(fake/'glab', '#!/usr/bin/env python3\nimport json,os\nprint(json.dumps({"username":os.getenv("FAKE_IDENTITY","zociety-dev"),"email":"service@example.invalid"}))\n')
+        write(fake/'gpg', '#!/usr/bin/env python3\nfrom pathlib import Path\nimport sys\nif "--import" in sys.argv: Path("gpg-imported").write_bytes(sys.stdin.buffer.read())\nelif "--list-secret-keys" in sys.argv: print("fpr:::::::::0123456789ABCDEF0123456789ABCDEF01234567:")\n')
         write(fake/'claude', '#!/bin/sh\n[ "$1" = --version ] || exit 90\necho fixture-claude\n')
         write(fake/'pre-commit', '#!/bin/sh\nprintf "%s\\n" "$*" > hooks-installed\n')
         write(fake/'git', '#!/usr/bin/env python3\nimport json,os,subprocess,sys\na=sys.argv[1:]\nwith open(os.environ["FAKE_GIT_LOG"],"a") as f: f.write(json.dumps(a)+chr(10))\nif a[:3]==["remote","set-url","origin"]: a[3]=os.environ["FAKE_ORIGIN"]\nif a[:3] in (["remote","add","github"],["remote","set-url","github"]): a[3]=os.environ["FAKE_MIRROR"]\nif a and a[0]=="push" and os.getenv("FAKE_PUSH_FAIL")=="1": sys.exit(1)\nsys.exit(subprocess.call([os.environ["FAKE_REAL_GIT"],*a]))\n')
@@ -114,6 +116,14 @@ with tempfile.TemporaryDirectory(prefix='zci-test-') as tmp:
     result=run(project,env)
     check('replicates CI provenance notes to GitHub',result.returncode==0 and git(mirror,'rev-parse','refs/notes/agent')==git(origin,'rev-parse','refs/notes/agent'))
     check('keeps the GitHub token value out of Git config','fixture-github-token' not in (project/'.git/config').read_text())
+
+    for encoding in ('plain','base64'):
+        project,origin,env=fixture('signing-'+encoding)
+        key='-----BEGIN PGP '+'PRIVATE KEY BLOCK-----\nfixture-signing-key\n-----END PGP PRIVATE KEY BLOCK-----\n'
+        key_file=project/'signing-key'
+        key_file.write_text(key if encoding=='plain' else 'base64:'+base64.b64encode(key.encode()).decode())
+        result=run(project,env|{'ZOCIETY_GPG_SIGNING_KEY_FILE':str(key_file)},'--check')
+        check('imports '+encoding+' signing-key files before a turn',result.returncode==0 and (project/'gpg-imported').read_text()==key)
 
     project,origin,env=fixture('resume')
     git(project,'checkout','-qb','cycle/rev1-attempt2')

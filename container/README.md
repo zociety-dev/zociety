@@ -273,16 +273,15 @@ t󠄁h󠄁r󠄁o󠄁w󠄁a󠄁w󠄁a󠄁y󠄁 f󠄁i󠄁x󠄁t󠄁u󠄁r󠄁e�
 ## GitLab CI
 
 MR/default-branch pipelines run state validation. Tooling changes also run
-shellcheck, gitleaks, seven fixture harnesses and static-site tests with full
+shellcheck, gitleaks, seven fixture harnesses, the secret-transfer proof, and static-site tests with full
 history and tags. Tests have no `autonomous` environment or model credentials.
 Agent-proposed workflows target `.gitlab/ci/` and become active only after
 approval and merge.
 
 To enable CI automation, explicitly approve copying the following local
 credentials into this project's GitLab CI variables. Use type **File**,
-**Protected**, **Raw**, and environment scope **autonomous**. Mask and hide
-single-line values when supported. Keep values out of command arguments and
-logs.
+**Protected**, **Raw**, **Masked and hidden**, and environment scope
+**autonomous**. Keep values out of command arguments and logs.
 
 | GitLab variable | Local source | Purpose |
 | --- | --- | --- |
@@ -291,6 +290,50 @@ logs.
 | `ZOCIETY_GPG_SIGNING_KEY_FILE` | `container/secrets/gpg_signing_key.asc` | Optional commit/tag signing |
 | `ZOCIETY_BLIND_KEY_FILE` | Operator's existing `ZOCIETY_BLIND_KEY` | The shared provenance sealing key |
 | `ZOCIETY_GITHUB_TOKEN_FILE` | `container/secrets/github_token` | Replicate provenance notes to the GitHub mirror |
+
+Use the dedicated transfer command after approving that destination and scope:
+
+```bash
+# Reproducible proof: synthetic credentials only, no network or model calls.
+bin/test-zci-secrets --report .zociety/secret-transfer-proof.json
+
+# Metadata-only status; the default mode never prints values.
+bin/zci-secrets --report .zociety/secret-transfer-status.json
+
+# Copy missing credentials from the local files and ZOCIETY_BLIND_KEY.
+bin/zci-secrets --set --report .zociety/secret-transfer-status.json
+```
+
+`--source-dir` selects the local credential directory; `--blind-key-file`
+can supply the provenance passphrase instead of the operator environment.
+Existing variables are kept unless `--force` is supplied. An existing visible
+variable requires deliberate recreation because GitLab cannot make it hidden
+with an update. All source values are validated before the first write.
+The multiline GPG key is stored with a `base64:` prefix so it can be masked
+and hidden; `bin/zci-loop` decodes it before importing it. Existing raw armored
+key files remain supported.
+
+Normal-mode output contains only the fixed project ID, scope, variable names
+and statuses. The same schema is used for receipts. No value hashes, previews,
+API response bodies, exception messages or tracebacks are emitted. Credentials
+travel from local files/environment through Python memory directly to the
+fixed GitLab HTTPS endpoint; no child process receives them. Redirects and
+proxy-environment overrides are disabled. Failed runs remove an old success
+receipt; a fresh status check identifies any partially completed transfer.
+
+The proof uses freshly generated canaries and checks raw, JSON-escaped,
+hexadecimal and base64 representations against stdout, stderr, reports, argv
+and URLs. It also injects reflected secrets into API errors, malformed JSON,
+exceptions and interrupts. Eight unrelated valid credential sets must produce
+identical normal transcripts. Test failures themselves suppress captured data.
+GitLab publishes the metadata-only proof artifact from `secret-transfer-proof`.
+
+Intentional operator QA can disclose values with both `--debug-show-values`
+and `--confirm-secret-disclosure`, with stdin and stdout attached to a terminal.
+The proof exercises this exception with synthetic credentials. Real credential
+provisioning and agent-facing status checks use normal mode. This establishes
+the transfer's output boundary; it does not revoke filesystem or API access
+already held by an agent running as the same user.
 
 An API-authenticated installation can use `ZOCIETY_ANTHROPIC_API_KEY_FILE`
 instead of the OAuth file. Keep the existing blind key; replacing it prevents
